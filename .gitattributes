@@ -1,0 +1,3 @@
+*.bas text eol=crlf
+*.xlsx binary
+*.xlsm binary

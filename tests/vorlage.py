@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""
+Prueft die Excel-Vorlage gegen echte Ausgabe des Endpunkts.
+
+    python3 tests/vorlage.py
+
+tests/csv_beispiel.mjs erzeugt eine CSV, wie der Endpunkt sie liefert. Die
+Formeln werden aus der gebauten Vorlage gelesen, gegen diese Daten ausgewertet
+und mit den Quellwerten verglichen. Damit ist geprueft, was hier ueberhaupt
+schiefgehen kann: ob die Spaltenbuchstaben und der Suchschluessel stimmen.
+
+Kein Excel im Spiel. Die LibreOffice-Neuberechnung waere der bessere Weg,
+aber diese Umgebung hat kein Calc-Modul (libsclo.so und calc.xcd fehlen;
+soffice bricht auch bei einer Datei mit drei Zellen mit «source file could
+not be loaded» ab). Der Auswerter unten deckt die Formellogik ab — dass
+Excel die Datei anstandslos oeffnet, ist damit NICHT gezeigt.
+"""
+
+import csv
+import io
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
+
+WURZEL  = Path(__file__).resolve().parent.parent
+VORLAGE = WURZEL / 'vorlage' / 'Wareneingang-Vorlage.xlsx'
+
+bestanden = fehler = 0
+
+# =IFERROR(INDEX(Daten!$F$2:$F$20001,MATCH(<schluessel>,Daten!$A$2:$A$20001,0)),"")
+MUSTER = re.compile(
+    r'^=IFERROR\(INDEX\(Daten!\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+),'
+    r'MATCH\((.+?),Daten!\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+),0\)\),""\)$'
+)
+
+
+def ok(name, bedingung, extra=''):
+    global bestanden, fehler
+    if bedingung:
+        bestanden += 1
+        print(f'  PASS  {name}')
+    else:
+        fehler += 1
+        print(f'  FAIL  {name}' + (f'\n        {extra}' if extra else ''))
+
+
+def beispiel_csv():
+    r = subprocess.run(['node', str(WURZEL / 'tests' / 'csv_beispiel.mjs')],
+                       capture_output=True, text=True, cwd=WURZEL)
+    if r.returncode:
+        sys.exit('csv_beispiel.mjs fehlgeschlagen:\n' + r.stderr)
+    nummern = r.stderr.strip().split('\t')[1:]
+    return list(csv.reader(io.StringIO(r.stdout))), nummern
+
+
+class Blatt:
+    """Das Blatt `Daten`, wie Power Query es fuellen wuerde."""
+
+    def __init__(self, kopf, zeilen):
+        self.kopf = kopf
+        # Zeile 1 ist die Ueberschrift, Daten ab Zeile 2 — wie im echten Blatt
+        self.zellen = {}
+        for i, zeile in enumerate(zeilen, start=2):
+            for j, wert in enumerate(zeile, start=1):
+                self.zellen[(get_column_letter(j), i)] = wert
+
+    def wert(self, sp, zeile):
+        return self.zellen.get((sp, zeile), '')
+
+
+def auswerten(formel, blatt, wahl, pos_nr, zeilen_da):
+    """Rechnet eine Formel der Vorlage aus. Gibt '' zurueck wie IFERROR."""
+    m = MUSTER.match(formel)
+    if not m:
+        raise ValueError(f'unerwartete Formel: {formel}')
+    idx_sp, idx_von, idx_sp2, idx_bis, schluessel, m_sp, m_von, m_sp2, m_bis = \
+        m.group(1), int(m.group(2)), m.group(3), int(m.group(4)), \
+        m.group(5), m.group(6), int(m.group(7)), m.group(8), int(m.group(9))
+
+    # INDEX- und MATCH-Bereich muessen deckungsgleich sein, sonst zeigt der
+    # gefundene Zeilenindex auf eine andere Zeile.
+    if (idx_von, idx_bis) != (m_von, m_bis):
+        raise ValueError(f'Bereiche versetzt: {formel}')
+    if idx_sp != idx_sp2 or m_sp != m_sp2:
+        raise ValueError(f'Bereich ueber mehrere Spalten: {formel}')
+
+    if schluessel == '$J$2':
+        gesucht = wahl
+    else:
+        s = re.match(r'^\$J\$2&"-"&\$A(\d+)$', schluessel)
+        if not s:
+            raise ValueError(f'unbekannter Schluessel: {schluessel}')
+        gesucht = f'{wahl}-{pos_nr}'
+
+    for zeile in range(idx_von, min(idx_bis, idx_von + zeilen_da) + 1):
+        if str(blatt.wert(m_sp, zeile)) == str(gesucht):
+            return blatt.wert(idx_sp, zeile)
+    return ''                                   # IFERROR faengt #NV ab
+
+
+def main():
+    if not VORLAGE.exists():
+        sys.exit('Vorlage fehlt — zuerst tools/vorlage_bauen.py laufen lassen')
+
+    reihen, (nr_voll, nr_offen, nr_storno) = beispiel_csv()
+    kopf, daten = reihen[0], reihen[1:]
+    blatt = Blatt(kopf, daten)
+    n = len(daten)
+
+    wb = load_workbook(VORLAGE)
+    fm = wb['Formular']
+
+    print('\n1) Beispieldaten')
+    ok('CSV hat 23 Spalten', len(kopf) == 23, str(len(kopf)))
+    ok('stornierter Wareneingang fehlt', all(z[0] != nr_storno for z in daten))
+    ok('vier Positionszeilen', n == 4, str(n))
+
+    print('\n2) Aufbau der Arbeitsmappe')
+    ok('vier Blaetter', wb.sheetnames == ['Formular', 'Daten', 'Nummern', 'Liste'],
+       str(wb.sheetnames))
+    ok('Daten traegt die CSV-Ueberschriften',
+       [wb['Daten'].cell(row=1, column=i + 1).value for i in range(23)] == kopf)
+    ok('Liste traegt dieselben Ueberschriften',
+       [wb['Liste'].cell(row=1, column=i + 1).value for i in range(23)] == kopf)
+    ok('Auswahlliste haengt an J2',
+       any('J2' in str(dv.sqref) and dv.formula1 == 'Nummern!$A$2:$A$1000'
+           for dv in fm.data_validations.dataValidation),
+       str([(str(d.sqref), d.formula1) for d in fm.data_validations.dataValidation]))
+    # openpyxl setzt den Blattnamen in Anfuehrungszeichen
+    druck = str(fm.print_area).replace("'", '').strip('[]')
+    ok('Druckbereich endet bei Spalte H', druck == 'Formular!$A$1:$H$30', druck)
+    ok('auf eine Seite skaliert', fm.sheet_properties.pageSetUpPr.fitToPage is True)
+    ok('Bestehend-Spalte gelb',
+       all(fm[f'H{z}'].fill.fgColor.rgb.endswith('FFFF00') for z in range(16, 26)))
+
+    print('\n3) Papierraster')
+    raster = {
+        'A1':  'Wareneingang / Material reception',
+        'A3':  'Aufgabe / Task',
+        'B3':  'Name Mitarbeiter / Employee name',
+        'C3':  'Datum / Date',
+        'D3':  'Uhrzeit / Time',
+        'A6':  'Eingelagert / stored',
+        'A10': 'Kunde / Client',
+        'A11': 'Lieferant / Supplier',
+        'A15': 'N°',
+        'C15': 'Anzahl / QTY',
+        'D15': 'kg',
+        'E15': 'MHD / Expiration Date',
+        'H15': 'Bestehend / Existing',
+        'A27': 'Lagerfläche / storage space',
+        'A28': 'm2 Anzahl / m2 quantity',
+        'D28': '1 g = 0.001 kg',
+    }
+    for zelle, text in raster.items():
+        ok(f'{zelle} = {text[:34]}', fm[zelle].value == text, repr(fm[zelle].value))
+    ok('Positionen 1..10 durchnummeriert',
+       [fm[f'A{z}'].value for z in range(16, 26)] == list(range(1, 11)))
+
+    # -----------------------------------------------------------------
+    print('\n4) Formeln gegen die Quelldaten — vollstaendig quittiert')
+    quelle = {k: v for k, v in zip(kopf, daten[0])}
+    W = lambda z, nr=None: auswerten(fm[z].value, blatt, nr_voll, nr, n)  # noqa: E731
+
+    pruefungen = [
+        ('B10', None, 'Kunde'), ('B11', None, 'Lieferant'),
+        ('B4', None, 'AngNam'), ('C4', None, 'AngDat'), ('D4', None, 'AngZeit'),
+        ('B5', None, 'GezNam'), ('C5', None, 'GezDat'), ('D5', None, 'GezZeit'),
+        ('B6', None, 'EinNam'), ('C6', None, 'EinDat'), ('D6', None, 'EinZeit'),
+        ('C28', None, 'LagerM2'), ('B30', None, 'KopfBemerkung'),
+    ]
+    for zelle, nr, feld in pruefungen:
+        ok(f'{zelle} zieht {feld}', W(zelle, nr) == quelle[feld],
+           f'{W(zelle, nr)!r} statt {quelle[feld]!r}')
+
+    ok('Kunde mit Komma unzerteilt', W('B10') == 'Meier, Sohn & Co', repr(W('B10')))
+    ok('Gezaehlt zeigt den anderen Mitarbeiter', W('B5') == 'Bob Meier', repr(W('B5')))
+
+    print('\n5) Positionen')
+    pos = [dict(zip(kopf, z)) for z in daten if z[0] == nr_voll]
+    ok('drei Positionen', len(pos) == 3, str(len(pos)))
+    felder = [('B', 'Artikel'), ('C', 'Anzahl'), ('D', 'KG'), ('E', 'MHD'),
+              ('F', 'Regalplatz'), ('G', 'Bemerkung'), ('H', 'Bestehend')]
+    for i, p in enumerate(pos):
+        zeile = 16 + i
+        for sp, feld in felder:
+            ok(f'{sp}{zeile} = {feld}',
+               auswerten(fm[f'{sp}{zeile}'].value, blatt, nr_voll, i + 1, n) == p[feld],
+               f'{auswerten(fm[f"{sp}{zeile}"].value, blatt, nr_voll, i + 1, n)!r} '
+               f'statt {p[feld]!r}')
+
+    ok('Anfuehrungszeichen im Artikel',
+       auswerten(fm['B17'].value, blatt, nr_voll, 2, n) == 'Rohr "40mm"')
+    ok('Bestehend gesetzt',
+       auswerten(fm['H16'].value, blatt, nr_voll, 1, n) == 'X')
+    ok('Bestehend nicht gesetzt',
+       auswerten(fm['H17'].value, blatt, nr_voll, 2, n) == '')
+
+    print('\n6) Ungenutzte Zeilen bleiben leer')
+    for i, zeile in enumerate(range(19, 26), start=4):
+        leer = [sp for sp, _ in felder
+                if auswerten(fm[f'{sp}{zeile}'].value, blatt, nr_voll, i, n) != '']
+        ok(f'Zeile {zeile} leer', not leer, str(leer))
+
+    print('\n7) Anderer Wareneingang')
+    O = lambda z, nr=None: auswerten(fm[z].value, blatt, nr_offen, nr, n)  # noqa: E731
+    ok('Kunde gewechselt', O('B10') == 'Zweiter Kunde AG', repr(O('B10')))
+    ok('Lieferant gewechselt', O('B11') == 'Alpina Food', repr(O('B11')))
+    ok('erste Position gewechselt',
+       auswerten(fm['B16'].value, blatt, nr_offen, 1, n) == 'Mehl Type 550')
+    ok('nicht quittierter Schritt leer', O('B5') == '', repr(O('B5')))
+    ok('leeres LagerM2 leer', O('C28') == '', repr(O('C28')))
+    ok('zweite Position leer',
+       auswerten(fm['B17'].value, blatt, nr_offen, 2, n) == '')
+
+    print('\n8) Unbekannte und stornierte Nummer')
+    for nummer, wie in ((nr_storno, 'storniert'), ('WE-1999-9999', 'unbekannt')):
+        belegt = [z for z in ('B4', 'B5', 'B6', 'B10', 'B11', 'C28', 'B30')
+                  if auswerten(fm[z].value, blatt, nummer, None, n) != '']
+        belegt += [f'B{16 + i}' for i in range(3)
+                   if auswerten(fm[f'B{16 + i}'].value, blatt, nummer, i + 1, n) != '']
+        ok(f'{wie}: alles leer, kein #NV', not belegt, str(belegt))
+
+    print('\n' + '=' * 46)
+    print(f'{bestanden} bestanden, {fehler} gescheitert')
+    return 1 if fehler else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

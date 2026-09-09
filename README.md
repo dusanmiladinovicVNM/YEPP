@@ -36,8 +36,14 @@ icons/icon-maskable-512.png ← zamijeni
 
 apps-script/Code.gs        ceo backend — prijava, unos, kvitiranje, xlsx, CSV
 
+vorlage/Wareneingang-Vorlage.xlsx   gotova Excel šablona za SharePoint
+vorlage/Vorlage-Aufbau.bas          makro koji joj doda Power Query upite
+tools/vorlage_bauen.py              generator šablone iz CSV_SPALTEN
+
 tests/pwa.mjs              vozi pravi UI u Chromiumu sa lažnim backendom
 tests/backend.mjs          vozi Code.gs nad Sheets-om u memoriji
+tests/vorlage.py           računa formule šablone nad pravim CSV-om
+tests/gerippe.mjs          Sheets u memoriji, deljen između testova
 
 README.md                  ovaj fajl
 EXCEL.md                   šablon na SharePointu, Power Query, formule
@@ -250,18 +256,25 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 Dve suite, obe bez mreže i bez Google naloga:
 
 ```bash
-node tests/backend.mjs     # Code.gs nad Sheets-om u memoriji
-node tests/pwa.mjs         # pravi UI u Chromiumu, lažni Apps Script
+node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
+node   tests/pwa.mjs       # pravi UI u Chromiumu, lažni Apps Script
+python3 tests/vorlage.py   # formule Excel šablone nad pravim CSV-om
 ```
 
-Zovu se iz root-a repoa. `tests/pwa.mjs` traži Playwright — lokalno
-instaliran ili globalno preko `NODE_PATH`; ništa se ne dodaje u repo.
+Zovu se iz root-a repoa. `pwa.mjs` traži Playwright — lokalno instaliran ili
+globalno preko `NODE_PATH`; `vorlage.py` traži `openpyxl`. Ništa se ne dodaje
+u repo.
 
-`backend.mjs` cilja mesta gde klize indeksi kolona i redova: raspored
-kolona, brojni niz po godini, upis pozicija, kvitiranje, storno, CSV,
-admin prava i raspored ćelija u Excel listu. `pwa.mjs` vozi ceo tok —
-prijava, unos, brisanje pozicije, čuvanje, kvitiranje, Regalplatz,
-slanje, istekla sesija.
+`backend.mjs` cilja mesta gde klize indeksi kolona i redova: raspored kolona,
+brojni niz po godini, upis pozicija, kvitiranje, storno, CSV, admin prava i
+raspored ćelija u Excel listu. `pwa.mjs` vozi ceo tok — prijava, unos, brisanje
+pozicije, čuvanje, kvitiranje, Regalplatz, slanje, istekla sesija.
+`vorlage.py` puni šablonu izlazom iz `csv_beispiel.mjs` i računa svaku formulu:
+da li vuče pravu kolonu, da li se prazni redovi drže praznih, da li prelazak na
+drugi dokument menja sve.
+
+**Šta `vorlage.py` NE dokazuje:** da Excel otvori fajl bez prigovora. Formule
+su izračunate sopstvenim auswerter-om, ne Excel-kompatibilnim motorom.
 
 **Dodaješ ponašanje — dodaj test.** Checklista u chatu važi samo za ono
 što se ne može automatizovati: kako izgleda odštampan list, ponašanje na

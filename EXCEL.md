@@ -82,111 +82,39 @@ slučaj da nekome zatreba jedan dokument bez Excela.
 
 ---
 
-## Postavljanje (~45 min, jednom)
-
-### 1. Provera URL-a
-
-Zalepi u browser:
+## Šablon je već napravljen
 
 ```
-<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
+vorlage/Wareneingang-Vorlage.xlsx   arbeitsmappa: Formular, Daten, Nummern, Liste
+vorlage/Vorlage-Aufbau.bas          makro koji dodaje Power Query upite
+tools/vorlage_bauen.py              generator — odavde je fajl nastao
 ```
 
-Mora vratiti CSV koji počinje sa `WeNr,Kunde,Lieferant,...`. Ako vidiš Google
-login stranicu, `Zugriff` u Bereitstellung nije na *Jeder*.
+Sve što se moglo unapred: četiri lista, raspored kao na papiru, **83 formule**,
+padajuća lista na `J2`, žuta kolona `Bestehend`, oblast štampe `A1:H30` na
+jednu stranu. Ništa od toga ne kucaš.
 
-### 2. Upit `Daten`
+Generator čita `CSV_SPALTEN` **iz `Code.gs`**. Promeni li se endpoint, pokreneš
+`python3 tools/vorlage_bauen.py` i šablon je opet u koraku. Zato ovde nema
+argumenta „šablon se razilazi sa kodom" — ne pravi se rukom.
 
-**Daten → Aus dem Web** → gornji URL → autentifikacija **Anonym**.
+Ostaju samo **upiti**, jer njih Excel mora da napravi sam: Power Query delovi
+sklopljeni izvan Excela se često odbiju bez poruke.
 
-U Power Query editoru:
-- **Erste Zeile als Überschriften verwenden**
-- tipove kolona ostavi kao **Text** — datumi su već `GGGG-MM-TT` i kao tekst
-  se ne pomeraju po vremenskoj zoni. `Anzahl`, `KG` i `LagerM2` postavi na
-  **Dezimalzahl**.
-- upit preimenuj u **`Daten`**
-- **Schliessen & laden in… → Neues Arbeitsblatt**, list nazovi `Daten`
+---
 
-### 3. Upit `Nummern` za padajuću listu
+## Postavljanje (~15 min, jednom)
 
-Desni klik na upit `Daten` → **Duplizieren**. U duplikatu:
-- **Andere Spalten entfernen** osim `WeNr`
-- **Duplikate entfernen**
-- Sortieren absteigend
-- preimenuj u **`Nummern`**, učitaj u novi list `Nummern`
+### Windows — makro
 
-### 4. List `Formular`
-
-Nov list, raspored **isti kao na papiru** — i isti kao `.xlsx` koji stiže
-mejlom, da se ne razlikuju:
-
-| Ćelija | Sadržaj |
-|---|---|
-| `A1` | `Wareneingang / Material reception` |
-| `A3:D3` | `Aufgabe / Task` · `Name Mitarbeiter / Employee name` · `Datum / Date` · `Uhrzeit / Time` |
-| `A4` `A5` `A6` | `Angenommen / Accepted` · `Gezählt & kontrolliert` · `Eingelagert / stored` |
-| `A8` | `Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.` |
-| `A10` `A11` | `Kunde / Client` · `Lieferant / Supplier` |
-| `A13` | `Bei neuem und bestehendem Material mit oder ohne Lieferschein notwendig:` |
-| `A15:H15` | zaglavlje pozicija, osam kolona kao na papiru |
-| `A16:A25` | brojevi `1` do `10`, ukucani |
-| `A27` `A28` | `Lagerfläche / storage space` · `m2 Anzahl / m2 quantity` |
-| `D27` `D28` | `Umrechung/Conversion` · `1 g = 0.001 kg` |
-
-**Biranje dokumenta** — van oblasti štampe:
-
-- `J1`: tekst `Wareneingang wählen`
-- `J2`: **Daten → Datenüberprüfung → Liste**, izvor `=Nummern!$A$2:$A$1000`
-
-### 5. Formule
-
-Zaglavlje — traži prvi red tog WE-broja:
-
-```excel
-B4  =WENNFEHLER(INDEX(Daten!F:F;VERGLEICH($J$2;Daten!$A:$A;0));"")
-C4  =WENNFEHLER(INDEX(Daten!G:G;VERGLEICH($J$2;Daten!$A:$A;0));"")
-D4  =WENNFEHLER(INDEX(Daten!H:H;VERGLEICH($J$2;Daten!$A:$A;0));"")
-
-B5  … Daten!I:I      C5  … Daten!J:J      D5  … Daten!K:K
-B6  … Daten!L:L      C6  … Daten!M:M      D6  … Daten!N:N
-
-B10 =WENNFEHLER(INDEX(Daten!B:B;VERGLEICH($J$2;Daten!$A:$A;0));"")
-B11 =WENNFEHLER(INDEX(Daten!C:C;VERGLEICH($J$2;Daten!$A:$A;0));"")
-C28 =WENNFEHLER(INDEX(Daten!D:D;VERGLEICH($J$2;Daten!$A:$A;0));"")
-```
-
-Pozicije — ključ `WeNr-Nr` iz kolone `W`:
-
-```excel
-B16 =WENNFEHLER(INDEX(Daten!P:P;VERGLEICH($J$2&"-"&$A16;Daten!$W:$W;0));"")
-C16 … Daten!Q:Q      D16 … Daten!R:R      E16 … Daten!S:S
-F16 … Daten!T:T      G16 … Daten!U:U      H16 … Daten!V:V
-```
-
-`B16:H16` povuci naniže do reda **25**. Deset redova pokriva veće isporuke;
-prazni ostaju prazni jer `WENNFEHLER` guta `#NV`.
-
-Engleski Excel: `WENNFEHLER` = `IFERROR`, `VERGLEICH` = `MATCH`,
-`INDEX` = `INDEX`.
-
-### 6. Izgled i štampa
-
-- `H15:H25` — pozadina **žuta**, kao kolona `Bestehend` na papiru
-- okviri oko `A3:D6`, `A10:B11`, `A15:H25`, `A27:D28`
-- **Seitenlayout → Druckbereich festlegen** = `A1:H28`
-- **Skalierung → Auf eine Seite anpassen**
-
-Kolona `J` je van oblasti štampe, pa se padajuća lista ne štampa.
-
-### 7. List `Liste`
-
-Za evidenciju preko svih isporuka: prevuci upit `Daten` još jednom na nov list
-i uključi **Als Tabelle formatieren** sa filterima. Ovde se ništa ne računa —
-to je ista tabela, samo vidljiva.
-
-### 8. Automatsko osvežavanje
-
-Sačuvaj kao **`.xlsm`**. `Alt+F11` → `DieseArbeitsmappe`:
+1. `Wareneingang-Vorlage.xlsx` otvoriti
+2. `Alt+F11` → **Datei → Datei importieren** → `Vorlage-Aufbau.bas`
+3. Na vrhu modula upisati `WEB_APP_URL` i `TOKEN`; `TAGE` po potrebi
+4. Kursor u `AbfragenAnlegen`, `F5`
+5. Prvi put Excel pita za pristup izvoru → **Anonym**, i za nivoe
+   privatnosti → **Ignorieren** ili sve na *Öffentlich*
+6. **Speichern unter → Excel-Arbeitsmappe mit Makros (\*.xlsm)**
+7. U `DieseArbeitsmappe` zalepiti:
 
 ```vba
 Private Sub Workbook_Open()
@@ -194,17 +122,72 @@ Private Sub Workbook_Open()
 End Sub
 ```
 
-Na Macu je makro jedini pouzdan način; *Aktualisieren beim Öffnen* u
-svojstvima upita tamo ume da se preskoči bez poruke.
+Makro pravi oba upita i puni `Daten`, `Nummern` i `Liste`. Sme da se pokrene
+više puta — postojeći upiti se zamenjuju, ne dupliraju.
 
-### 9. Na SharePoint
+### Mac — upiti rukom
+
+Excel za Mac ne poznaje `Queries.Add`; makro to prijavi i stane. Dva upita se
+tada prave jednom, kroz UI. **Daten → Aus dem Web**, URL:
+
+```
+<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
+```
+
+autentifikacija **Anonym**. U editoru:
+
+- **Erste Zeile als Überschriften verwenden**
+- tipove ostaviti na **Text**, osim `Anzahl`, `KG`, `LagerM2` →
+  **Dezimalzahl** i `Nr` → **Ganze Zahl**.
+  Datumi **moraju ostati tekst** — CSV šalje `GGGG-MM-TT`, a kao datum
+  učitani se pomeraju po vremenskoj zoni
+- upit nazvati **`Daten`**, učitati u postojeći list `Daten`, ćelija `A1`
+
+Zatim desni klik na `Daten` → **Duplizieren**, u duplikatu:
+**Andere Spalten entfernen** osim `WeNr` → **Duplikate entfernen** →
+**Sortieren absteigend**, nazvati **`Nummern`**, učitati u list `Nummern`.
+
+Isti upit `Daten` učitati još jednom u list `Liste` — to je vidljiva
+evidencija.
+
+Na kraju sačuvati kao `.xlsm` i dodati `Workbook_Open` kao gore.
+
+**Bitno pri učitavanju:** u svojstvima upita
+*Wenn die Anzahl der Zeilen sich ändert* postaviti na **Zellen überschreiben**,
+ne *Zeilen einfügen*. Inače se pri osvežavanju redovi pomeraju.
+
+### Provera odmah
+
+U `J2` izabrati broj iz padajuće liste — obrazac se popuni. Drugi broj →
+menja se odmah, bez osvežavanja.
+
+---
+
+## Na SharePoint
 
 Fajl ide u biblioteku. **Ne otvarati ga iz browsera** — Excel for Web ne
 osvežava Power Query i to ne javlja; videćeš podatke od pre nedelju dana bez
 ijednog upozorenja. Sinhronizuj biblioteku i otvaraj iz Findera.
 
-Tada je jedan klik = otvaranje fajla. Podaci su trenutni, obrazac se bira
-padajućom listom, štampa staje na jednu stranu.
+Tada je jedan klik = otvaranje fajla.
+
+---
+
+## Ako treba menjati raspored
+
+Ne u Excelu — u `tools/vorlage_bauen.py`, pa:
+
+```bash
+python3 tools/vorlage_bauen.py
+python3 tests/vorlage.py
+```
+
+Test puni šablon pravim izlazom endpointa i proverava da svaka formula vuče
+baš onu kolonu koju treba. Ručna izmena u Excelu preživi do prvog regenerisanja
+i ne prolazi kroz taj test.
+
+`POS_ZEILEN` u generatoru je broj redova pozicija (sada 10), `DATEN_ZEILEN`
+gornja granica pretrage (sada 20000).
 
 ---
 
