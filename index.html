@@ -641,6 +641,7 @@ function datumText(wert) {
 /* ---------- API ---------- */
 
 async function post(payload) {
+  if (!CONFIG.url) throw new Error('nicht_verbunden');
   // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht beantwortet.
   const res  = await fetch(CONFIG.url, {
     method: 'POST',
@@ -651,15 +652,36 @@ async function post(payload) {
   try {
     return JSON.parse(text);
   } catch (e) {
+    // Kein JSON heisst fast immer: die Bereitstellung ist nicht oeffentlich
+    // und Google hat eine Anmelde- oder Fehlerseite geschickt.
     console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-    throw e;
+    throw new Error('keine_antwort');
   }
 }
 
 async function get(params) {
+  if (!CONFIG.url) throw new Error('nicht_verbunden');
   const q = new URLSearchParams(Object.assign({ session: S.session }, params));
   const res = await fetch(CONFIG.url + '?' + q.toString());
   return res.json();
+}
+
+/**
+ * «Keine Verbindung» ist die haeufigste Luege einer solchen App: meist ist
+ * nicht das Netz weg, sondern die Adresse fehlt oder die Bereitstellung ist
+ * nicht oeffentlich. Beides steht hier im Klartext.
+ */
+function verbindungText(e) {
+  const art = e && e.message;
+  if (art === 'nicht_verbunden') {
+    return 'Diese App ist noch nicht mit dem Backend verbunden: ' +
+           'CONFIG.url in index.html ist leer.';
+  }
+  if (art === 'keine_antwort') {
+    return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
+           'Zugriff «Jeder», Adresse endet auf /exec.';
+  }
+  return 'Keine Verbindung. Bitte Internetverbindung prüfen.';
 }
 
 function sessionWeg() {
@@ -717,7 +739,7 @@ async function anmelden() {
       m.classList.add('zeigen');
     }
   } catch (e) {
-    m.textContent = 'Keine Verbindung. Bitte Internetverbindung prüfen.';
+    m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
     btn.disabled = false;
@@ -1043,7 +1065,9 @@ async function speichern() {
       }
     }
   } catch (e) {
-    toast('Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
+    toast(e && e.message === 'keine_antwort' || e && e.message === 'nicht_verbunden'
+      ? verbindungText(e)
+      : 'Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
   } finally {
     S.laeuft = false;
     btn.disabled = false;
@@ -1467,7 +1491,17 @@ $('frage-ja').addEventListener('click', () => {
   if (frage._dann) frage._dann();
 });
 
-if (S.session) start(); else zeigeScreen('scr-login');
+if (!CONFIG.url) {
+  // Ohne diese eine Zeile geht gar nichts, und ohne Hinweis sieht es aus
+  // wie ein Netzproblem — bis jemand die Browser-Konsole aufmacht.
+  $('lg-meldung').textContent = verbindungText(new Error('nicht_verbunden'));
+  $('lg-meldung').classList.add('zeigen');
+  zeigeScreen('scr-login');
+} else if (S.session) {
+  start();
+} else {
+  zeigeScreen('scr-login');
+}
 </script>
 </body>
 </html>

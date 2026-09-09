@@ -242,6 +242,31 @@ await page.waitForSelector('#scr-login.aktiv');
 ok('faellt auf den Login zurueck', await sichtbar('#scr-login'));
 ok('Sitzung geloescht', (await page.evaluate(() => localStorage.getItem('session'))) === null);
 
+// --- 10) Nicht verbunden, falsch bereitgestellt ----------------------------
+console.log('\n10) Klartext statt «Keine Verbindung»');
+await page.evaluate(() => { CONFIG.url = ''; });
+await page.fill('#lg-email', 'anna@firma.ch');
+await page.fill('#lg-pass', 'geheim123');
+await page.click('#lg-senden');
+await page.waitForSelector('#lg-meldung.zeigen');
+ok('fehlende Adresse wird benannt',
+   (await page.textContent('#lg-meldung')).includes('CONFIG.url'),
+   await page.textContent('#lg-meldung'));
+
+// Der haeufigste Fall: die Bereitstellung ist nicht oeffentlich, Google
+// schickt eine Anmeldeseite, und die App meldete bisher «Keine Verbindung».
+await page.evaluate(() => {
+  CONFIG.url = 'https://example.test/exec';
+  window.fetch = async () => ({ status: 200,
+    text: async () => '<!DOCTYPE html><title>Anmelden</title>' });
+});
+await page.click('#lg-senden');
+await page.waitForFunction(() =>
+  document.getElementById('lg-meldung').textContent.includes('Bereitstellung'));
+ok('Antwort ohne JSON wird benannt',
+   (await page.textContent('#lg-meldung')).includes('/exec'),
+   await page.textContent('#lg-meldung'));
+
 await browser.close();
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
