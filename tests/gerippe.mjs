@@ -34,6 +34,13 @@ class Range {
     this.sh.formate.push({ format: f, spalte: this.c, zeile: this.r, zeilen: this.nr });
     return this;
   }
+  // Verbundene Bereiche werden gemerkt: an ihnen haengt, ob die langen
+  // Beschriftungen des Papiers im Excel lesbar sind oder abgeschnitten.
+  merge() {
+    this.sh.verbunden.push({ zeile: this.r, spalte: this.c,
+                             zeilen: this.nr, spalten: this.nc });
+    return this;
+  }
   setFontWeight() { return this; } setFontSize() { return this; }
   setBackground() { return this; } setBorder() { return this; }
   setWrap() { return this; } setVerticalAlignment() { return this; }
@@ -47,6 +54,7 @@ class Sheet {
     this.daten = [];
     this.geloescht = [];
     this.formate = [];
+    this.verbunden = [];
     if (kopf) this.daten.push(kopf.slice());
   }
   _z(n) { while (this.daten.length < n) this.daten.push([]); return this.daten[n - 1]; }
@@ -104,6 +112,9 @@ function laden(ss) {
     .replace("const SHEET_ID   = '';", "const SHEET_ID   = 'X';");
   const ctx = {
     console,
+    // Dasselbe Date wie im Test, sonst scheitert `instanceof Date` an der
+    // Realm-Grenze der vm — in Apps Script gibt es nur eine Realm.
+    Date,
     SpreadsheetApp: {
       openById: () => ss,
       create: () => { const t = new Spreadsheet(); t.blaetter.T = new Sheet('T'); return t; },
@@ -113,7 +124,12 @@ function laden(ss) {
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     DriveApp: {
       getFileById: () => ({ setTrashed() {}, makeCopy() {} }),
-      getFolderById: () => ordner()
+      getFolderById: id => {
+        // Eine ID, die es nicht gibt, wirft — daran haengt die Rueckmeldung
+        // «Ordner nicht erreichbar» im Adminbereich.
+        if (String(id).indexOf('kaputt') >= 0) throw new Error('not found');
+        return ordner(id);
+      }
     },
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
     ScriptApp: { getOAuthToken: () => 'tok' },
@@ -140,9 +156,10 @@ function laden(ss) {
     },
     __mails: []
   };
-  function ordner() {
-    return { getFoldersByName: () => ({ hasNext: () => false }),
-             createFolder: () => ordner(), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
+  function ordner(id) {
+    return { getName: () => 'Ordner ' + String(id || 'X'),
+             getFoldersByName: () => ({ hasNext: () => false }),
+             createFolder: () => ordner(id), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
   }
   vm.createContext(ctx);
   vm.runInContext(quelle, ctx);

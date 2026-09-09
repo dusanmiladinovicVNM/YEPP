@@ -90,6 +90,11 @@ vorlage/Vorlage-Aufbau.bas          makro koji dodaje Power Query upite
 tools/vorlage_bauen.py              generator — odavde je fajl nastao
 ```
 
+Zaglavlje radi sa spojenim ćelijama, jer je kolona A uska `N°` kolona tabele
+pozicija: **A:B** zadatak, **C:D** ime, **E** datum, **F** vreme, a Kunde i
+Lieferant **A:B** natpis / **C:F** vrednost. Mejl-verzija (`blattAufbauen` u
+`Code.gs`) ima isto to, namerno.
+
 Sve što se moglo unapred: četiri lista, raspored kao na papiru, **85 formula**,
 padajuća lista na `J2`, žuta kolona `Bestehend`, oblast štampe `A1:H30` na
 jednu stranu. Ništa od toga ne kucaš.

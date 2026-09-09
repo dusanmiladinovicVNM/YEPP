@@ -71,6 +71,18 @@ await page.addInitScript(() => {
         return A({ ok: true });
       case 'we_senden':
         return A({ ok: true, an: 'lager@firma.ch', url: '' });
+      case 'admin_parameter':
+        if (d.werte) DB.par = d.werte;
+        return A({ ok: true,
+          werte: DB.par || { MailAn: 'lager@firma.ch', ArchivOrdner: '1Arch',
+                             FotoOrdner: '' },
+          ordner: { ArchivOrdner: 'Wareneingang Archiv', FotoOrdner: '' } });
+      case 'admin_liste':
+        return A({ ok: true, benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
+          aktiv: true, admin: true, neu: false, gesperrt: false }] });
+      case 'admin_neu':
+        return A({ ok: true, passwort: 'Xy7k9m2Qw4', text: 'Guten Tag …',
+                   wem: d.name + ' <' + d.email + '>' });
       default:
         return A({ ok: true });
     }
@@ -231,19 +243,62 @@ await page.waitForFunction(() => !document.querySelector('[data-schritt="angenom
 ok('nach dem Nachtragen kein Knopf mehr',
    !(await page.$('[data-schritt="angenommen"]')));
 
-// --- 9) Abgelaufene Sitzung -------------------------------------------------
-console.log('\n9) Abgelaufene Sitzung');
+// --- 9) Verwaltung ---------------------------------------------------------
+console.log('\n9) Verwaltung');
+await page.click('#dt-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-admin');
+await page.waitForSelector('#scr-admin.aktiv');
+await page.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
+
+ok('Empfaengeradresse geladen',
+   (await page.inputValue('#adm-mailan')) === 'lager@firma.ch');
+ok('Ordner-ID geladen', (await page.inputValue('#adm-archiv')) === '1Arch');
+ok('Ordnername statt blosser ID',
+   (await page.textContent('#adm-archiv-name')).includes('Wareneingang Archiv'));
+ok('leerer Ordner erklaert sich',
+   (await page.textContent('#adm-foto-name')).includes('übersprungen'));
+
+await page.fill('#adm-mailan', 'neu@firma.ch');
+await page.fill('#adm-foto', 'https://drive.google.com/drive/folders/1Foto');
+await page.click('#adm-par');
+await page.waitForFunction(() =>
+  window.__gesendet.some(x => x.action === 'admin_parameter' && x.werte));
+const par = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_parameter' && x.werte).pop());
+ok('neue Adresse mitgeschickt', par.werte.MailAn === 'neu@firma.ch',
+   JSON.stringify(par.werte));
+ok('eingefuegte Ordner-Adresse mitgeschickt',
+   par.werte.FotoOrdner === 'https://drive.google.com/drive/folders/1Foto');
+
+// Der Weg, der schon da war: Benutzer anlegen und Zugangsmail verschicken
+await page.fill('#adm-name', 'Bob Meier');
+await page.fill('#adm-email', 'bob@firma.ch');
+await page.check('#adm-mail');
+await page.click('#adm-neu');
+await page.waitForSelector('#dlg-pw.zeigen');
+const neu = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_neu').pop());
+ok('Benutzer mit Mailwunsch angelegt',
+   neu.email === 'bob@firma.ch' && neu.mail === true, JSON.stringify(neu));
+ok('Passwort wird einmal gezeigt',
+   (await page.textContent('#pw-wert')) === 'Xy7k9m2Qw4');
+await page.click('#pw-fertig');
+
+// --- 10) Abgelaufene Sitzung ------------------------------------------------
+console.log('\n10) Abgelaufene Sitzung');
 await page.evaluate(() => {
   window.fetch = async () => ({ text: async () => '{"ok":false,"error":"session"}',
                                 json: async () => ({ ok: false, error: 'session' }) });
 });
-await page.click('#dt-zurueck');
+// Ein Klick, der wirklich zum Server geht — «Zurück» allein tut es nicht.
+await page.click('#adm-par');
 await page.waitForSelector('#scr-login.aktiv');
 ok('faellt auf den Login zurueck', await sichtbar('#scr-login'));
 ok('Sitzung geloescht', (await page.evaluate(() => localStorage.getItem('session'))) === null);
 
 // --- 10) Nicht verbunden, falsch bereitgestellt ----------------------------
-console.log('\n10) Klartext statt «Keine Verbindung»');
+console.log('\n11) Klartext statt «Keine Verbindung»');
 await page.evaluate(() => { CONFIG.url = ''; });
 await page.fill('#lg-email', 'anna@firma.ch');
 await page.fill('#lg-pass', 'geheim123');

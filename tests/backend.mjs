@@ -275,7 +275,59 @@ console.log('\n8) Sitzung');
         .error === 'zu_kurz');
 }
 
-console.log('\n9) Excel-Blatt');
+console.log('\n9) Einstellungen im Adminbereich');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const bob = ctx.sitzungPruefen('tokB');
+
+  const leer = ctx.adminParameter({}, u);
+  ok('anfangs alle drei leer',
+     leer.werte.MailAn === '' && leer.werte.ArchivOrdner === '' &&
+     leer.werte.FotoOrdner === '', JSON.stringify(leer.werte));
+
+  // Wer den Ordner offen hat, kopiert die Adresse - nicht die ID darin.
+  const r = ctx.adminParameter({ werte: {
+    MailAn: ' lager@firma.ch ',
+    ArchivOrdner: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz09/',
+    FotoOrdner: '1FotoFotoFotoFotoFotoFotoFo'
+  } }, u);
+  ok('Mail getrimmt gespeichert', r.werte.MailAn === 'lager@firma.ch', r.werte.MailAn);
+  ok('Ordner-ID aus der Adresse geholt',
+     r.werte.ArchivOrdner === '1AbCdEfGhIjKlMnOpQrStUvWxYz09', r.werte.ArchivOrdner);
+  ok('blosse ID bleibt, wie sie ist',
+     r.werte.FotoOrdner === '1FotoFotoFotoFotoFotoFotoFo', r.werte.FotoOrdner);
+  ok('Ordnername kommt mit', r.ordner.ArchivOrdner.startsWith('Ordner '),
+     r.ordner.ArchivOrdner);
+
+  // Der Wert steht wirklich im Blatt und wird von parameter() gefunden
+  ok('MailAn im Blatt Parameter', ctx.parameter('MailAn') === 'lager@firma.ch');
+  const par = ss.blaetter.Parameter;
+  ok('keine Zeile doppelt angelegt',
+     par.daten.filter(z => z[0] === 'MailAn').length === 1,
+     JSON.stringify(par.daten));
+
+  ctx.adminParameter({ werte: { MailAn: 'neu@firma.ch' } }, u);
+  ok('zweites Speichern ueberschreibt', ctx.parameter('MailAn') === 'neu@firma.ch');
+  ok('nicht mitgeschickte Werte bleiben stehen',
+     ctx.parameter('FotoOrdner') === '1FotoFotoFotoFotoFotoFotoFo');
+
+  ok('unsinnige Adresse abgewiesen',
+     ctx.adminParameter({ werte: { MailAn: 'lager.firma.ch' } }, u).error === 'mail_ungueltig');
+  ok('nach der Abweisung steht der alte Wert', ctx.parameter('MailAn') === 'neu@firma.ch');
+
+  const kaputt = ctx.adminParameter({ werte: { ArchivOrdner: 'kaputt-kaputt-kaputt-kaputt' } }, u);
+  ok('unerreichbarer Ordner ohne Namen', kaputt.ordner.ArchivOrdner === '',
+     kaputt.ordner.ArchivOrdner);
+
+  // Rechte: die Pruefung sitzt in verteilen(), nicht in der Oberflaeche
+  ok('Nicht-Admin abgewiesen',
+     ctx.verteilen({ action: 'admin_parameter', session: 'tokB' }).error === 'keine Berechtigung');
+  ok('Admin kommt durch',
+     ctx.verteilen({ action: 'admin_parameter', session: 'tokA' }).ok === true);
+}
+
+console.log('\n10) Excel-Blatt');
 {
   const ss = neueTabelle(), ctx = laden(ss);
   const u = mitBenutzer(ctx, ss);
@@ -290,11 +342,27 @@ console.log('\n9) Excel-Blatt');
 
   ok('Titel in A1', String(zelle(1, 1)).startsWith('Wareneingang / Material reception'));
   ok('Quittungskopf in Zeile 3', zelle(3, 1) === 'Aufgabe / Task');
-  ok('Angenommen mit Namen', zelle(4, 2) === 'Anna Muster');
-  ok('Gezaehlt mit Namen', zelle(5, 2) === 'Anna Muster');
-  ok('Eingelagert leer', zelle(6, 2) === '');
-  ok('Kunde in A10/B10', zelle(10, 1) === 'Kunde / Client' && zelle(10, 2) === 'Kunde AG');
-  ok('Lieferant in Zeile 11', zelle(11, 2) === 'Lief GmbH');
+  ok('Angenommen mit Namen', zelle(4, 3) === 'Anna Muster');
+  ok('Gezaehlt mit Namen', zelle(5, 3) === 'Anna Muster');
+  ok('Eingelagert leer', zelle(6, 3) === '');
+  ok('Datum der Quittung in Spalte E', /^\d{4}-\d{2}-\d{2}$/.test(String(zelle(4, 5))),
+     String(zelle(4, 5)));
+  ok('Uhrzeit der Quittung in Spalte F', /^\d{2}:\d{2}$/.test(String(zelle(4, 6))),
+     String(zelle(4, 6)));
+  ok('Kunde in A10/C10', zelle(10, 1) === 'Kunde / Client' && zelle(10, 3) === 'Kunde AG');
+  ok('Lieferant in Zeile 11', zelle(11, 3) === 'Lief GmbH');
+
+  // Ohne die Verbindungen stehen die langen Beschriftungen in der 60px
+  // schmalen N°-Spalte und werden abgeschnitten.
+  const verbunden = (z, s, n) => sh.verbunden.some(v =>
+    v.zeile === z && v.spalte === s && v.spalten === n && v.zeilen === 1);
+  ok('Aufgabenspalte verbunden A:B', [3, 4, 5, 6].every(z => verbunden(z, 1, 2)),
+     JSON.stringify(sh.verbunden));
+  ok('Namensspalte verbunden C:D', [3, 4, 5, 6].every(z => verbunden(z, 3, 2)));
+  ok('Hinweis ueber die ganze Breite', verbunden(8, 1, 8) && verbunden(13, 1, 8));
+  ok('Kunde und Lieferant verbunden',
+     verbunden(10, 1, 2) && verbunden(10, 3, 4) &&
+     verbunden(11, 1, 2) && verbunden(11, 3, 4));
   ok('Positionskopf in Zeile 15', zelle(15, 1) === 'N°');
   ok('achte Spalte ist Bestehend', String(zelle(15, 8)).startsWith('Bestehend'));
   ok('erste Position in Zeile 16', zelle(16, 2) === 'Schrauben M6');
@@ -321,7 +389,42 @@ console.log('\n9) Excel-Blatt');
   ok('Fuss wandert auf Zeile 26', z2(26, 1) === 'Lagerfläche / storage space');
 }
 
-console.log('\n10) Einrichtung — Textspalten');
+console.log('\n11) Umgedeutete Datums- und Zeitwerte');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const nr = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u).weNr;
+
+  // Genau das, was eine Tabelle ohne Textformat zurueckgibt: aus «08:30»
+  // wurde eine Uhrzeit am 30.12.1899, aus «2026-09-09» ein Datum.
+  const w = ss.blaetter.Wareneingang, k = ctx.spalten(w.daten[0]);
+  w.daten[1][k.AngDat]  = new Date(2026, 8, 9);
+  w.daten[1][k.AngZeit] = new Date(1899, 11, 30, 17, 3);
+  const p = ss.blaetter.Positionen, pk = ctx.spalten(p.daten[0]);
+  p.daten[1][pk.MHD] = new Date(2027, 9, 1);
+
+  const det = ctx.weDetail({ weNr: nr }, u);
+  ok('Datum wieder als Datum', det.kopf.AngDat === '2026-09-09', det.kopf.AngDat);
+  ok('Uhrzeit wieder als Uhrzeit', det.kopf.AngZeit === '17:03', det.kopf.AngZeit);
+  ok('MHD wieder als Datum', det.positionen[0].mhd === '2027-10-01',
+     det.positionen[0].mhd);
+
+  const liste = ctx.weListe({}, u).liste[0];
+  ok('Liste zeigt kein 1899', liste.zeit === '17:03', liste.zeit);
+
+  const zeilen = ctx.csvExport().split('\n');
+  const kopfCsv = felder(zeilen[0]), erste = felder(zeilen[1]);
+  ok('CSV liefert die Uhrzeit als Text',
+     erste[kopfCsv.indexOf('AngZeit')] === '17:03',
+     erste[kopfCsv.indexOf('AngZeit')]);
+  ok('CSV liefert das Datum als Text',
+     erste[kopfCsv.indexOf('AngDat')] === '2026-09-09',
+     erste[kopfCsv.indexOf('AngDat')]);
+  ok('CSV laesst Zahlen in Ruhe',
+     erste[kopfCsv.indexOf('Anzahl')] === '120', erste[kopfCsv.indexOf('Anzahl')]);
+}
+
+console.log('\n12) Einrichtung — Textspalten');
 {
   const ZEIT = ['AngDat', 'AngZeit', 'GezDat', 'GezZeit', 'EinDat', 'EinZeit'];
 

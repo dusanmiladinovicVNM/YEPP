@@ -148,9 +148,9 @@ def main():
     raster = {
         'A1':  'Wareneingang / Material reception',
         'A3':  'Aufgabe / Task',
-        'B3':  'Name Mitarbeiter / Employee name',
-        'C3':  'Datum / Date',
-        'D3':  'Uhrzeit / Time',
+        'C3':  'Name Mitarbeiter / Employee name',
+        'E3':  'Datum / Date',
+        'F3':  'Uhrzeit / Time',
         'A6':  'Eingelagert / stored',
         'A10': 'Kunde / Client',
         'A11': 'Lieferant / Supplier',
@@ -174,18 +174,26 @@ def main():
     W = lambda z, nr=None: auswerten(fm[z].value, blatt, nr_voll, nr, n)  # noqa: E731
 
     pruefungen = [
-        ('B10', None, 'Kunde'), ('B11', None, 'Lieferant'),
-        ('B4', None, 'AngNam'), ('C4', None, 'AngDat'), ('D4', None, 'AngZeit'),
-        ('B5', None, 'GezNam'), ('C5', None, 'GezDat'), ('D5', None, 'GezZeit'),
-        ('B6', None, 'EinNam'), ('C6', None, 'EinDat'), ('D6', None, 'EinZeit'),
+        ('C10', None, 'Kunde'), ('C11', None, 'Lieferant'),
+        ('C4', None, 'AngNam'), ('E4', None, 'AngDat'), ('F4', None, 'AngZeit'),
+        ('C5', None, 'GezNam'), ('E5', None, 'GezDat'), ('F5', None, 'GezZeit'),
+        ('C6', None, 'EinNam'), ('E6', None, 'EinDat'), ('F6', None, 'EinZeit'),
         ('C28', None, 'LagerM2'), ('B30', None, 'KopfBemerkung'),
     ]
     for zelle, nr, feld in pruefungen:
         ok(f'{zelle} zieht {feld}', W(zelle, nr) == quelle[feld],
            f'{W(zelle, nr)!r} statt {quelle[feld]!r}')
 
-    ok('Kunde mit Komma unzerteilt', W('B10') == 'Meier, Sohn & Co', repr(W('B10')))
-    ok('Gezaehlt zeigt den anderen Mitarbeiter', W('B5') == 'Bob Meier', repr(W('B5')))
+    ok('Kunde mit Komma unzerteilt', W('C10') == 'Meier, Sohn & Co', repr(W('C10')))
+    ok('Gezaehlt zeigt den anderen Mitarbeiter', W('C5') == 'Bob Meier', repr(W('C5')))
+
+    # Ohne die Verbindungen stehen «Gezählt & kontrolliert / counted &
+    # controlled» und der Name in der 9 Zeichen schmalen N°-Spalte.
+    verbunden = {str(b) for b in fm.merged_cells.ranges}
+    for bereich in ('A3:B3', 'C3:D3', 'A5:B5', 'C5:D5',
+                    'A10:B10', 'C10:F10', 'A11:B11', 'C11:F11',
+                    'A8:H8', 'A13:H13'):
+        ok(f'{bereich} verbunden', bereich in verbunden, str(sorted(verbunden)))
 
     print('\n5) Positionen')
     pos = [dict(zip(kopf, z)) for z in daten if z[0] == nr_voll]
@@ -215,18 +223,18 @@ def main():
 
     print('\n7) Anderer Wareneingang')
     O = lambda z, nr=None: auswerten(fm[z].value, blatt, nr_offen, nr, n)  # noqa: E731
-    ok('Kunde gewechselt', O('B10') == 'Zweiter Kunde AG', repr(O('B10')))
-    ok('Lieferant gewechselt', O('B11') == 'Alpina Food', repr(O('B11')))
+    ok('Kunde gewechselt', O('C10') == 'Zweiter Kunde AG', repr(O('C10')))
+    ok('Lieferant gewechselt', O('C11') == 'Alpina Food', repr(O('C11')))
     ok('erste Position gewechselt',
        auswerten(fm['B16'].value, blatt, nr_offen, 1, n) == 'Mehl Type 550')
-    ok('nicht quittierter Schritt leer', O('B5') == '', repr(O('B5')))
+    ok('nicht quittierter Schritt leer', O('C5') == '', repr(O('C5')))
     ok('leeres LagerM2 leer', O('C28') == '', repr(O('C28')))
     ok('zweite Position leer',
        auswerten(fm['B17'].value, blatt, nr_offen, 2, n) == '')
 
     print('\n8) Unbekannte und stornierte Nummer')
     for nummer, wie in ((nr_storno, 'storniert'), ('WE-1999-9999', 'unbekannt')):
-        belegt = [z for z in ('B4', 'B5', 'B6', 'B10', 'B11', 'C28', 'B30')
+        belegt = [z for z in ('C4', 'C5', 'C6', 'C10', 'C11', 'C28', 'B30')
                   if auswerten(fm[z].value, blatt, nummer, None, n) != '']
         belegt += [f'B{16 + i}' for i in range(3)
                    if auswerten(fm[f'B{16 + i}'].value, blatt, nummer, i + 1, n) != '']
@@ -235,7 +243,7 @@ def main():
     print('\n9) Warnzeile — das Formularblatt hat feste Zeilen')
     # Der Zaehler muss denselben Bereich absuchen wie die uebrigen Formeln,
     # sonst warnt er ueber andere Daten, als das Blatt anzeigt.
-    m_kopf = MUSTER.match(fm['B10'].value)
+    m_kopf = MUSTER.match(fm['C10'].value)
     we_bereich = (f'Daten!${m_kopf.group(6)}${m_kopf.group(7)}:'
                   f'${m_kopf.group(8)}${m_kopf.group(9)}')
     ok('Zaehler nutzt den WeNr-Bereich der Formeln',

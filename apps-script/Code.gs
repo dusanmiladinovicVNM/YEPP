@@ -101,6 +101,7 @@ function verteilen(d) {
       case 'admin_liste':  return adminListe();
       case 'admin_neu':    return adminNeu(d, u);
       case 'admin_aktion': return adminAktion(d, u);
+      case 'admin_parameter': return adminParameter(d, u);
     }
   }
 
@@ -457,8 +458,8 @@ function weListe(d, u) {
     }
     aus.push({
       weNr:      String(dat[i][k.WeNr]),
-      datum:     String(dat[i][k.AngDat] || ''),
-      zeit:      String(dat[i][k.AngZeit] || ''),
+      datum:     feldText('AngDat', dat[i][k.AngDat]),
+      zeit:      feldText('AngZeit', dat[i][k.AngZeit]),
       kunde:     String(dat[i][k.Kunde] || ''),
       lieferant: String(dat[i][k.Lieferant] || ''),
       status:    String(dat[i][k.Status] || ''),
@@ -470,6 +471,21 @@ function weListe(d, u) {
   return { ok: true, liste: aus.slice(0, 100) };
 }
 
+/**
+ * Ein Feld als Text. Ist die Spalte in der Tabelle nicht als Text formatiert,
+ * macht Sheets aus dem geschriebenen «08:30» eine Uhrzeit und aus
+ * «2026-09-09» ein Datum; zurueck kommt dann ein Zeitstempel, und in der App
+ * stand «Sat Dec 30 1899 17:03:00». setupAnlegen verhindert den Fall fuer
+ * neue Tabellen — das hier holt zurueck, was schon falsch drinsteht, und
+ * bleibt die Bremse, falls jemand das Format wieder wegnimmt.
+ */
+function feldText(name, wert) {
+  if (!(wert instanceof Date)) return String(wert == null ? '' : wert);
+  if (/Zeit$/.test(name))           return fmt(wert, 'HH:mm');
+  if (/Dat$/.test(name) || name === 'MHD') return fmt(wert, 'yyyy-MM-dd');
+  return fmt(wert, 'yyyy-MM-dd HH:mm');
+}
+
 function weDetail(d, u) {
   const dat = blatt(T.we).getDataRange().getValues();
   const k   = spalten(dat[0]);
@@ -477,10 +493,7 @@ function weDetail(d, u) {
   if (i < 0) return { ok: false, error: 'nicht_gefunden' };
 
   const kopf = {};
-  Object.keys(k).forEach(name => {
-    const w = dat[i][k[name]];
-    kopf[name] = w instanceof Date ? fmt(w, 'yyyy-MM-dd HH:mm') : String(w == null ? '' : w);
-  });
+  Object.keys(k).forEach(name => { kopf[name] = feldText(name, dat[i][k[name]]); });
 
   return { ok: true, kopf: kopf, positionen: positionenLesen(d.weNr) };
 }
@@ -496,7 +509,7 @@ function positionenLesen(weNr) {
       artikel:    String(dat[i][k.Artikel] || ''),
       anzahl:     dat[i][k.Anzahl] === '' ? '' : Number(dat[i][k.Anzahl]),
       kg:         dat[i][k.KG] === '' ? '' : Number(dat[i][k.KG]),
-      mhd:        String(dat[i][k.MHD] || ''),
+      mhd:        feldText('MHD', dat[i][k.MHD]),
       regalplatz: String(dat[i][k.Regalplatz] || ''),
       bemerkung:  String(dat[i][k.Bemerkung] || ''),
       bestehend:  String(dat[i][k.Bestehend]).toLowerCase() === 'true'
@@ -606,7 +619,8 @@ function blattAufbauen(sh, kopf, pos) {
   sh.setColumnWidths(1, 8, 110);
   sh.setColumnWidth(1, 60);    // N
   sh.setColumnWidth(2, 260);   // Artikelbezeichnung
-  sh.setColumnWidth(6, 150);   // Regalplatz
+  sh.setColumnWidth(5, 130);   // MHD, und in Zeile 3-6 das Datum
+  sh.setColumnWidth(6, 150);   // Regalplatz, und in Zeile 3-6 die Uhrzeit
   sh.setColumnWidth(7, 150);   // Bemerkungen
   sh.setColumnWidth(8, 90);    // Bestehend
 
@@ -615,35 +629,58 @@ function blattAufbauen(sh, kopf, pos) {
     .setFontWeight('bold').setFontSize(12);
 
   // --- Quittungen ---
+  // Die Beschriftungen des Papiers sind lang, Spalte A ist aber die schmale
+  // N°-Spalte des Positionsblocks. Darum stehen die vier Felder auf
+  // verbundenen Bereichen: A:B Aufgabe, C:D Name, E Datum, F Uhrzeit.
   const kt = [
-    ['Aufgabe / Task', 'Name Mitarbeiter / Employee name', 'Datum / Date', 'Uhrzeit / Time'],
-    ['Angenommen /\nAccepted',                       kopf.AngNam, kopf.AngDat, kopf.AngZeit],
-    ['Gezählt & kontrolliert /\ncounted & controlled', kopf.GezNam, kopf.GezDat, kopf.GezZeit],
+    ['Aufgabe / Task', 'Name Mitarbeiter / Employee name',
+     'Datum / Date', 'Uhrzeit / Time'],
+    ['Angenommen / Accepted',                         kopf.AngNam, kopf.AngDat, kopf.AngZeit],
+    ['Gezählt & kontrolliert / counted & controlled', kopf.GezNam, kopf.GezDat, kopf.GezZeit],
     ['Eingelagert / stored',                          kopf.EinNam, kopf.EinDat, kopf.EinZeit]
   ];
-  sh.getRange(3, 1, 4, 4).setValues(kt)
+  kt.forEach((zeile, i) => {
+    const r = 3 + i;
+    sh.getRange(r, 1).setValue(zeile[0]);
+    sh.getRange(r, 3).setValue(zeile[1]);
+    sh.getRange(r, 5).setValue(zeile[2]);
+    sh.getRange(r, 6).setValue(zeile[3]);
+    sh.getRange(r, 1, 1, 2).merge();
+    sh.getRange(r, 3, 1, 2).merge();
+    sh.setRowHeight(r, 26);
+  });
+  sh.getRange(3, 1, 4, 6)
     .setBorder(true, true, true, true, true, true, '#000000', RAND)
     .setVerticalAlignment('middle').setWrap(true);
-  sh.getRange(3, 1, 1, 4).setFontWeight('bold').setBackground(GRAU);
-  sh.getRange(4, 1, 3, 1).setFontSize(9);
+  sh.getRange(3, 1, 1, 6).setFontWeight('bold').setBackground(GRAU);
+  sh.getRange(4, 1, 3, 1).setFontWeight('bold');
 
   sh.getRange('A8').setValue(
     'Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.\n' +
     'Please check off or adapt the article quantities directly on the delivery slip'
-  ).setFontWeight('bold').setWrap(true);
+  ).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+  sh.getRange(8, 1, 1, 8).merge();
   sh.setRowHeight(8, 32);
 
   // --- Kunde / Lieferant ---
-  sh.getRange(10, 1, 2, 2).setValues([
-    ['Kunde / Client',      kopf.Kunde],
-    ['Lieferant / Supplier', kopf.Lieferant]
-  ]).setBorder(true, true, true, true, true, true, '#000000', RAND);
+  // Gleiches Raster wie oben: Beschriftung auf A:B, Wert auf C:F.
+  [[10, 'Kunde / Client', kopf.Kunde], [11, 'Lieferant / Supplier', kopf.Lieferant]]
+    .forEach(x => {
+      sh.getRange(x[0], 1).setValue(x[1]);
+      sh.getRange(x[0], 3).setValue(x[2]);
+      sh.getRange(x[0], 1, 1, 2).merge();
+      sh.getRange(x[0], 3, 1, 4).merge();
+      sh.setRowHeight(x[0], 22);
+    });
+  sh.getRange(10, 1, 2, 6)
+    .setBorder(true, true, true, true, true, true, '#000000', RAND);
   sh.getRange(10, 1, 2, 1).setFontWeight('bold');
 
   sh.getRange('A13').setValue(
     'Bei neuem und bestehendem Material mit oder ohne Lieferschein notwendig:\n' +
     'For new and existing material with or without delivery slip needed'
-  ).setFontWeight('bold').setWrap(true);
+  ).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+  sh.getRange(13, 1, 1, 8).merge();
   sh.setRowHeight(13, 32);
 
   // --- Positionen ---
@@ -840,6 +877,75 @@ function adminAktion(d, u) {
   return { ok: false, error: 'unbekannte Aktion' };
 }
 
+/**
+ * Die drei Einstellungen, die den Versand steuern. Nur diese drei sind
+ * ueber die App erreichbar — alles andere im Blatt «Parameter» ist
+ * Datenbestand, keine Einstellung.
+ */
+const ADMIN_PARAMETER = ['MailAn', 'ArchivOrdner', 'FotoOrdner'];
+
+/**
+ * Liest die Einstellungen, und schreibt sie, wenn `werte` mitkommt.
+ * Zurueck kommt immer der gespeicherte Stand plus der Name des Ordners,
+ * den die ID wirklich trifft: eine ID sagt einem Menschen nichts, ein
+ * falsch eingefuegter Ordner faellt sonst erst beim ersten Versand auf.
+ */
+function adminParameter(d, u) {
+  if (d.werte && typeof d.werte === 'object') {
+    const mail = String(d.werte.MailAn == null ? parameter('MailAn') : d.werte.MailAn).trim();
+    if (mail && mail.indexOf('@') < 0) return { ok: false, error: 'mail_ungueltig' };
+
+    ADMIN_PARAMETER.forEach(s => {
+      if (d.werte[s] == null) return;
+      const wert = s === 'MailAn' ? String(d.werte[s]).trim()
+                                  : ordnerId(d.werte[s]);
+      parameterSetzen(s, wert);
+    });
+  }
+
+  const werte = {}, namen = {};
+  ADMIN_PARAMETER.forEach(s => { werte[s] = parameter(s); });
+  ['ArchivOrdner', 'FotoOrdner'].forEach(s => { namen[s] = ordnerName(werte[s]); });
+  return { ok: true, werte: werte, ordner: namen };
+}
+
+/** Schreibt einen Parameter; legt die Zeile an, wenn es sie noch nicht gibt. */
+function parameterSetzen(schluessel, wert) {
+  const bl  = blatt(T.parameter);
+  const dat = bl.getDataRange().getValues();
+  const k   = spalten(dat[0]);
+  for (let i = 1; i < dat.length; i++) {
+    if (String(dat[i][k.Schluessel]).trim() === schluessel) {
+      bl.getRange(i + 1, k.Wert + 1).setValue(wert);
+      return;
+    }
+  }
+  const z = new Array(Math.max(bl.getLastColumn(), 2)).fill('');
+  z[k.Schluessel] = schluessel;
+  z[k.Wert]       = wert;
+  bl.appendRow(z);
+}
+
+/**
+ * Aus einer eingefuegten Drive-Adresse die blosse Ordner-ID holen. Wer den
+ * Ordner offen hat, kopiert die Adresse — nicht den Teil dahinter.
+ */
+function ordnerId(wert) {
+  const s = String(wert || '').trim();
+  const m = s.match(/[-\w]{25,}/);
+  return m ? m[0] : s;
+}
+
+/** Name des Ordners zu einer ID, oder leer wenn sie nicht stimmt. */
+function ordnerName(id) {
+  if (!String(id || '').trim()) return '';
+  try {
+    return DriveApp.getFolderById(String(id).trim()).getName();
+  } catch (e) {
+    return '';
+  }
+}
+
 function zugangText(name, pass) {
   return [
     'Guten Tag ' + name,
@@ -929,8 +1035,8 @@ function csvExport(p) {
     ]);
   }
 
-  return aus.map(z => z.map(feld => {
-    const s = String(feld == null ? '' : feld);
+  return aus.map((z, i) => z.map((feld, j) => {
+    const s = i === 0 ? String(feld) : feldText(CSV_SPALTEN[j], feld);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(',')).join('\n');
 }

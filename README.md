@@ -235,8 +235,14 @@ Parametri: `&tage=` sužava na poslednjih n dana, `&we=` na jedan dokument.
 
 **Sporedni put: Als Excel senden.** Zamrznut `.xlsx` po dokumentu, u prilogu
 mejla i u `ArchivOrdner/GGGG-MM/`. Za slanje napolje — kupcu, dobavljaču, u
-arhivu. Raspored je isti kao u listu `Formular`, namerno: kolone A–H, potpisi
-u redovima 3–6, Kunde i Lieferant u 10–11, zaglavlje pozicija u redu 15.
+arhivu. Raspored je isti kao u listu `Formular`, namerno: kolone A–H,
+potpisi u redovima 3–6, Kunde i Lieferant u 10–11, zaglavlje pozicija u redu 15.
+
+U zaglavlju su ćelije spojene, jer je kolona A uska `N°` kolona tabele
+pozicija a natpisi sa papira su dugački: **A:B** zadatak, **C:D** ime,
+**E** datum, **F** vreme; isto i za Kunde/Lieferant (**A:B** natpis,
+**C:F** vrednost) i za dve napomene (**A:H**). Bez toga se „Gezählt &
+kontrolliert / counted & controlled" odseca ili razvuče red preko pola strane.
 Layout stoji u `blattAufbauen` u `Code.gs`; **datoteke-šablona namerno nema**,
 jer šablon koji se odvoji od koda je izvor tihih grešaka.
 
@@ -257,16 +263,45 @@ u base64 preko 10 MB, i pada i Apps Script i mobilna veza.
 se nasleđuje na sve podfoldere, i to je jedina postavka koju treba dirati.
 Radnicima ne treba pristup Driveu; oni šalju kroz aplikaciju.
 
-## Admin-Bereich
+## Verwaltung
+
+Dugme **Verwaltung** vidi samo admin. Tu su dve stvari: podešavanja slanja i
+korisnici. U tabelu se ne mora ulaziti ni za jedno.
+
+### Slanje
+
+| Polje | Šta je |
+|---|---|
+| Empfänger der Excel-Datei | `MailAn` — adresa koja dobija popunjeni `.xlsx` |
+| Drive-Ordner für die Excel-Ablage | `ArchivOrdner` — prazno znači: samo mejl |
+| Drive-Ordner für die Lieferschein-Fotos | `FotoOrdner` — prazno znači: slika se preskače |
+
+Kod oba foldera sme se **zalepiti cela Drive adresa** — server iz nje izvuče
+ID. Ispod polja stoji **ime foldera** koji taj ID stvarno pogađa; ako piše da
+nije dostižan, ID je pogrešan. To je jedina provera koja se isplati, jer ID
+sam po sebi čoveku ne znači ništa.
+
+Ista tri parametra i dalje stoje u listu `Parameter` — aplikacija ih samo
+upisuje umesto tebe.
+
+### Korisnici
 
 Korisnicima upravlja neko iz firme kroz samu aplikaciju, ne kroz tabelu.
 
 **Ko je admin:** u koloni `Rolle` u listu `Benutzer` stoji `admin`.
 Prvom adminu tu vrednost upisuješ ručno; on dalje može postavljati druge.
 
-Admin vidi dugme **Benutzer verwalten**. Tamo može dodati korisnika,
-deaktivirati i ponovo aktivirati, poslati novu lozinku, dodeliti ili
-oduzeti admin prava.
+Admin može dodati korisnika, deaktivirati ga i ponovo aktivirati, poslati
+novu lozinku, dodeliti ili oduzeti admin prava.
+
+**Novi korisnik dobija mejl sa lozinkom** — upiši ime i adresu, čekiraj
+*Zugangsmail verschicken* i pritisni **Benutzer anlegen**. Lozinka se posle
+toga prikazuje **samo jednom**, za slučaj da mejl ne prođe; tekst poruke se
+može kopirati dugmetom. Pri prvoj prijavi aplikacija traži sopstvenu lozinku.
+
+**Ako ne vidiš dugme Verwaltung:** u koloni `Rolle` u listu `Benutzer` ne
+piše `admin`, ili si se prijavio pre nego što je upisano. Rola se čita pri
+prijavi — odjavi se i prijavi ponovo.
 
 **Sopstveni nalog ne može da se deaktivira ni da sebi oduzme prava.**
 Bez toga bi jedan pogrešan klik ostavio firmu bez ijednog admina.
@@ -279,7 +314,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **254 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **301 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -333,6 +368,10 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
 | 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
 | 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
+| 12f | Odštampan mejl-xlsx | natpisi u zaglavlju čitljivi, nijedan red preko pola strane |
+| 21 | Admin zalepi celu Drive adresu u polje za folder | sačuva se ID, ispod stoji ime foldera |
+| 22 | Admin upiše `lager.firma.ch` bez `@` | odbijeno, stari unos ostaje |
+| 23 | Novi korisnik iz Verwaltung, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |
