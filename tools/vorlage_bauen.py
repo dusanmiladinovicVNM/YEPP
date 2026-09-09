@@ -38,6 +38,8 @@ DATEN_ZEILEN = 20000     # Suchbereich in `Daten`
 # nicht mehr, hier erhoehen und neu bauen; `&tage=` am Endpunkt haelt die
 # Datenmenge ohnehin klein.
 
+ROT   = 'C00000'         # Warnzeile, nur sichtbar wenn sie etwas zu sagen hat
+
 GRAU  = PatternFill('solid', fgColor='F2F2F2')
 GELB  = PatternFill('solid', fgColor='FFFF00')
 BLASS = PatternFill('solid', fgColor='FFF9E3')      # Eingabefeld
@@ -114,6 +116,9 @@ def bauen():
                    'geändert. Alles andere füllt sich selbst.', wrap=True)
     fm['J4'].alignment = Alignment(wrap_text=True, vertical='top')
     fm.merge_cells('J4:J7')
+
+    setz(fm, 'J9', 'Positionen im Dokument', gross=8)
+    setz(fm, 'J10', f'=COUNTIF({B("WeNr")},$J$2)', fett=True)
 
     pruef = DataValidation(type='list', formula1='Nummern!$A$2:$A$1000',
                            allow_blank=True, showDropDown=False)
@@ -195,6 +200,22 @@ def bauen():
                  fuell=GELB if sp == 'H' else None)
         fm.row_dimensions[zeile].height = 30
 
+    # -- Warnzeile --------------------------------------------------
+    # Das Formularblatt hat feste Zeilen; ein laengerer Wareneingang wuerde
+    # sonst stillschweigend abgeschnitten und der Ausdruck saehe vollstaendig
+    # aus. Dieselbe Zeile meldet auch den umgekehrten Fall: gar keine Daten,
+    # weil die Abfrage nicht aktualisiert oder der Suchbereich zu klein ist.
+    warn = KOPF_ZEILE + POS_ZEILEN + 1
+    setz(fm, f'A{warn}',
+         f'=IF($J$2="","",'
+         f'IF($J$10=0,"Zu dieser Nummer stehen keine Zeilen im Blatt Daten — '
+         f'aktualisieren, oder der Suchbereich reicht nicht.",'
+         f'IF($J$10>{POS_ZEILEN},"Achtung: dieser Wareneingang hat "&$J$10&'
+         f'" Positionen. Hier stehen nur die ersten {POS_ZEILEN}.","")))',
+         fett=True, wrap=True)
+    fm[f'A{warn}'].font = Font(name=SCHRIFT, bold=True, size=10, color=ROT)
+    fm.merge_cells(f'A{warn}:H{warn}')
+
     # -- Fuss -------------------------------------------------------
     fuss = KOPF_ZEILE + POS_ZEILEN + 2
     setz(fm, f'A{fuss}', 'Lagerfläche / storage space', fett=True, rahmen=True)
@@ -253,7 +274,7 @@ def bauen():
     ZIEL.parent.mkdir(exist_ok=True)
     wb.save(ZIEL)
     print(f'{ZIEL.relative_to(WURZEL)} gebaut — {len(namen)} Spalten, '
-          f'{POS_ZEILEN} Positionszeilen')
+          f'{POS_ZEILEN} Positionszeilen, Warnzeile in A{warn}')
     return namen
 
 

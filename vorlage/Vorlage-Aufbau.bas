@@ -83,6 +83,12 @@ End Sub
 ' Nur Anzahl, KG, LagerM2 und Nr werden Zahlen. Alles andere bleibt
 ' Text - vor allem die Datumsspalten: die CSV liefert JJJJ-MM-TT, und
 ' als Datum eingelesen verschiebt Excel sie ueber die Zeitzone.
+'
+' Das "en-US" am Ende ist nicht Kosmetik. Ohne Angabe nimmt Power Query die
+' Regionaleinstellung des Rechners; unter deutscher Einstellung ist der Punkt
+' das Tausendertrennzeichen, und aus 3.4 kg wird 34 kg oder ein Fehler - je
+' nach Version, ohne Meldung, und nur auf manchen Arbeitsplaetzen. Die CSV
+' liefert immer den Punkt, also wird die Kultur hier festgenagelt.
 Private Function MDaten(ByVal quelle As String) As String
     MDaten = _
         "let" & vbLf & _
@@ -91,7 +97,7 @@ Private Function MDaten(ByVal quelle As String) As String
         "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true])," & vbLf & _
         "    Typen = Table.TransformColumnTypes(Kopf,{" & _
         "{""Anzahl"", type number}, {""KG"", type number}, " & _
-        "{""LagerM2"", type number}, {""Nr"", Int64.Type}})" & vbLf & _
+        "{""LagerM2"", type number}, {""Nr"", Int64.Type}}, ""en-US"")" & vbLf & _
         "in" & vbLf & _
         "    Typen"
 End Function

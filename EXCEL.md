@@ -90,7 +90,7 @@ vorlage/Vorlage-Aufbau.bas          makro koji dodaje Power Query upite
 tools/vorlage_bauen.py              generator — odavde je fajl nastao
 ```
 
-Sve što se moglo unapred: četiri lista, raspored kao na papiru, **83 formule**,
+Sve što se moglo unapred: četiri lista, raspored kao na papiru, **85 formula**,
 padajuća lista na `J2`, žuta kolona `Bestehend`, oblast štampe `A1:H30` na
 jednu stranu. Ništa od toga ne kucaš.
 
@@ -137,8 +137,13 @@ tada prave jednom, kroz UI. **Daten → Aus dem Web**, URL:
 autentifikacija **Anonym**. U editoru:
 
 - **Erste Zeile als Überschriften verwenden**
-- tipove ostaviti na **Text**, osim `Anzahl`, `KG`, `LagerM2` →
-  **Dezimalzahl** i `Nr` → **Ganze Zahl**.
+- tipove ostaviti na **Text**, osim `Anzahl`, `KG`, `LagerM2` i `Nr`
+- te četiri menjaj **isključivo** preko **Typ ändern → Gebietsschema…**,
+  gde se bira **Englisch (USA)**, pa `Dezimalzahl` odnosno `Ganze Zahl`.
+  Obično „Dezimalzahl" uzima regionalno podešavanje računara — a na
+  nemačkom je tačka separator hiljada, pa od `3.4` kg tiho postane `34` kg,
+  i to samo na nekim mašinama. CSV uvek šalje tačku.
+  Makro to isto radi kroz `"en-US"` u `Table.TransformColumnTypes`.
   Datumi **moraju ostati tekst** — CSV šalje `GGGG-MM-TT`, a kao datum
   učitani se pomeraju po vremenskoj zoni
 - upit nazvati **`Daten`**, učitati u postojeći list `Daten`, ćelija `A1`
@@ -173,6 +178,29 @@ Tada je jedan klik = otvaranje fajla.
 
 ---
 
+## Tri granice, i jedna koja se sama javi
+
+Obrazac ima **10 redova za pozicije** (`POS_ZEILEN`), pretraga ide do
+**20000 redova** u listu `Daten` (`DATEN_ZEILEN`), a padajuća lista čita
+**1000 brojeva** iz lista `Nummern`. Sve tri su fiksne, i sve tri bi tiho
+odsekle ono što preko njih pređe — odštampan list bi izgledao potpuno.
+
+Zato red **`A26`**, odmah ispod tabele i unutar oblasti štampe, nosi crveno
+upozorenje. Prazan je dok nema šta da kaže:
+
+| Stanje | Šta piše |
+|---|---|
+| pozicija ≤ 10 | ništa, red je prazan |
+| pozicija > 10 | `Achtung: dieser Wareneingang hat 12 Positionen. Hier stehen nur die ersten 10.` |
+| nema nijednog reda | `Zu dieser Nummer stehen keine Zeilen im Blatt Daten — aktualisieren, oder der Suchbereich reicht nicht.` |
+
+Broji ćelija **`J10`** — `COUNTIF` nad istom `WeNr` kolonom koju gađaju i
+ostale formule, van oblasti štampe. Test veže granicu u formuli za stvarni
+broj redova u obrascu, pa se to dvoje ne može razići.
+
+Treba li više od 10 pozicija po listu: promeni `POS_ZEILEN` u generatoru i
+pusti ga ponovo. Upozorenje se preračuna samo.
+
 ## Ako treba menjati raspored
 
 Ne u Excelu — u `tools/vorlage_bauen.py`, pa:
@@ -199,7 +227,9 @@ gornja granica pretrage (sada 20000).
 | 2 | Izabrati WE-broj u `J2` | obrazac se popuni ceo |
 | 3 | Izabrati drugi broj | promeni se odmah, bez osvežavanja |
 | 4 | Isporuka sa 2 pozicije | redovi 18–25 prazni, bez `#NV` |
-| 5 | Isporuka sa 10 pozicija | svih deset u obrascu |
+| 5 | Isporuka sa 10 pozicija | svih deset u obrascu, red `A26` prazan |
+| 5b | Isporuka sa 12 pozicija | prvih deset, u `A26` crveno upozorenje sa brojem 12 |
+| 5c | Broj u `J2` kojeg nema u `Daten` | `A26` javlja da nema redova |
 | 6 | Nekvitiran korak | to polje prazno, ostalo popunjeno |
 | 7 | Kunde sa zarezom u imenu | jedno polje, ne razbijeno na dva |
 | 8 | Novi unos u PWA, pa zatvoriti i otvoriti fajl | novi broj u padajućoj listi |
@@ -231,3 +261,14 @@ autentifikacije. **Daten → Abfragen und Verbindungen → Datenquelleneinstellu
 
 **Kolone se pomerile posle izmene koda** — neko je umetnuo kolonu u
 `CSV_SPALTEN` između postojećih. Vrati je na kraj.
+
+**`3.4` postalo `34`** — Power Query je konverziju tipa uradio po regionalnom
+podešavanju računara, gde je tačka separator hiljada. Upit `Daten`, korak
+`Typen`, mora imati `"en-US"` kao poslednji argument u
+`Table.TransformColumnTypes`. Makro ga postavlja; ručno pravljen upit na Macu
+traži **Typ ändern → Gebietsschema… → Englisch (USA)**.
+
+**U polju Uhrzeit piše `Sat Dec 30 1899 …`** — kolona `AngZeit`/`GezZeit`/
+`EinZeit` u Google tabeli nije formatirana kao tekst, pa je Sheets pretvorio
+`08:30` u vreme. Pokreni `setupAnlegen` još jednom; već upisani redovi se
+time ne popravljaju.

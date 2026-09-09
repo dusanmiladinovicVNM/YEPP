@@ -28,11 +28,16 @@ class Range {
       for (let j = 0; j < this.nc; j++) this.sh._z(this.r + i)[this.c + j - 1] = w;
     return this;
   }
-  // Formatierung interessiert hier nicht, muss aber verkettbar bleiben
+  // Das Zahlenformat wird gemerkt: an ihm haengt, ob Sheets aus «08:30»
+  // eine Uhrzeit macht. Der Rest der Formatierung muss nur verkettbar sein.
+  setNumberFormat(f) {
+    this.sh.formate.push({ format: f, spalte: this.c, zeile: this.r, zeilen: this.nr });
+    return this;
+  }
   setFontWeight() { return this; } setFontSize() { return this; }
   setBackground() { return this; } setBorder() { return this; }
   setWrap() { return this; } setVerticalAlignment() { return this; }
-  setHorizontalAlignment() { return this; } setNumberFormat() { return this; }
+  setHorizontalAlignment() { return this; }
   setFontColor() { return this; }
 }
 
@@ -41,11 +46,14 @@ class Sheet {
     this.name = name;
     this.daten = [];
     this.geloescht = [];
+    this.formate = [];
     if (kopf) this.daten.push(kopf.slice());
   }
   _z(n) { while (this.daten.length < n) this.daten.push([]); return this.daten[n - 1]; }
   setName(n) { this.name = n; return this; }
   getLastRow() { return this.daten.length; }
+  // Google legt ein Blatt mit 1000 Zeilen an; darueber waechst es mit.
+  getMaxRows() { return Math.max(1000, this.daten.length); }
   getLastColumn() { return Math.max(0, ...this.daten.map(z => z.length)); }
   getRange(r, c, nr, nc) {
     if (typeof r === 'string') {

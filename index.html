@@ -442,8 +442,25 @@ button.sekundaer:active{background:#1d1d1d}
       <textarea id="fm-bemerkung" placeholder="optional"></textarea>
     </div>
 
+    <div class="pos-kopf" style="margin-top:24px">
+      <h2>Quittieren</h2>
+      <span class="zahl">auf Ihren Namen</span>
+    </div>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-angenommen" checked>
+      <span>Angenommen / Accepted</span>
+    </label>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-gezaehlt">
+      <span>Gezählt &amp; kontrolliert / counted &amp; controlled</span>
+    </label>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-eingelagert">
+      <span>Eingelagert / stored</span>
+    </label>
     <p class="hinweis">
-      Mit dem Speichern wird «Angenommen / Accepted» auf Ihren Namen quittiert.
+      Nur ankreuzen, was Sie selbst getan haben. Alles andere wird später im
+      Dokument quittiert — mit dem Namen dessen, der es tut.
     </p>
 
     <div class="knopfzeile">
@@ -562,7 +579,7 @@ button.sekundaer:active{background:#1d1d1d}
    Konfiguration — Web-App-URL aus Apps Script
    ============================================================ */
 const CONFIG = {
-  url: ''
+  url: 'https://script.google.com/macros/s/AKfycbzWrRWjsfYBzJFRB1S98dl1KomRf6vnAWWcBbaJ-whJJ1G_k_2Li5bU8xtE2SzZ5tbT/exec'
 };
 
 /* Wareneingang — Clientlogik */
@@ -624,6 +641,7 @@ function datumText(wert) {
 /* ---------- API ---------- */
 
 async function post(payload) {
+  if (!CONFIG.url) throw new Error('nicht_verbunden');
   // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht beantwortet.
   const res  = await fetch(CONFIG.url, {
     method: 'POST',
@@ -634,15 +652,36 @@ async function post(payload) {
   try {
     return JSON.parse(text);
   } catch (e) {
+    // Kein JSON heisst fast immer: die Bereitstellung ist nicht oeffentlich
+    // und Google hat eine Anmelde- oder Fehlerseite geschickt.
     console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-    throw e;
+    throw new Error('keine_antwort');
   }
 }
 
 async function get(params) {
+  if (!CONFIG.url) throw new Error('nicht_verbunden');
   const q = new URLSearchParams(Object.assign({ session: S.session }, params));
   const res = await fetch(CONFIG.url + '?' + q.toString());
   return res.json();
+}
+
+/**
+ * «Keine Verbindung» ist die haeufigste Luege einer solchen App: meist ist
+ * nicht das Netz weg, sondern die Adresse fehlt oder die Bereitstellung ist
+ * nicht oeffentlich. Beides steht hier im Klartext.
+ */
+function verbindungText(e) {
+  const art = e && e.message;
+  if (art === 'nicht_verbunden') {
+    return 'Diese App ist noch nicht mit dem Backend verbunden: ' +
+           'CONFIG.url in index.html ist leer.';
+  }
+  if (art === 'keine_antwort') {
+    return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
+           'Zugriff «Jeder», Adresse endet auf /exec.';
+  }
+  return 'Keine Verbindung. Bitte Internetverbindung prüfen.';
 }
 
 function sessionWeg() {
@@ -700,7 +739,7 @@ async function anmelden() {
       m.classList.add('zeigen');
     }
   } catch (e) {
-    m.textContent = 'Keine Verbindung. Bitte Internetverbindung prüfen.';
+    m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
     btn.disabled = false;
@@ -809,7 +848,10 @@ function fuelleStammdaten() {
   setze('dl-lieferanten', S.lieferanten);
 }
 
+const SCHRITT_FOLGE = ['angenommen', 'gezaehlt', 'eingelagert'];
+
 const STATUS_TEXT = {
+  erfasst:     'erfasst',
   angenommen:  'angenommen',
   gezaehlt:    'gezählt',
   eingelagert: 'eingelagert'
@@ -866,6 +908,7 @@ function formularNeu() {
   $('fm-lieferant').value = '';
   $('fm-m2').value = '';
   $('fm-bemerkung').value = '';
+  SCHRITT_FOLGE.forEach(s => $('fm-s-' + s).checked = s === 'angenommen');
   fotoWeg();
   S.positionen = [];
   for (let i = 0; i < MIN_ZEILEN; i++) S.positionen.push(leerePosition());
@@ -874,7 +917,8 @@ function formularNeu() {
 }
 
 function leerePosition() {
-  return { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false };
+  return { artikel: '', anzahl: '', kg: '', mhd: '', regalplatz: '',
+           bemerkung: '', bestehend: false };
 }
 
 /**
@@ -905,6 +949,9 @@ function zeichnePositionen() {
           '<input type="text" data-f="mhd" placeholder="TT.MM.JJJJ" value="' +
             esc(p.mhd) + '"></div>' +
       '</div>' +
+
+      '<label>Regalplatznr. / shelf no.</label>' +
+      '<input type="text" data-f="regalplatz" value="' + esc(p.regalplatz) + '">' +
 
       '<label>Bemerkungen / Kontrolle</label>' +
       '<input type="text" data-f="bemerkung" value="' + esc(p.bemerkung) + '">' +
@@ -972,21 +1019,27 @@ async function speichern() {
     toast('Mindestens eine Position mit Artikelbezeichnung.', 'err'); return;
   }
 
+  // Was der Erfasser selbst getan hat. Der Server setzt dazu seinen Namen
+  // aus der Sitzung; hier steht nur, welche Zeilen es betrifft.
+  const schritte = SCHRITT_FOLGE.filter(s => $('fm-s-' + s).checked);
+
   const daten = {
     action:    'we_speichern',
     session:   S.session,
     kunde:     kunde,
     lieferant: lieferant,
+    schritte:  schritte,
     lagerM2:   zahl($('fm-m2').value),
     bemerkung: $('fm-bemerkung').value.trim(),
     foto:      S.bild || '',
     positionen: gefuellt.map(p => ({
-      artikel:   String(p.artikel).trim(),
-      anzahl:    zahl(p.anzahl),
-      kg:        zahl(p.kg),
-      mhd:       String(p.mhd).trim(),
-      bemerkung: String(p.bemerkung).trim(),
-      bestehend: p.bestehend === true
+      artikel:    String(p.artikel).trim(),
+      anzahl:     zahl(p.anzahl),
+      kg:         zahl(p.kg),
+      mhd:        String(p.mhd).trim(),
+      regalplatz: String(p.regalplatz).trim(),
+      bemerkung:  String(p.bemerkung).trim(),
+      bestehend:  p.bestehend === true
     }))
   };
 
@@ -1012,7 +1065,9 @@ async function speichern() {
       }
     }
   } catch (e) {
-    toast('Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
+    toast(e && e.message === 'keine_antwort' || e && e.message === 'nicht_verbunden'
+      ? verbindungText(e)
+      : 'Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
   } finally {
     S.laeuft = false;
     btn.disabled = false;
@@ -1122,7 +1177,7 @@ function zeichneDetail(kopf, pos) {
             esc(datumText(x.dat)) + ' ' + esc(x.zeit)
           : 'offen') + '</div>' +
       '</div>' +
-      (fertig || x.s === 'angenommen' ? '<span></span>'
+      (fertig ? '<span></span>'
         : '<button class="klein" data-schritt="' + x.s + '">Quittieren</button>') +
     '</div>';
   }).join('');
@@ -1436,7 +1491,17 @@ $('frage-ja').addEventListener('click', () => {
   if (frage._dann) frage._dann();
 });
 
-if (S.session) start(); else zeigeScreen('scr-login');
+if (!CONFIG.url) {
+  // Ohne diese eine Zeile geht gar nichts, und ohne Hinweis sieht es aus
+  // wie ein Netzproblem — bis jemand die Browser-Konsole aufmacht.
+  $('lg-meldung').textContent = verbindungText(new Error('nicht_verbunden'));
+  $('lg-meldung').classList.add('zeigen');
+  zeigeScreen('scr-login');
+} else if (S.session) {
+  start();
+} else {
+  zeigeScreen('scr-login');
+}
 </script>
 </body>
 </html>

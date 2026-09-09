@@ -20,6 +20,9 @@ page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.messag
 await page.addInitScript(() => {
   window.__gesendet = [];
   const DB = { kopf: null, positionen: [] };
+  // Der weiteste quittierte Schritt, wie statusAus() im Backend.
+  const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
+                             : DB.ang ? 'angenommen' : 'erfasst';
 
   window.fetch = async (url, opt) => {
     let d;
@@ -40,23 +43,31 @@ await page.addInitScript(() => {
           weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
           kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
           status: DB.status || 'angenommen', erfasser: 'Anna Muster', gesendet: '' }] : [] });
-      case 'we_speichern':
+      case 'we_speichern': {
         DB.kopf = d;
         DB.positionen = d.positionen.map((p, i) => Object.assign({ nr: i + 1, regalplatz: '' }, p));
-        DB.status = 'angenommen';
+        const s = d.schritte || [];
+        DB.ang = s.includes('angenommen')  ? 'Anna Muster' : '';
+        DB.gez = s.includes('gezaehlt')    ? 'Anna Muster' : '';
+        DB.ein = s.includes('eingelagert') ? 'Anna Muster' : '';
+        DB.status = status();
         return A({ ok: true, weNr: 'WE-2026-0001' });
+      }
       case 'we_detail':
         return A({ ok: true, positionen: DB.positionen, kopf: {
           WeNr: 'WE-2026-0001', Kunde: DB.kopf.kunde, Lieferant: DB.kopf.lieferant,
           LagerM2: String(DB.kopf.lagerM2), Bemerkung: DB.kopf.bemerkung,
-          AngNam: 'Anna Muster', AngDat: '2026-09-09', AngZeit: '08:30',
+          AngNam: DB.ang || '', AngDat: DB.ang ? '2026-09-09' : '',
+          AngZeit: DB.ang ? '08:30' : '',
           GezNam: DB.gez || '', GezDat: DB.gez ? '2026-09-09' : '', GezZeit: DB.gez ? '09:00' : '',
           EinNam: DB.ein || '', EinDat: '', EinZeit: '',
           FotoUrl: '', Gesendet: '', Storniert: 'false', Status: DB.status } });
       case 'we_schritt':
-        if (d.schritt === 'gezaehlt')    { DB.gez = 'Anna Muster'; DB.status = 'gezaehlt'; }
-        if (d.schritt === 'eingelagert') { DB.ein = 'Anna Muster'; DB.status = 'eingelagert';
+        if (d.schritt === 'angenommen')  { DB.ang = 'Anna Muster'; }
+        if (d.schritt === 'gezaehlt')    { DB.gez = 'Anna Muster'; }
+        if (d.schritt === 'eingelagert') { DB.ein = 'Anna Muster';
           (d.regalplaetze || []).forEach((w, i) => { if (DB.positionen[i]) DB.positionen[i].regalplatz = w; }); }
+        DB.status = status();
         return A({ ok: true });
       case 'we_senden':
         return A({ ok: true, an: 'lager@firma.ch', url: '' });
@@ -87,11 +98,17 @@ console.log('\n2) Formular');
 await page.click('#st-neu');
 await page.waitForSelector('#scr-form.aktiv');
 ok('5 Leerzeilen wie auf dem Papier', (await page.$$('.pos')).length === 5);
+ok('Regalplatzfeld je Position',
+   (await page.$$('.pos [data-f="regalplatz"]')).length === 5);
+ok('Angenommen vorausgewaehlt', await page.isChecked('#fm-s-angenommen'));
+ok('Gezaehlt nicht vorausgewaehlt', !(await page.isChecked('#fm-s-gezaehlt')));
+ok('Eingelagert nicht vorausgewaehlt', !(await page.isChecked('#fm-s-eingelagert')));
 
 await feld(0, 'artikel', 'Schrauben M6');
 await feld(0, 'anzahl', '120');
 await feld(0, 'kg', '3,4');                       // Komma statt Punkt
 await feld(0, 'mhd', '10.2027');
+await feld(0, 'regalplatz', 'A-12');
 await page.check('.pos[data-i="0"] [data-f="bestehend"]');
 await feld(1, 'artikel', 'ZWEITE — wird entfernt');
 await feld(2, 'artikel', 'Kartonage 60x40');
@@ -134,12 +151,18 @@ ok('bestehend als Boolean', gesendet.positionen[0].bestehend === true);
 ok('zweite Position ohne Haken', gesendet.positionen[1].bestehend === false);
 ok('m2 mit Komma', gesendet.lagerM2 === 12.5, 'lagerM2=' + JSON.stringify(gesendet.lagerM2));
 ok('leeres kg bleibt leer', gesendet.positionen[1].kg === '');
+ok('Regalplatz schon beim Erfassen', gesendet.positionen[0].regalplatz === 'A-12',
+   JSON.stringify(gesendet.positionen[0].regalplatz));
+ok('nur Angenommen quittiert',
+   JSON.stringify(gesendet.schritte) === '["angenommen"]',
+   JSON.stringify(gesendet.schritte));
 ok('Sitzung mitgeschickt', gesendet.session === 'tok');
 
 // --- 5) Detail und Quittieren ----------------------------------------------
 console.log('\n5) Detail und Quittieren');
 ok('Titel ist die WE-Nummer', (await page.textContent('#dt-titel')) === 'WE-2026-0001');
-ok('Angenommen ohne Knopf', !(await page.$('.schritt [data-schritt="angenommen"]')));
+ok('Angenommen beim Erfassen quittiert, kein Knopf',
+   !(await page.$('.schritt [data-schritt="angenommen"]')));
 ok('Gezaehlt mit Knopf', !!(await page.$('.schritt [data-schritt="gezaehlt"]')));
 ok('Eingelagert mit Knopf', !!(await page.$('.schritt [data-schritt="eingelagert"]')));
 
@@ -155,6 +178,8 @@ console.log('\n6) Einlagern');
 await page.click('[data-schritt="eingelagert"]');
 await page.waitForSelector('#scr-regal.aktiv');
 ok('ein Feld je Position', (await page.$$('#rg-liste input')).length === 2);
+ok('erfasster Regalplatz vorbelegt',
+   (await page.inputValue('#rg-liste input[data-nr="1"]')) === 'A-12');
 await page.fill('#rg-liste input[data-nr="1"]', 'A-12');
 await page.fill('#rg-liste input[data-nr="2"]', 'B-03');
 await page.click('#rg-senden');
@@ -179,8 +204,35 @@ await page.waitForFunction(() =>
 ok('Sendeauftrag mit WE-Nummer', (await page.evaluate(() =>
   window.__gesendet.filter(x => x.action === 'we_senden')[0])).weNr === 'WE-2026-0001');
 
-// --- 8) Abgelaufene Sitzung -------------------------------------------------
-console.log('\n8) Abgelaufene Sitzung');
+// --- 8) Erfassen ohne eigene Quittung --------------------------------------
+console.log('\n8) Erfassen ohne eigene Quittung');
+await page.click('#dt-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-neu');
+await page.waitForSelector('#scr-form.aktiv');
+ok('Auswahl steht wieder auf Angenommen', await page.isChecked('#fm-s-angenommen'));
+
+await page.uncheck('#fm-s-angenommen');
+await feld(0, 'artikel', 'Nur abgetippt');
+await page.fill('#fm-kunde', 'Kunde AG');
+await page.click('#fm-speichern');
+await page.waitForSelector('#scr-detail.aktiv');
+
+const ohne = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_speichern').pop());
+ok('keine Quittung mitgeschickt', JSON.stringify(ohne.schritte) === '[]',
+   JSON.stringify(ohne.schritte));
+ok('Angenommen jetzt quittierbar', !!(await page.$('[data-schritt="angenommen"]')));
+ok('alle drei Schritte offen',
+   (await page.$$('.schritt [data-schritt]')).length === 3);
+
+await page.click('[data-schritt="angenommen"]');
+await page.waitForFunction(() => !document.querySelector('[data-schritt="angenommen"]'));
+ok('nach dem Nachtragen kein Knopf mehr',
+   !(await page.$('[data-schritt="angenommen"]')));
+
+// --- 9) Abgelaufene Sitzung -------------------------------------------------
+console.log('\n9) Abgelaufene Sitzung');
 await page.evaluate(() => {
   window.fetch = async () => ({ text: async () => '{"ok":false,"error":"session"}',
                                 json: async () => ({ ok: false, error: 'session' }) });
@@ -189,6 +241,31 @@ await page.click('#dt-zurueck');
 await page.waitForSelector('#scr-login.aktiv');
 ok('faellt auf den Login zurueck', await sichtbar('#scr-login'));
 ok('Sitzung geloescht', (await page.evaluate(() => localStorage.getItem('session'))) === null);
+
+// --- 10) Nicht verbunden, falsch bereitgestellt ----------------------------
+console.log('\n10) Klartext statt «Keine Verbindung»');
+await page.evaluate(() => { CONFIG.url = ''; });
+await page.fill('#lg-email', 'anna@firma.ch');
+await page.fill('#lg-pass', 'geheim123');
+await page.click('#lg-senden');
+await page.waitForSelector('#lg-meldung.zeigen');
+ok('fehlende Adresse wird benannt',
+   (await page.textContent('#lg-meldung')).includes('CONFIG.url'),
+   await page.textContent('#lg-meldung'));
+
+// Der haeufigste Fall: die Bereitstellung ist nicht oeffentlich, Google
+// schickt eine Anmeldeseite, und die App meldete bisher «Keine Verbindung».
+await page.evaluate(() => {
+  CONFIG.url = 'https://example.test/exec';
+  window.fetch = async () => ({ status: 200,
+    text: async () => '<!DOCTYPE html><title>Anmelden</title>' });
+});
+await page.click('#lg-senden');
+await page.waitForFunction(() =>
+  document.getElementById('lg-meldung').textContent.includes('Bereitstellung'));
+ok('Antwort ohne JSON wird benannt',
+   (await page.textContent('#lg-meldung')).includes('/exec'),
+   await page.textContent('#lg-meldung'));
 
 await browser.close();
 console.log('\n' + '='.repeat(46));

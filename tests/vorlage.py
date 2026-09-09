@@ -37,6 +37,13 @@ MUSTER = re.compile(
     r'MATCH\((.+?),Daten!\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+),0\)\),""\)$'
 )
 
+# =IF($J$2="","",IF($J$10=0,"...",IF($J$10><n>,"..."&$J$10&"...","")))
+WARNUNG = re.compile(
+    r'^=IF\(\$J\$2="","",'
+    r'IF\(\$J\$10=0,"([^"]+)",'
+    r'IF\(\$J\$10>(\d+),"([^"]*)"&\$J\$10&"([^"]*)",""\)\)\)$'
+)
+
 
 def ok(name, bedingung, extra=''):
     global bestanden, fehler
@@ -106,7 +113,7 @@ def main():
     if not VORLAGE.exists():
         sys.exit('Vorlage fehlt — zuerst tools/vorlage_bauen.py laufen lassen')
 
-    reihen, (nr_voll, nr_offen, nr_storno) = beispiel_csv()
+    reihen, (nr_voll, nr_offen, nr_storno, nr_viele) = beispiel_csv()
     kopf, daten = reihen[0], reihen[1:]
     blatt = Blatt(kopf, daten)
     n = len(daten)
@@ -117,7 +124,7 @@ def main():
     print('\n1) Beispieldaten')
     ok('CSV hat 23 Spalten', len(kopf) == 23, str(len(kopf)))
     ok('stornierter Wareneingang fehlt', all(z[0] != nr_storno for z in daten))
-    ok('vier Positionszeilen', n == 4, str(n))
+    ok('sechzehn Positionszeilen', n == 16, str(n))
 
     print('\n2) Aufbau der Arbeitsmappe')
     ok('vier Blaetter', wb.sheetnames == ['Formular', 'Daten', 'Nummern', 'Liste'],
@@ -224,6 +231,48 @@ def main():
         belegt += [f'B{16 + i}' for i in range(3)
                    if auswerten(fm[f'B{16 + i}'].value, blatt, nummer, i + 1, n) != '']
         ok(f'{wie}: alles leer, kein #NV', not belegt, str(belegt))
+
+    print('\n9) Warnzeile — das Formularblatt hat feste Zeilen')
+    # Der Zaehler muss denselben Bereich absuchen wie die uebrigen Formeln,
+    # sonst warnt er ueber andere Daten, als das Blatt anzeigt.
+    m_kopf = MUSTER.match(fm['B10'].value)
+    we_bereich = (f'Daten!${m_kopf.group(6)}${m_kopf.group(7)}:'
+                  f'${m_kopf.group(8)}${m_kopf.group(9)}')
+    ok('Zaehler nutzt den WeNr-Bereich der Formeln',
+       fm['J10'].value == f'=COUNTIF({we_bereich},$J$2)', repr(fm['J10'].value))
+    ok('Zaehler steht ausserhalb des Druckbereichs', druck.endswith('$H$30'))
+
+    w = WARNUNG.match(str(fm['A26'].value))
+    ok('Warnzeile hat die erwartete Form', w is not None, repr(fm['A26'].value))
+    grenze = int(w.group(2))
+    zeilen_im_blatt = sum(1 for z in range(16, 40) if fm[f'A{z}'].value in range(1, 99))
+    ok('Grenze ist die Zahl der Formularzeilen', grenze == zeilen_im_blatt,
+       f'{grenze} statt {zeilen_im_blatt}')
+
+    def warnung(nummer):
+        anzahl = sum(1 for z in daten if z[0] == nummer)
+        if anzahl == 0:
+            return w.group(1)
+        if anzahl > grenze:
+            return w.group(3) + str(anzahl) + w.group(4)
+        return ''
+
+    ok('kurzer Wareneingang ohne Warnung', warnung(nr_voll) == '', warnung(nr_voll))
+    ok('zwoelf Positionen im Beispiel',
+       sum(1 for z in daten if z[0] == nr_viele) == 12)
+    ok('langer Wareneingang warnt mit Zahl',
+       '12' in warnung(nr_viele) and str(grenze) in warnung(nr_viele),
+       warnung(nr_viele))
+    ok('unbekannte Nummer meldet fehlende Daten',
+       warnung('WE-1999-9999') == w.group(1), warnung('WE-1999-9999'))
+
+    # Ohne die Warnzeile bliebe genau das hier unbemerkt:
+    sichtbar = [auswerten(fm[f'B{16 + i}'].value, blatt, nr_viele, i + 1, n)
+                for i in range(10)]
+    ok('Blatt zeigt die ersten zehn Positionen',
+       sichtbar == [f'Palette {i + 1}' for i in range(10)], str(sichtbar[:3]))
+    ok('elfte Position erscheint nirgends',
+       'Palette 11' not in [fm[f'B{z}'].value for z in range(16, 26)])
 
     print('\n' + '=' * 46)
     print(f'{bestanden} bestanden, {fehler} gescheitert')

@@ -262,13 +262,30 @@ function listeAktiv(name) {
    ============================================================ */
 
 /**
- * Legt einen Wareneingang an. «Angenommen» wird dabei sofort mit dem Namen
- * aus der Sitzung quittiert — wer erfasst, hat die Ware angenommen.
+ * Die drei Quittungen des Papiers, in ihrer Reihenfolge. Abschnitt 5 setzt
+ * sie beim Erfassen, Abschnitt 6 traegt sie nach — eine Tabelle fuer beide
+ * Wege, damit keiner von ihnen eigene Spaltennamen erfindet.
+ */
+const SCHRITTE = {
+  angenommen:  { nam: 'AngNam', dat: 'AngDat', zeit: 'AngZeit' },
+  gezaehlt:    { nam: 'GezNam', dat: 'GezDat', zeit: 'GezZeit' },
+  eingelagert: { nam: 'EinNam', dat: 'EinDat', zeit: 'EinZeit' }
+};
+const SCHRITT_FOLGE = ['angenommen', 'gezaehlt', 'eingelagert'];
+
+/**
+ * Legt einen Wareneingang an und quittiert dabei die Schritte, die der
+ * Erfasser selbst getan hat — auf dem Papier unterschreibt jeder nur seine
+ * Zeile, und wer im Buero nur abtippt, unterschreibt gar nichts. Ohne
+ * Angabe bleibt es bei «Angenommen»: wer erfasst, hat die Ware angenommen.
+ * Der Name kommt in jedem Fall aus der Sitzung, nie aus dem Request.
  */
 function weSpeichern(d, u) {
   const kunde     = String(d.kunde || '').trim();
   const lieferant = String(d.lieferant || '').trim();
   const pos       = Array.isArray(d.positionen) ? d.positionen : [];
+  const wunsch    = Array.isArray(d.schritte) ? d.schritte : ['angenommen'];
+  const gewaehlt  = SCHRITT_FOLGE.filter(s => wunsch.indexOf(s) >= 0);
 
   if (!kunde && !lieferant) return { ok: false, error: 'kunde_lieferant' };
   if (!pos.length)          return { ok: false, error: 'keine_positionen' };
@@ -291,13 +308,15 @@ function weSpeichern(d, u) {
     z[k.Email]       = u.email;
     z[k.Kunde]       = kunde;
     z[k.Lieferant]   = lieferant;
-    z[k.AngNam]      = u.name;
-    z[k.AngDat]      = datum;
-    z[k.AngZeit]     = zeit;
+    gewaehlt.forEach(s => {
+      z[k[SCHRITTE[s].nam]]  = u.name;
+      z[k[SCHRITTE[s].dat]]  = datum;
+      z[k[SCHRITTE[s].zeit]] = zeit;
+    });
     z[k.LagerM2]     = d.lagerM2 === '' || d.lagerM2 == null ? '' : Number(d.lagerM2);
     z[k.Bemerkung]   = String(d.bemerkung || '').trim();
     z[k.Storniert]   = false;
-    z[k.Status]      = 'angenommen';
+    z[k.Status]      = statusAus(z, k);
     z[k.FotoUrl]     = d.foto ? fotoAblegen(d.foto, weNr, u) : '';
     bl.appendRow(z);
 
@@ -357,13 +376,22 @@ function naechsteNummer() {
    6) Arbeitsschritte quittieren
    ============================================================ */
 
-const SCHRITTE = {
-  gezaehlt:    { nam: 'GezNam', dat: 'GezDat', zeit: 'GezZeit' },
-  eingelagert: { nam: 'EinNam', dat: 'EinDat', zeit: 'EinZeit' }
-};
+/**
+ * Der Status ist der weiteste quittierte Schritt, nicht der zuletzt
+ * geklickte: wer «Angenommen» nachtraegt, darf ein bereits eingelagertes
+ * Dokument nicht wieder auf Anfang setzen.
+ */
+function statusAus(zeile, k) {
+  let status = 'erfasst';
+  SCHRITT_FOLGE.forEach(s => {
+    if (String(zeile[k[SCHRITTE[s].nam]] || '').trim()) status = s;
+  });
+  return status;
+}
 
 /**
- * Quittiert «Gezaehlt & kontrolliert» oder «Eingelagert».
+ * Traegt eine der drei Quittungen nach — auch «Angenommen», denn wer nur
+ * abgetippt hat, muss die Annahme dem Kollegen ueberlassen koennen.
  * Der Name kommt aus der Sitzung, Datum und Zeit vom Server —
  * eine Quittung unter fremdem Namen ist so nicht moeglich.
  */
@@ -387,7 +415,8 @@ function weSchritt(d, u) {
   bl.getRange(i + 1, k[feld.nam] + 1).setValue(u.name);
   bl.getRange(i + 1, k[feld.dat] + 1).setValue(fmt(jetzt, 'yyyy-MM-dd'));
   bl.getRange(i + 1, k[feld.zeit] + 1).setValue(fmt(jetzt, 'HH:mm'));
-  bl.getRange(i + 1, k.Status + 1).setValue(d.schritt);
+  dat[i][k[feld.nam]] = u.name;
+  bl.getRange(i + 1, k.Status + 1).setValue(statusAus(dat[i], k));
 
   // Regalplaetze traegt das zweite Team beim Einlagern nach.
   if (d.schritt === 'eingelagert' && Array.isArray(d.regalplaetze)) {
@@ -999,10 +1028,13 @@ function setupAnlegen() {
     }
   });
 
-  // Datumsspalten als Text — sonst verschiebt Sheets sie ueber die Zeitzone.
-  [[T.we, 8], [T.we, 11], [T.we, 14], [T.pos, 6]].forEach(x => {
-    ss.getSheetByName(x[0]).getRange(2, x[1], 5000).setNumberFormat('@');
-  });
+  // Datum UND Uhrzeit als Text. Sheets liest einen geschriebenen String wie
+  // eine Tastatureingabe: «2026-09-09» wird zum Datum, «08:30» zur Uhrzeit,
+  // und beides kommt danach als Zeitstempel zurueck — in die Liste, in die
+  // CSV und damit ins Excel-Formular, wo dann «Sat Dec 30 1899 ...» steht.
+  textSpalten(ss, T.we, ['AngDat', 'AngZeit', 'GezDat', 'GezZeit',
+                         'EinDat', 'EinZeit']);
+  textSpalten(ss, T.pos, ['MHD']);
 
   const par = ss.getSheetByName(T.parameter);
   if (par.getLastRow() < 2) {
@@ -1013,6 +1045,25 @@ function setupAnlegen() {
     ]);
   }
   return 'fertig';
+}
+
+/**
+ * Formatiert Spalten als Text — nach Namen und ueber die ganze Hoehe des
+ * Blattes. Beides mit Absicht: eine feste Spaltennummer bricht, sobald
+ * jemand die Reihenfolge aendert (was diese Tabelle ausdruecklich erlaubt),
+ * und eine Grenze bei Zeile n faellt genau dann auf, wenn niemand mehr an
+ * sie denkt. Angehaengte Zeilen erben das Format der letzten.
+ *
+ * Laeuft mehrfach ohne Schaden — bei einer bestehenden Tabelle einmal
+ * `setupAnlegen` nachziehen.
+ */
+function textSpalten(ss, blattName, namen) {
+  const bl = ss.getSheetByName(blattName);
+  const k  = spalten(bl.getRange(1, 1, 1, bl.getLastColumn()).getValues()[0]);
+  namen.forEach(name => {
+    if (k[name] == null) return;
+    bl.getRange(2, k[name] + 1, bl.getMaxRows() - 1, 1).setNumberFormat('@');
+  });
 }
 
 /** Erstzugang: in «Benutzer» nur Email und Name eintragen, dann hier starten. */
