@@ -108,6 +108,11 @@ def bauen():
 
     setz(fm, 'A1', 'Wareneingang / Material reception', fett=True, gross=14)
 
+    # Die Nummer gehoert in den Druckbereich: der Ausdruck wird
+    # unterschrieben und abgelegt. J2 selbst steht ausserhalb.
+    setz(fm, 'F1', '=IF($J$2="","",$J$2)', fett=True, gross=12, aus='right')
+    fm.merge_cells('F1:H1')
+
     # Auswahl — ausserhalb des Druckbereichs, damit sie nicht mitgedruckt wird
     setz(fm, 'J1', 'Wareneingang wählen', fett=True)
     wahl = setz(fm, 'J2', '', fett=True, rahmen=True, fuell=BLASS)

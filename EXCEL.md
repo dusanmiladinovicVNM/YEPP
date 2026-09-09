@@ -90,6 +90,10 @@ vorlage/Vorlage-Aufbau.bas          makro koji dodaje Power Query upite
 tools/vorlage_bauen.py              generator — odavde je fajl nastao
 ```
 
+Broj dokumenta stoji **gore desno u `F1`** (`=IF($J$2="","",$J$2)`), unutar
+oblasti štampe — `J2` je van nje, pa bi bez toga potpisan i odložen list
+ostao bez oznake kojoj isporuci pripada.
+
 Zaglavlje radi sa spojenim ćelijama, jer je kolona A uska `N°` kolona tabele
 pozicija: **A:B** zadatak, **C:D** ime, **E** datum, **F** vreme, a Kunde i
 Lieferant **A:B** natpis / **C:F** vrednost. Mejl-verzija (`blattAufbauen` u

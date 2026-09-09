@@ -140,6 +140,12 @@ def main():
     # openpyxl setzt den Blattnamen in Anfuehrungszeichen
     druck = str(fm.print_area).replace("'", '').strip('[]')
     ok('Druckbereich endet bei Spalte H', druck == 'Formular!$A$1:$H$30', druck)
+    # J2 selbst liegt ausserhalb des Druckbereichs; ohne F1 traegt das
+    # unterschriebene Blatt keine Nummer.
+    ok('Nummer im Druckbereich', fm['F1'].value == '=IF($J$2="","",$J$2)',
+       repr(fm['F1'].value))
+    ok('Nummer ueber F1:H1 verbunden',
+       'F1:H1' in {str(b) for b in fm.merged_cells.ranges})
     ok('auf eine Seite skaliert', fm.sheet_properties.pageSetUpPr.fitToPage is True)
     ok('Bestehend-Spalte gelb',
        all(fm[f'H{z}'].fill.fgColor.rgb.endswith('FFFF00') for z in range(16, 26)))

@@ -104,6 +104,12 @@ Werte und werden neu durchnummeriert.
 nicht kennt, überspringt sie — das zweite Team trägt sie später beim
 Einlagern nach. Wer sie kennt, spart dem Kollegen den Weg.
 
+**Bricht beim Speichern die Verbindung ab**, erscheint «Keine Verbindung.
+Bitte nochmals speichern — doppelt wird es nicht.» Tippen Sie einfach noch
+einmal auf **Speichern**. Auch wenn der erste Versuch beim Server angekommen
+war, entsteht kein zweiter Eintrag; Sie sehen dann «Dieser Wareneingang war
+schon gespeichert».
+
 ### Lieferschein-Foto
 
 Auf **Foto aufnehmen** tippen — die Kamera öffnet sich. Nach der Aufnahme

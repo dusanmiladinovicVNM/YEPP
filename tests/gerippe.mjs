@@ -5,6 +5,7 @@
  */
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { randomUUID } from 'node:crypto';
 
 /* ---------- Tabellen-Gerippe ---------- */
 
@@ -19,6 +20,7 @@ class Range {
     }
     return aus;
   }
+  getValue() { return this.getValues()[0][0]; }
   setValues(v) {
     v.forEach((z, i) => z.forEach((w, j) => { this.sh._z(this.r + i)[this.c + j - 1] = w; }));
     return this;
@@ -93,7 +95,7 @@ function neueTabelle() {
   B('Wareneingang', ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
     'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
     'EinNam', 'EinDat', 'EinZeit', 'LagerM2', 'Bemerkung',
-    'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet']);
+    'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet', 'Vorgang']);
   B('Positionen', ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
     'Regalplatz', 'Bemerkung', 'Bestehend']);
   B('Kunden', ['Name', 'Aktiv', 'Sortierung']);
@@ -121,7 +123,14 @@ function laden(ss) {
       flush: () => {},
       BorderStyle: { SOLID: 'SOLID' }
     },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    // Die Sperre wird mitgeschrieben: an ihr haengt, ob zwei gleichzeitige
+    // Klicks an derselben Pruefung vorbeikommen.
+    LockService: {
+      getScriptLock: () => ({
+        waitLock() { ctx.__sperren.push('an'); },
+        releaseLock() { ctx.__sperren.push('aus'); }
+      })
+    },
     DriveApp: {
       getFileById: () => ({ setTrashed() {}, makeCopy() {} }),
       getFolderById: id => {
@@ -140,6 +149,7 @@ function laden(ss) {
       base64Encode: b => Buffer.from(b).toString('base64'),
       base64Decode: s => Buffer.from(s, 'base64'),
       newBlob: () => ({}),
+      getUuid: () => randomUUID(),
       formatDate: (d, _z, m) => {
         const p = x => String(x).padStart(2, '0');
         return m
@@ -154,7 +164,8 @@ function laden(ss) {
       MimeType: { JSON: 'json', CSV: 'csv' },
       createTextOutput: t => ({ setMimeType: () => t, t })
     },
-    __mails: []
+    __mails: [],
+    __sperren: []
   };
   function ordner(id) {
     return { getName: () => 'Ordner ' + String(id || 'X'),

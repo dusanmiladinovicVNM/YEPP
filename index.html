@@ -539,6 +539,11 @@ button.sekundaer:active{background:#1d1d1d}
     <input id="adm-foto" type="text" placeholder="Ordner-Adresse einfügen">
     <p class="hinweis" id="adm-foto-name">Leer heisst: Fotos werden übersprungen.</p>
 
+    <label for="adm-sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
+    <input id="adm-sicherung" type="text" placeholder="Ordner-Adresse einfügen">
+    <p class="hinweis" id="adm-sicherung-name">Leer heisst: keine Sicherung.
+       Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.</p>
+
     <div id="adm-par-meldung" class="meldung err"></div>
 
     <div class="knopfzeile">
@@ -623,6 +628,7 @@ const S = {
   lieferanten: [],
   positionen:  [],
   bild:        null,
+  vorgang:     '',       // Schluessel dieser Erfassung, gegen Doppeleintraege
   altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
   pwPflicht:   false,
   detail:      null,
@@ -662,6 +668,16 @@ function zahl(text) {
   if (!s) return '';
   const n = parseFloat(s);
   return isNaN(n) ? '' : n;
+}
+
+/**
+ * Schluessel eines Erfassungsvorgangs. Kein Sicherheitsmerkmal — er sorgt
+ * nur dafuer, dass ein zweiter Versuch nach einem Verbindungsabbruch
+ * denselben Wareneingang trifft statt einen zweiten anzulegen.
+ */
+function vorgangsNr() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'v' + Date.now() + Math.random().toString(36).slice(2, 10);
 }
 
 function datumText(wert) {
@@ -779,6 +795,10 @@ async function anmelden() {
 }
 
 function abmelden() {
+  // Erst dem Server sagen, dann lokal vergessen. Ohne das bleibt der Token
+  // dreissig Tage gueltig, und «Abmelden» auf einem geteilten iPad waere
+  // nur eine Geste. Schlaegt der Ruf fehl, wird trotzdem abgemeldet.
+  if (S.session) post({ action: 'abmelden', session: S.session }).catch(() => {});
   localStorage.clear();
   S.session = ''; S.name = ''; S.rolle = '';
   $('lg-pass').value = '';
@@ -940,6 +960,7 @@ function formularNeu() {
   $('fm-m2').value = '';
   $('fm-bemerkung').value = '';
   SCHRITT_FOLGE.forEach(s => $('fm-s-' + s).checked = s === 'angenommen');
+  S.vorgang = vorgangsNr();
   fotoWeg();
   S.positionen = [];
   for (let i = 0; i < MIN_ZEILEN; i++) S.positionen.push(leerePosition());
@@ -1060,6 +1081,7 @@ async function speichern() {
     kunde:     kunde,
     lieferant: lieferant,
     schritte:  schritte,
+    vorgang:   S.vorgang,
     lagerM2:   zahl($('fm-m2').value),
     bemerkung: $('fm-bemerkung').value.trim(),
     foto:      S.bild || '',
@@ -1082,7 +1104,9 @@ async function speichern() {
   try {
     const r = await post(daten);
     if (r.ok) {
-      toast('Wareneingang ' + r.weNr + ' erfasst.', 'ok');
+      toast(r.wiederholt
+        ? 'Dieser Wareneingang war schon gespeichert: ' + r.weNr
+        : 'Wareneingang ' + r.weNr + ' erfasst.', 'ok');
       await ladeListe();
       detailOeffnen(r.weNr);
     } else if (!antwortOk(r)) {
@@ -1098,7 +1122,11 @@ async function speichern() {
   } catch (e) {
     toast(e && e.message === 'keine_antwort' || e && e.message === 'nicht_verbunden'
       ? verbindungText(e)
-      : 'Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
+      // Ob die Zeile geschrieben wurde, weiss hier niemand — deshalb nicht
+      // behaupten, sie sei es nicht. Der Vorgangsschluessel sorgt dafuer,
+      // dass ein zweiter Versuch nichts verdoppelt.
+      : 'Keine Verbindung. Bitte nochmals speichern — doppelt wird es nicht.',
+      'err');
   } finally {
     S.laeuft = false;
     btn.disabled = false;
@@ -1367,10 +1395,14 @@ async function adminOeffnen() {
 /* ---------- Einstellungen ---------- */
 
 const PAR_FELDER = { MailAn: 'adm-mailan', ArchivOrdner: 'adm-archiv',
-                     FotoOrdner: 'adm-foto' };
+                     FotoOrdner: 'adm-foto', SicherungOrdner: 'adm-sicherung' };
 
-const PAR_LEER = { ArchivOrdner: 'Leer heisst: nur Mail, kein Archiv.',
-                   FotoOrdner:   'Leer heisst: Fotos werden übersprungen.' };
+const PAR_LEER = {
+  ArchivOrdner:    'Leer heisst: nur Mail, kein Archiv.',
+  FotoOrdner:      'Leer heisst: Fotos werden übersprungen.',
+  SicherungOrdner: 'Leer heisst: keine Sicherung. Diesen Ordner mit niemandem ' +
+                   'teilen — die Kopie enthält die Passwörter.'
+};
 
 /** Ohne `werte` nur lesen, mit `werte` speichern — dieselbe Antwort. */
 async function adminParameter(werte) {
@@ -1393,7 +1425,7 @@ async function adminParameter(werte) {
 
     // Der Name sagt einem Menschen, ob die eingefuegte ID den richtigen
     // Ordner trifft. Eine ID allein sagt gar nichts.
-    ['ArchivOrdner', 'FotoOrdner'].forEach(s => {
+    Object.keys(PAR_LEER).forEach(s => {
       const feld = $(PAR_FELDER[s] + '-name');
       if (!r.werte[s]) feld.textContent = PAR_LEER[s];
       else if (r.ordner[s]) feld.textContent = 'Ordner: ' + r.ordner[s];
@@ -1549,11 +1581,11 @@ $('rg-senden').addEventListener('click', regalSenden);
 
 $('adm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
 $('adm-neu').addEventListener('click', adminNeu);
-$('adm-par').addEventListener('click', () => adminParameter({
-  MailAn:       $('adm-mailan').value.trim(),
-  ArchivOrdner: $('adm-archiv').value.trim(),
-  FotoOrdner:   $('adm-foto').value.trim()
-}));
+$('adm-par').addEventListener('click', () => {
+  const werte = {};
+  Object.keys(PAR_FELDER).forEach(s => { werte[s] = $(PAR_FELDER[s]).value.trim(); });
+  adminParameter(werte);
+});
 
 $('pw-fertig').addEventListener('click', () => $('dlg-pw').classList.remove('zeigen'));
 $('pw-kopieren').addEventListener('click', async () => {

@@ -75,7 +75,7 @@ Nastaju ovi, sa ovim kolonama:
 
 | List | Kolone |
 |---|---|
-| `Wareneingang` | `WeNr` `Zeitstempel` `Erfasser` `Email` `Kunde` `Lieferant` `AngNam` `AngDat` `AngZeit` `GezNam` `GezDat` `GezZeit` `EinNam` `EinDat` `EinZeit` `LagerM2` `Bemerkung` `Storniert` `Status` `FotoUrl` `DateiUrl` `Gesendet` |
+| `Wareneingang` | `WeNr` `Zeitstempel` `Erfasser` `Email` `Kunde` `Lieferant` `AngNam` `AngDat` `AngZeit` `GezNam` `GezDat` `GezZeit` `EinNam` `EinDat` `EinZeit` `LagerM2` `Bemerkung` `Storniert` `Status` `FotoUrl` `DateiUrl` `Gesendet` `Vorgang` |
 | `Positionen` | `WeNr` `Nr` `Artikel` `Anzahl` `KG` `MHD` `Regalplatz` `Bemerkung` `Bestehend` |
 | `Kunden` | `Name` `Aktiv` `Sortierung` |
 | `Lieferanten` | `Name` `Aktiv` `Sortierung` |
@@ -113,8 +113,15 @@ pečate; u aplikaciji, u CSV-u i u Excel obrascu onda piše `Sat Dec 30 1899 …
 Format ide preko cele visine lista, ne preko prvih n redova, i kolone se traže
 po imenu.
 
+**`setupAnlegen` ujedno dograđuje postojeću tabelu:** kolone iz nove verzije
+koda koje u tabeli ne postoje dopisuje **na kraj** zaglavlja, nikad između,
+i ne dira podatke. Tako živa instalacija povuče novu verziju bez ručnog
+kucanja zaglavlja.
+
 Ako tabela već radi, pokreni `setupAnlegen` ponovo posle ažuriranja koda.
-**Redovi upisani pre toga se time ne popravljaju** — njih treba prekucati.
+Redovi upisani pre toga zadržavaju svoje vrednosti; datum i vreme koje je
+Sheets bio pretvorio u vremenski pečat aplikacija sada sama vraća u tekst,
+pa se ne moraju prekucavati.
 
 Test u browseru:
 
@@ -139,6 +146,7 @@ U listu `Parameter`, kolona `Schluessel` / `Wert`:
 | `MailAn` | `lager@firma.ch` | adresa koja dobija popunjeni .xlsx |
 | `ArchivOrdner` | ID Drive foldera | tu se odlaže .xlsx, u podfolder `GGGG-MM` |
 | `FotoOrdner` | ID Drive foldera | tu idu slike otpremnice, u podfolder `GGGG-MM` |
+| `SicherungOrdner` | ID Drive foldera | tu ide nedeljna kopija cele tabele |
 
 ID foldera je deo URL-a posle `/folders/`.
 
@@ -275,14 +283,19 @@ korisnici. U tabelu se ne mora ulaziti ni za jedno.
 | Empfänger der Excel-Datei | `MailAn` — adresa koja dobija popunjeni `.xlsx` |
 | Drive-Ordner für die Excel-Ablage | `ArchivOrdner` — prazno znači: samo mejl |
 | Drive-Ordner für die Lieferschein-Fotos | `FotoOrdner` — prazno znači: slika se preskače |
+| Drive-Ordner für die wöchentliche Sicherung | `SicherungOrdner` — prazno znači: nema kopije |
 
 Kod oba foldera sme se **zalepiti cela Drive adresa** — server iz nje izvuče
 ID. Ispod polja stoji **ime foldera** koji taj ID stvarno pogađa; ako piše da
 nije dostižan, ID je pogrešan. To je jedina provera koja se isplati, jer ID
 sam po sebi čoveku ne znači ništa.
 
-Ista tri parametra i dalje stoje u listu `Parameter` — aplikacija ih samo
+Ista četiri parametra i dalje stoje u listu `Parameter` — aplikacija ih samo
 upisuje umesto tebe.
+
+**Folder za sigurnosnu kopiju ne deli ni sa kim.** Kopija sadrži list
+`Benutzer`, a u njemu `PassHash` i `Salt`. Zato je odvojen od `ArchivOrdner`,
+koji se po pravilu deli sa računovodstvom.
 
 ### Korisnici
 
@@ -314,7 +327,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **301 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **344 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -372,6 +385,9 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 21 | Admin zalepi celu Drive adresu u polje za folder | sačuva se ID, ispod stoji ime foldera |
 | 22 | Admin upiše `lager.firma.ch` bez `@` | odbijeno, stari unos ostaje |
 | 23 | Novi korisnik iz Verwaltung, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
+| 24 | Avionski režim usred *Speichern*, pa ponovo *Speichern* | jedan dokument, ne dva |
+| 25 | *Abmelden*, pa isti token ubačen ručno | odbijen sa `session` |
+| 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |
@@ -391,6 +407,11 @@ Test 1 zaključava nalog na 15 minuta — radi ga sa testnim nalogom.
 signalom to se oseti. Ako se pokaže da je potrebno, dodaje se IndexedDB
 outbox bez izmene backenda.
 
+Ono što jeste rešeno je **prekid usred slanja**: svaki unos nosi ključ
+vorganga, server ga upisuje u kolonu `Vorgang`, i drugi pokušaj sa istim
+ključem vraća postojeći broj umesto da otvori novi dokument. Zato poruka i
+ne tvrdi da ništa nije sačuvano — ona kaže da se sme pokušati ponovo.
+
 **Podaci su izvan tenanta firme.** Odluku o tome treba da potvrdi firma.
 Isto važi i za Spesen; ako je tamo prošlo, prolazi i ovde.
 
@@ -401,7 +422,8 @@ Sign-In — `login` tada prima ID token umesto lozinke, ostatak arhitekture
 se ne menja.
 
 **Sheets nema verzionisanje kakvo ima SharePoint.** Funkcija `sicherung()`
-u `Code.gs` pravi kopiju — zakači je na nedeljni vremenski okidač.
+u `Code.gs` pravi kopiju u folder iz parametra `SicherungOrdner` — zakači je
+na nedeljni vremenski okidač. Bez tog parametra ne radi ništa i to javi.
 
 **Nema izmene posle čuvanja.** Pogrešan unos se povlači i unosi ponovo.
 Za obrazac koji se potpisuje u tri koraka to je namerno: izmena posle

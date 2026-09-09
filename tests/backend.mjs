@@ -341,6 +341,9 @@ console.log('\n10) Excel-Blatt');
   const zelle = (r, c) => (sh.daten[r - 1] || [])[c - 1];
 
   ok('Titel in A1', String(zelle(1, 1)).startsWith('Wareneingang / Material reception'));
+  // Der Ausdruck wird unterschrieben und abgelegt — ohne Nummer weiss
+  // niemand, zu welcher Lieferung das Blatt gehoert.
+  ok('WE-Nummer im Kopf', String(zelle(1, 6)).startsWith('WE-'), String(zelle(1, 6)));
   ok('Quittungskopf in Zeile 3', zelle(3, 1) === 'Aufgabe / Task');
   ok('Angenommen mit Namen', zelle(4, 3) === 'Anna Muster');
   ok('Gezaehlt mit Namen', zelle(5, 3) === 'Anna Muster');
@@ -462,6 +465,132 @@ console.log('\n12) Einrichtung — Textspalten');
     !w2.formate.some(f => f.format === '@' && f.spalte === k2[name] + 1));
   ok('Textformat folgt der umgestellten Spalte', daneben.length === 0,
      'ohne Format: ' + daneben.join(', '));
+}
+
+console.log('\n13) Zufall, Sitzung, Sperre');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+  const viele = [];
+  for (let i = 0; i < 200; i++) viele.push(ctx.zufall(32));
+  ok('richtige Laenge', viele.every(s => s.length === 32));
+  ok('nur Zeichen aus dem Alphabet',
+     viele.every(s => Array.from(s).every(c => ALPHABET.includes(c))));
+  ok('keine Verwechslerzeichen', !viele.join('').match(/[0O1lI]/));
+  ok('alle verschieden', new Set(viele).size === 200);
+
+  // Beweist die Quelle: waere noch Math.random() im Spiel, aenderte ein
+  // festgenageltes getUuid nichts an der Ausgabe.
+  const echt = ctx.Utilities.getUuid;
+  ctx.Utilities.getUuid = () => '00112233-4455-6677-8899-aabbccddeeff';
+  const a = ctx.zufall(20), b = ctx.zufall(20);
+  ctx.Utilities.getUuid = echt;
+  ok('Zufall stammt aus getUuid', a === b && a.length === 20, a + ' / ' + b);
+
+  // Anmeldung: der Weg war bisher gar nicht gefahren
+  const bl = ss.blaetter.Benutzer, k = ctx.spalten(bl.daten[0]);
+  const salt = ctx.zufall(16);
+  bl.appendRow(['eva@firma.ch', 'Eva Weber', ctx.hash('geheim123', salt), salt,
+                true, 0, '', '', true, '']);
+  const an = ctx.login({ email: ' Eva@Firma.CH ', passwort: 'geheim123' });
+  ok('Anmeldung mit Gross- und Kleinschreibung', an.ok === true, JSON.stringify(an));
+  ok('Sitzung angelegt', ss.blaetter.Sessions.daten.some(z => z[0] === an.session));
+  ok('falsches Passwort abgewiesen',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'falsch' }).error === 'login');
+
+  // Abmelden raeumt den Token weg, nicht nur den Browser
+  ok('abmelden bestaetigt', ctx.verteilen({ action: 'abmelden', session: an.session }).ok === true);
+  ok('Token geloescht', !ss.blaetter.Sessions.daten.some(z => z[0] === an.session));
+  ok('Sitzung danach ungueltig', ctx.sitzungPruefen(an.session) === null);
+
+  // Abgelaufene Zeilen verschwinden beim naechsten Anmelden
+  ss.blaetter.Sessions.appendRow(['alt1', 'eva@firma.ch', new Date(Date.now() - 8.64e7)]);
+  ss.blaetter.Sessions.appendRow(['alt2', 'eva@firma.ch', new Date(Date.now() - 1)]);
+  const vorher = ss.blaetter.Sessions.daten.length;
+  ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' });
+  ok('abgelaufene Sitzungen aufgeraeumt',
+     ss.blaetter.Sessions.daten.length === vorher - 1,
+     vorher + ' -> ' + ss.blaetter.Sessions.daten.length);
+
+  // Quittieren unter Sperre, wie das Erfassen
+  const u = mitBenutzer(ctx, ss);
+  const nr = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u).weNr;
+  ctx.__sperren.length = 0;
+  ctx.weSchritt({ weNr: nr, schritt: 'gezaehlt' }, u);
+  ok('Quittieren nimmt die Sperre',
+     ctx.__sperren.join(',') === 'an,aus', ctx.__sperren.join(','));
+  ctx.__sperren.length = 0;
+  ctx.weSchritt({ weNr: nr, schritt: 'gezaehlt' }, u);
+  ok('Sperre auch bei Abweisung wieder frei',
+     ctx.__sperren.join(',') === 'an,aus', ctx.__sperren.join(','));
+}
+
+console.log('\n14) Doppelte Erfassung');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const w = ss.blaetter.Wareneingang;
+  const eingabe = () => ({ kunde: 'K', positionen: POS, vorgang: 'v-4711' });
+
+  const erst = ctx.weSpeichern(eingabe(), u);
+  const nochmal = ctx.weSpeichern(eingabe(), u);
+  ok('zweiter Versuch legt nichts an', w.daten.length === 2, w.daten.length + ' Zeilen');
+  ok('dieselbe Nummer zurueck', nochmal.weNr === erst.weNr,
+     erst.weNr + ' / ' + nochmal.weNr);
+  ok('als Wiederholung gekennzeichnet', nochmal.wiederholt === true);
+  ok('keine doppelten Positionen', ss.blaetter.Positionen.daten.length === 3,
+     ss.blaetter.Positionen.daten.length + ' Zeilen');
+
+  const anderer = ctx.weSpeichern({ kunde: 'K', positionen: POS, vorgang: 'v-4712' }, u);
+  ok('anderer Vorgang legt an', anderer.weNr !== erst.weNr && w.daten.length === 3);
+  ok('Schluessel steht in der Zeile',
+     w.daten[1][ctx.spalten(w.daten[0]).Vorgang] === 'v-4711',
+     String(w.daten[1][ctx.spalten(w.daten[0]).Vorgang]));
+
+  // Ohne Schluessel bleibt es beim alten Verhalten
+  ctx.weSpeichern({ kunde: 'K', positionen: POS }, u);
+  ctx.weSpeichern({ kunde: 'K', positionen: POS }, u);
+  ok('ohne Schluessel wird nicht zusammengelegt', w.daten.length === 5,
+     w.daten.length + ' Zeilen');
+
+  // Komma statt Punkt: der Server rechnet selbst um
+  ctx.weSpeichern({ kunde: 'K', lagerM2: '12,5', vorgang: 'v-komma', positionen: [
+    { artikel: 'Mit Komma', anzahl: '3,4', kg: ' 1,25 ', mhd: '', bemerkung: '',
+      bestehend: false },
+    { artikel: 'Unsinn', anzahl: 'viele', kg: '', mhd: '', bemerkung: '',
+      bestehend: false }] }, u);
+  const k = ctx.spalten(w.daten[0]);
+  const p = ss.blaetter.Positionen, pk = ctx.spalten(p.daten[0]);
+  ok('Komma im m2-Feld', w.daten[w.daten.length - 1][k.LagerM2] === 12.5);
+  ok('Komma in der Anzahl', p.daten[p.daten.length - 2][pk.Anzahl] === 3.4,
+     String(p.daten[p.daten.length - 2][pk.Anzahl]));
+  ok('Komma mit Leerzeichen im kg', p.daten[p.daten.length - 2][pk.KG] === 1.25);
+  ok('unsinnige Zahl wird leer, nicht NaN',
+     p.daten[p.daten.length - 1][pk.Anzahl] === '',
+     String(p.daten[p.daten.length - 1][pk.Anzahl]));
+}
+
+console.log('\n15) Sicherung und Nachruesten');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  ok('ohne Ordner wird nicht gesichert',
+     ctx.sicherung() === 'kein SicherungOrdner gesetzt — nichts gesichert');
+  ctx.parameterSetzen('SicherungOrdner', '1SicherungSicherungSicherung');
+  ok('mit eigenem Ordner wird gesichert', ctx.sicherung() === 'gesichert');
+  ok('Archivordner bleibt aussen vor', ctx.parameter('ArchivOrdner') === '');
+
+  // Bestehende Tabelle ohne die neue Spalte: setupAnlegen zieht sie nach
+  const alt = neueTabelle(), ctx2 = laden(alt);
+  const w = alt.blaetter.Wareneingang;
+  w.daten[0] = w.daten[0].filter(s => s !== 'Vorgang');
+  w.appendRow(['WE-2026-0001']);
+  ctx2.setupAnlegen();
+  ok('fehlende Spalte hinten angehaengt',
+     w.daten[0][w.daten[0].length - 1] === 'Vorgang', JSON.stringify(w.daten[0]));
+  ok('vorhandene Daten unberuehrt', w.daten[1][0] === 'WE-2026-0001');
+  ok('nichts doppelt angelegt',
+     w.daten[0].filter(s => s === 'Vorgang').length === 1);
 }
 
 console.log('\n' + '='.repeat(46));
