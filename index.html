@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121212">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Wareneingang">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Wareneingang</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Farben — hier anpassen
+   ============================================================ */
+:root{
+  --bg:#121212;
+  --feld:#262626;
+  --akzent:#E0A32E;
+  --text:#F0F0F0;
+  --grau:#969696;
+  --rand:#464646;
+  --fehler:#C84040;
+  --gelb:#FFE24D;
+  --pad:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Open Sans",-apple-system,BlinkMacSystemFont,sans-serif;
+  font-size:15px;
+  line-height:1.35;
+  overscroll-behavior-y:none;
+}
+
+/* ---------- Bildschirme ---------- */
+.screen{display:none;flex-direction:column;height:100%;align-items:center}
+.screen.aktiv{display:flex}
+.scroll{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0 var(--pad) calc(24px + env(safe-area-inset-bottom));
+}
+/* Auf dem iPad sonst ueber die ganze Breite gezogen. */
+.scroll,.login-wrap,.kopf,.kopf-liste,.total{
+  width:100%;max-width:560px;margin-left:auto;margin-right:auto;
+}
+
+/* ---------- Kopfzeilen ---------- */
+.kopf{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(12px + env(safe-area-inset-top)) var(--pad) 12px;
+  flex:none;
+}
+.kopf .name{font-weight:600;font-size:15px;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.kopf .zeichen{width:40px;height:40px;display:block;flex:none}
+.kopf-liste{
+  display:flex;align-items:center;gap:12px;
+  padding:calc(12px + env(safe-area-inset-top)) var(--pad) 4px;
+  flex:none;
+}
+.kopf-liste h1{margin:0;font-size:18px;font-weight:600;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zurueck{
+  background:none;border:0;padding:4px;margin-left:-4px;
+  color:var(--akzent);font-size:22px;line-height:1;cursor:pointer;
+}
+.total{padding:0 var(--pad) 12px;text-align:right;font-size:13px;color:var(--grau);flex:none}
+
+/* ---------- Felder ---------- */
+label{display:block;font-size:13px;margin:12px 0 4px}
+input:not([type=checkbox]),select,textarea{
+  width:100%;height:48px;padding:0 12px;
+  background:var(--feld);color:var(--text);
+  border:1px solid var(--rand);border-radius:4px;
+  font-family:inherit;font-size:16px;
+  appearance:none;-webkit-appearance:none;
+}
+textarea{height:80px;padding:12px;resize:none;line-height:1.4}
+input:not([type=checkbox]):focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--akzent)}
+input::placeholder,textarea::placeholder{color:var(--grau)}
+select{
+  padding-right:40px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1l6 6 6-6' fill='none' stroke='%23E0A32E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 14px center;
+}
+.feld{margin-top:12px}
+.feld label{margin-top:0}
+.feld[hidden]{display:none}
+.zeile2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.zeile2 label{grid-column:1 / -1;margin-bottom:4px}
+.hinweis{font-size:12px;color:var(--grau);margin:6px 0 0}
+
+/* ---------- Positionen ---------- */
+.pos-kopf{
+  display:flex;align-items:baseline;justify-content:space-between;
+  margin:24px 0 4px;
+}
+.pos-kopf h2{margin:0;font-size:15px;font-weight:600}
+.pos-kopf .zahl{font-size:12px;color:var(--grau)}
+.pos{
+  border:1px solid var(--rand);border-radius:4px;
+  padding:12px;margin-top:10px;background:rgba(255,255,255,.02);
+}
+.pos .zeile1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pos .nr{font-size:12px;font-weight:700;color:var(--akzent);letter-spacing:.4px}
+.pos-weg{
+  background:none;border:0;padding:4px 6px;cursor:pointer;
+  color:var(--grau);font-size:16px;line-height:1;
+}
+.pos-weg:active{color:var(--fehler)}
+.pos .drei{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.pos label{font-size:12px;margin:10px 0 4px}
+.pos input:not([type=checkbox]){height:44px}
+
+/* Bestehend / Existing — auf dem Papier die gelbe Spalte */
+.haken{
+  display:flex;align-items:center;gap:10px;
+  margin-top:12px;font-size:13px;cursor:pointer;
+}
+.haken input{
+  width:22px;height:22px;flex:none;margin:0;padding:0;
+  appearance:auto;-webkit-appearance:checkbox;
+  accent-color:var(--gelb);background:transparent;border:0;border-radius:0;
+}
+.haken .marker{color:var(--gelb);font-weight:600}
+
+/* ---------- Foto ---------- */
+.foto-knopf{
+  width:100%;height:48px;border-radius:4px;background:var(--feld);
+  color:var(--text);border:1px solid var(--rand);
+  font-family:inherit;font-size:15px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.foto-knopf:active{background:#2f2f2f}
+.foto-vorschau{display:none;margin-top:8px;position:relative}
+.foto-vorschau.da{display:block}
+.foto-vorschau img{
+  width:100%;max-height:220px;object-fit:cover;
+  border-radius:4px;border:1px solid var(--rand);display:block;
+}
+.foto-weg{
+  position:absolute;top:8px;right:8px;width:32px;height:32px;
+  border-radius:16px;border:0;cursor:pointer;
+  background:rgba(0,0,0,.7);color:#fff;font-size:16px;line-height:1;
+}
+.foto-info{font-size:11px;color:var(--grau);margin-top:4px}
+
+/* ---------- Knoepfe ---------- */
+button.gross{
+  width:100%;height:48px;border-radius:4px;
+  font-family:inherit;font-size:15px;font-weight:700;
+  cursor:pointer;border:1px solid transparent;
+}
+/* button.sekundaer statt .sekundaer: die Kurzform border in button.gross
+   ist spezifischer als eine reine Klasse und faerbt den Rand sonst
+   durchsichtig — der Knopf verliert seine Kontur. */
+button.primaer{background:var(--akzent);color:#000;border-color:var(--akzent)}
+button.primaer:active{background:#c88f24}
+button.primaer:disabled{opacity:.45;cursor:default}
+button.sekundaer{background:transparent;color:var(--text);border-color:var(--rand)}
+button.sekundaer:active{background:#1d1d1d}
+.knopfzeile{margin-top:20px;display:flex;flex-direction:column;gap:12px}
+.klein{
+  background:transparent;color:var(--text);border:1px solid var(--rand);
+  border-radius:3px;padding:8px 12px;font-family:inherit;font-size:12px;cursor:pointer;
+}
+.klein:active{background:#1d1d1d}
+.klein[disabled]{opacity:.35;cursor:default}
+.trennlinie{border:0;border-top:1px solid var(--rand);margin:24px 0 8px}
+
+/* ---------- Listen ---------- */
+.liste{padding:0 0 24px}
+.eintrag{
+  display:grid;grid-template-columns:1fr auto;
+  column-gap:12px;align-items:center;
+  padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);
+  cursor:pointer;
+}
+.eintrag .oben{display:flex;justify-content:space-between;gap:12px;
+  font-size:14px;font-weight:600}
+.eintrag .unten{font-size:11px;color:var(--grau);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eintrag .zellen{min-width:0}
+.trenn{color:var(--rand);font-weight:400;padding:0 2px}
+.leer{color:var(--grau);text-align:center;padding:48px 0;font-size:14px}
+.marke{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
+.marke.offen{background:rgba(224,163,46,.18);color:var(--akzent)}
+.marke.fertig{background:rgba(255,255,255,.08);color:var(--grau)}
+.marke.aus{background:rgba(200,64,64,.18);color:#E88}
+.marke.adm{background:rgba(224,163,46,.18);color:var(--akzent)}
+.marke.neu{background:rgba(255,255,255,.08);color:var(--grau)}
+
+/* ---------- Detail ---------- */
+.schritt{
+  display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+  padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);
+}
+.schritt .was{font-size:13px;font-weight:600}
+.schritt .wer{font-size:11px;color:var(--grau);margin-top:2px}
+.schritt.erledigt .was{color:var(--grau);font-weight:400}
+.daten{padding:4px 0 0}
+.daten .zeile{display:flex;justify-content:space-between;gap:12px;
+  padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.daten .zeile span:first-child{color:var(--grau);flex:none}
+.daten .zeile span:last-child{text-align:right;min-width:0;word-break:break-word}
+.zeigepos{
+  padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.zeigepos .a{display:flex;justify-content:space-between;gap:12px;font-weight:600}
+.zeigepos .b{font-size:11px;color:var(--grau);margin-top:2px}
+.zeigepos .gelb{color:var(--gelb)}
+.regal{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;
+  padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.regal .txt{font-size:13px;min-width:0}
+.regal .txt small{display:block;color:var(--grau);font-size:11px}
+.regal input{height:42px}
+
+/* ---------- Anmeldung ---------- */
+.login-wrap{
+  flex:1;display:flex;flex-direction:column;justify-content:center;
+  padding:0 var(--pad) 48px;
+}
+.login-wrap .logo{width:min(220px,60%);height:auto;align-self:center;margin-bottom:32px}
+.login-wrap h1{font-size:20px;font-weight:600;margin:0 0 4px;text-align:center}
+.login-wrap p.sub{font-size:13px;color:var(--grau);margin:0 0 24px;text-align:center}
+
+/* ---------- Meldungen ---------- */
+.meldung{margin-top:12px;font-size:13px;padding:10px 12px;border-radius:4px;display:none}
+.meldung.zeigen{display:block}
+.meldung.ok{background:rgba(224,163,46,.15);color:var(--akzent)}
+.meldung.err{background:rgba(200,64,64,.15);color:#E88}
+.toast{
+  position:fixed;left:var(--pad);right:var(--pad);
+  bottom:calc(20px + env(safe-area-inset-bottom));
+  max-width:480px;margin:0 auto;
+  background:#2a2a2a;color:var(--text);
+  padding:14px 16px;border-radius:4px;font-size:14px;
+  border-left:3px solid var(--rand);
+  opacity:0;transform:translateY(12px);pointer-events:none;
+  transition:opacity .18s,transform .18s;z-index:50;
+}
+.toast.zeigen{opacity:1;transform:translateY(0)}
+.toast.ok{border-left-color:var(--akzent)}
+.toast.err{border-left-color:var(--fehler)}
+
+/* ---------- Dialoge ---------- */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.72);
+  display:none;align-items:center;justify-content:center;
+  padding:var(--pad);z-index:40;
+}
+.overlay.zeigen{display:flex}
+.box{
+  background:#1e1e1e;border:1px solid var(--rand);border-radius:6px;
+  padding:20px;width:100%;max-width:400px;font-size:14px;
+  max-height:90vh;overflow-y:auto;
+}
+.box p{margin:0 0 4px}
+.pwfeld{
+  background:#1a1a1a;border:1px solid var(--akzent);border-radius:4px;
+  padding:14px;margin:12px 0;text-align:center;
+}
+.pwfeld .wert{
+  font-family:"SFMono-Regular",Menlo,Consolas,monospace;
+  font-size:22px;letter-spacing:1px;color:var(--akzent);
+  user-select:all;-webkit-user-select:all;word-break:break-all;
+}
+.pwfeld .wem{font-size:12px;color:var(--grau);margin-bottom:8px}
+.nachricht{
+  width:100%;height:200px;padding:12px;margin:12px 0 0;
+  background:#1a1a1a;color:var(--text);
+  border:1px solid var(--rand);border-radius:4px;
+  font-family:"SFMono-Regular",Menlo,Consolas,monospace;
+  font-size:15px;line-height:1.45;resize:none;
+}
+.nutzer{padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.nutzer .zeile1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.nutzer .nm{font-size:14px;font-weight:600}
+.nutzer .ml{font-size:11px;color:var(--grau);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nutzer .tasten{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     Logo — Inhalt durch das eigene SVG ersetzen
+     ============================================================ -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 120 120">
+    <rect x="14" y="40" width="92" height="66" rx="3" fill="none"
+          stroke="#E0A32E" stroke-width="6"/>
+    <path d="M14 58h92" stroke="#E0A32E" stroke-width="6"/>
+    <path d="M60 4v30M60 34l-13-13M60 34l13-13" fill="none"
+          stroke="#F0F0F0" stroke-width="6" stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </symbol>
+</svg>
+
+<!-- ============ ANMELDUNG ============ -->
+<section id="scr-login" class="screen aktiv">
+  <div class="login-wrap">
+    <svg class="logo" viewBox="0 0 120 120" aria-hidden="true"><use href="#logo"/></svg>
+    <h1>Wareneingang</h1>
+    <p class="sub">Material reception</p>
+
+    <div class="feld">
+      <label for="lg-email">E-Mail</label>
+      <input id="lg-email" type="email" inputmode="email"
+             autocapitalize="off" autocomplete="username" autocorrect="off">
+    </div>
+    <div class="feld">
+      <label for="lg-pass">Passwort</label>
+      <input id="lg-pass" type="password" autocomplete="current-password">
+    </div>
+
+    <div id="lg-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="lg-senden" class="gross primaer">Anmelden</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PASSWORT ============ -->
+<section id="scr-pw" class="screen">
+  <div class="login-wrap">
+    <svg class="logo" viewBox="0 0 120 120" aria-hidden="true"><use href="#logo"/></svg>
+    <h1 id="pw-titel">Passwort ändern</h1>
+    <p class="sub" id="pw-sub"></p>
+
+    <div class="feld" id="pw-alt-feld">
+      <label for="pw-alt">Bisheriges Passwort</label>
+      <input id="pw-alt" type="password" autocomplete="current-password">
+    </div>
+    <div class="feld">
+      <label for="pw-neu">Neues Passwort</label>
+      <input id="pw-neu" type="password" autocomplete="new-password">
+    </div>
+    <div class="feld">
+      <label for="pw-neu2">Neues Passwort wiederholen</label>
+      <input id="pw-neu2" type="password" autocomplete="new-password">
+    </div>
+
+    <div id="pw-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="pw-senden" class="gross primaer">Passwort speichern</button>
+      <button id="pw-zurueck" class="gross sekundaer">Abbrechen</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ÜBERSICHT ============ -->
+<section id="scr-start" class="screen">
+  <header class="kopf">
+    <span class="name" id="st-name"></span>
+    <svg class="zeichen" viewBox="0 0 120 120" aria-hidden="true"><use href="#logo"/></svg>
+  </header>
+
+  <div class="scroll">
+    <div class="knopfzeile" style="margin-top:0">
+      <button id="st-neu" class="gross primaer">Neuer Wareneingang</button>
+    </div>
+
+    <div class="pos-kopf">
+      <h2>Offene und letzte</h2>
+      <span class="zahl" id="st-zahl"></span>
+    </div>
+
+    <div class="liste" id="st-liste"></div>
+
+    <hr class="trennlinie">
+    <div class="knopfzeile" style="margin-top:8px">
+      <button id="st-admin" class="gross sekundaer" hidden>Benutzer verwalten</button>
+      <button id="st-passwort" class="gross sekundaer">Passwort ändern</button>
+      <button id="st-abmelden" class="gross sekundaer">Abmelden</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ERFASSUNG ============ -->
+<section id="scr-form" class="screen">
+  <header class="kopf-liste">
+    <button class="zurueck" id="fm-zurueck" aria-label="Zurück">&#8592;</button>
+    <h1>Neuer Wareneingang</h1>
+  </header>
+
+  <div class="scroll">
+    <div class="feld">
+      <label for="fm-kunde">Kunde / Client</label>
+      <input id="fm-kunde" type="text" list="dl-kunden" autocapitalize="words">
+      <datalist id="dl-kunden"></datalist>
+    </div>
+
+    <div class="feld">
+      <label for="fm-lieferant">Lieferant / Supplier</label>
+      <input id="fm-lieferant" type="text" list="dl-lieferanten" autocapitalize="words">
+      <datalist id="dl-lieferanten"></datalist>
+    </div>
+
+    <p class="hinweis">
+      Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.
+    </p>
+
+    <div class="pos-kopf">
+      <h2>Positionen</h2>
+      <span class="zahl" id="fm-poszahl"></span>
+    </div>
+    <div id="fm-positionen"></div>
+
+    <div class="knopfzeile" style="margin-top:12px">
+      <button id="fm-plus" class="gross sekundaer" type="button">+ Position</button>
+    </div>
+
+    <div class="feld" style="margin-top:24px">
+      <label for="fm-m2">Lagerfläche / storage space — m2</label>
+      <input id="fm-m2" type="text" inputmode="decimal" placeholder="optional">
+    </div>
+
+    <div class="feld">
+      <label>Lieferschein-Foto</label>
+      <button type="button" class="foto-knopf" id="fm-foto-knopf">
+        <span>&#128247;</span><span>Foto aufnehmen</span>
+      </button>
+      <input id="fm-foto" type="file" accept="image/*" capture="environment" hidden>
+      <div class="foto-vorschau" id="fm-foto-vorschau">
+        <img id="fm-foto-bild" alt="">
+        <button type="button" class="foto-weg" id="fm-foto-weg"
+                aria-label="Foto entfernen">&times;</button>
+      </div>
+      <div class="foto-info" id="fm-foto-info"></div>
+    </div>
+
+    <div class="feld">
+      <label for="fm-bemerkung">Bemerkung</label>
+      <textarea id="fm-bemerkung" placeholder="optional"></textarea>
+    </div>
+
+    <p class="hinweis">
+      Mit dem Speichern wird «Angenommen / Accepted» auf Ihren Namen quittiert.
+    </p>
+
+    <div class="knopfzeile">
+      <button id="fm-speichern" class="gross primaer">Speichern</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DETAIL ============ -->
+<section id="scr-detail" class="screen">
+  <header class="kopf-liste">
+    <button class="zurueck" id="dt-zurueck" aria-label="Zurück">&#8592;</button>
+    <h1 id="dt-titel">Wareneingang</h1>
+  </header>
+
+  <div class="scroll">
+    <div class="daten" id="dt-daten"></div>
+
+    <div class="pos-kopf"><h2>Aufgabe / Task</h2></div>
+    <div id="dt-schritte"></div>
+
+    <div class="pos-kopf">
+      <h2>Positionen</h2>
+      <span class="zahl" id="dt-poszahl"></span>
+    </div>
+    <div id="dt-positionen"></div>
+
+    <div class="knopfzeile">
+      <button id="dt-senden" class="gross primaer">Als Excel senden</button>
+      <button id="dt-storno" class="gross sekundaer">Zurückziehen</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EINLAGERN ============ -->
+<section id="scr-regal" class="screen">
+  <header class="kopf-liste">
+    <button class="zurueck" id="rg-zurueck" aria-label="Zurück">&#8592;</button>
+    <h1>Eingelagert / stored</h1>
+  </header>
+
+  <div class="scroll">
+    <p class="hinweis" style="margin-top:12px">
+      Regalplatznr. eintragen, soweit bekannt. Leere Felder bleiben offen.
+    </p>
+    <div id="rg-liste"></div>
+    <div class="knopfzeile">
+      <button id="rg-senden" class="gross primaer">Einlagerung quittieren</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ADMIN ============ -->
+<section id="scr-admin" class="screen">
+  <header class="kopf-liste">
+    <button class="zurueck" id="adm-zurueck" aria-label="Zurück">&#8592;</button>
+    <h1>Benutzer verwalten</h1>
+  </header>
+
+  <div class="scroll">
+    <label for="adm-name">Name</label>
+    <input id="adm-name" type="text" placeholder="Vorname Nachname">
+
+    <label for="adm-email">E-Mail</label>
+    <input id="adm-email" type="email" inputmode="email"
+           autocapitalize="off" placeholder="name@firma.ch">
+
+    <label class="haken" for="adm-mail">
+      <input type="checkbox" id="adm-mail">
+      <span>Zugangsmail verschicken</span>
+    </label>
+
+    <div id="adm-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="adm-neu" class="gross primaer">Benutzer anlegen</button>
+    </div>
+
+    <hr class="trennlinie">
+    <div id="adm-liste"></div>
+  </div>
+</section>
+
+<!-- ============ DIALOGE ============ -->
+<div class="overlay" id="dlg-pw">
+  <div class="box">
+    <p><b>Zugang angelegt</b><br><span id="pw-hinweis"></span></p>
+    <div class="pwfeld">
+      <div class="wem" id="pw-wem"></div>
+      <div class="wert" id="pw-wert"></div>
+    </div>
+    <textarea class="nachricht" id="pw-text" readonly></textarea>
+    <p style="font-size:12px;color:var(--grau)">Wird nur jetzt angezeigt.
+       Das Passwort gilt bis zur ersten Anmeldung.</p>
+    <div class="knopfzeile">
+      <button id="pw-kopieren" class="gross primaer">Nachricht kopieren</button>
+      <button id="pw-fertig" class="gross sekundaer">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlg-frage">
+  <div class="box">
+    <p id="frage-text"></p>
+    <div class="knopfzeile">
+      <button id="frage-ja" class="gross primaer">Ja</button>
+      <button id="frage-nein" class="gross sekundaer">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Konfiguration — Web-App-URL aus Apps Script
+   ============================================================ */
+const CONFIG = {
+  url: ''
+};
+
+/* Wareneingang — Clientlogik */
+
+const S = {
+  session:     localStorage.getItem('session') || '',
+  name:        localStorage.getItem('name')    || '',
+  rolle:       localStorage.getItem('rolle')   || '',
+  kunden:      [],
+  lieferanten: [],
+  positionen:  [],
+  bild:        null,
+  altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
+  pwPflicht:   false,
+  detail:      null,
+  laeuft:      false
+};
+
+const MIN_ZEILEN = 5;    // wie auf dem Papier
+
+const $ = id => document.getElementById(id);
+
+/* ---------- Hilfsmittel ---------- */
+
+function zeigeScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('aktiv'));
+  $(id).classList.add('aktiv');
+  const sc = $(id).querySelector('.scroll');
+  if (sc) sc.scrollTop = 0;
+}
+
+function toast(text, art) {
+  const t = $('toast');
+  t.textContent = text;
+  t.className = 'toast zeigen ' + (art || '');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.className = 'toast', 3200);
+}
+
+/** Alles, was aus der Antwort kommt, geht als Text in die Seite. */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function zahl(text) {
+  const s = String(text == null ? '' : text).replace(/\s/g, '').replace(',', '.');
+  if (!s) return '';
+  const n = parseFloat(s);
+  return isNaN(n) ? '' : n;
+}
+
+function datumText(wert) {
+  const t = String(wert || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return t ? t[3] + '.' + t[2] + '.' + t[1] : String(wert || '');
+}
+
+/* ---------- API ---------- */
+
+async function post(payload) {
+  // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht beantwortet.
+  const res  = await fetch(CONFIG.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
+    throw e;
+  }
+}
+
+async function get(params) {
+  const q = new URLSearchParams(Object.assign({ session: S.session }, params));
+  const res = await fetch(CONFIG.url + '?' + q.toString());
+  return res.json();
+}
+
+function sessionWeg() {
+  localStorage.clear();
+  S.session = '';
+  toast('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.', 'err');
+  zeigeScreen('scr-login');
+}
+
+/** true, wenn die Antwort weiterverarbeitet werden darf. */
+function antwortOk(r) {
+  if (r.ok) return true;
+  if (r.error === 'session') { sessionWeg(); return false; }
+  if (r.error === 'passwort_noetig') { zeigePasswort(true); return false; }
+  return false;
+}
+
+/* ---------- Anmeldung ---------- */
+
+async function anmelden() {
+  const email = $('lg-email').value.trim();
+  const pass  = $('lg-pass').value;
+  const m     = $('lg-meldung');
+  m.classList.remove('zeigen');
+
+  if (!email || !pass) {
+    m.textContent = 'Bitte E-Mail und Passwort eingeben.';
+    m.classList.add('zeigen');
+    return;
+  }
+
+  const btn = $('lg-senden');
+  btn.disabled = true;
+  btn.textContent = 'Anmelden …';
+
+  try {
+    const r = await post({ action: 'login', email: email, passwort: pass });
+    if (r.ok) {
+      S.session = r.session;
+      S.name    = r.name;
+      S.rolle   = r.rolle || '';
+      S.altPass = pass;
+      localStorage.setItem('session', r.session);
+      localStorage.setItem('name', r.name);
+      localStorage.setItem('rolle', S.rolle);
+      $('lg-pass').value = '';
+      if (r.pwGeaendert === false) { zeigePasswort(true); return; }
+      await start();
+    } else {
+      m.textContent = {
+        login:    'E-Mail oder Passwort ist falsch.',
+        gesperrt: 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.',
+        inaktiv:  'Dieser Zugang ist deaktiviert. Bitte melden Sie sich bei uns.'
+      }[r.error] || 'Anmeldung nicht möglich.';
+      m.classList.add('zeigen');
+    }
+  } catch (e) {
+    m.textContent = 'Keine Verbindung. Bitte Internetverbindung prüfen.';
+    m.classList.add('zeigen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Anmelden';
+  }
+}
+
+function abmelden() {
+  localStorage.clear();
+  S.session = ''; S.name = ''; S.rolle = '';
+  $('lg-pass').value = '';
+  zeigeScreen('scr-login');
+}
+
+/** pflicht = erste Anmeldung mit dem zugestellten Passwort. */
+function zeigePasswort(pflicht) {
+  S.pwPflicht = !!pflicht;
+  $('pw-titel').textContent = pflicht ? 'Eigenes Passwort setzen' : 'Passwort ändern';
+  $('pw-sub').textContent = pflicht
+    ? 'Das zugestellte Passwort stand im Mail. Bitte ersetzen Sie es jetzt.'
+    : 'Alle angemeldeten Geräte werden dabei abgemeldet.';
+  $('pw-alt-feld').hidden = pflicht && !!S.altPass;
+  $('pw-zurueck').hidden  = pflicht;
+  $('pw-alt').value = ''; $('pw-neu').value = ''; $('pw-neu2').value = '';
+  $('pw-meldung').classList.remove('zeigen');
+  zeigeScreen('scr-pw');
+}
+
+async function passwortSpeichern() {
+  const alt = S.pwPflicht && S.altPass ? S.altPass : $('pw-alt').value;
+  const neu = $('pw-neu').value;
+  const m   = $('pw-meldung');
+  m.classList.remove('zeigen');
+
+  if (neu.length < 8) {
+    m.textContent = 'Das neue Passwort braucht mindestens 8 Zeichen.';
+    m.classList.add('zeigen'); return;
+  }
+  if (neu !== $('pw-neu2').value) {
+    m.textContent = 'Die beiden Eingaben stimmen nicht überein.';
+    m.classList.add('zeigen'); return;
+  }
+
+  const btn = $('pw-senden');
+  btn.disabled = true; btn.textContent = 'Speichern …';
+  try {
+    const r = await post({ action: 'passwort', session: S.session, alt: alt, neu: neu });
+    if (r.ok) {
+      S.session = r.session;
+      S.altPass = '';
+      localStorage.setItem('session', r.session);
+      toast('Passwort gespeichert.', 'ok');
+      await start();
+    } else if (r.error === 'session') {
+      sessionWeg();
+    } else {
+      m.textContent = {
+        alt_falsch: 'Das bisherige Passwort ist falsch.',
+        zu_kurz:    'Das neue Passwort braucht mindestens 8 Zeichen.'
+      }[r.error] || 'Speichern nicht möglich.';
+      m.classList.add('zeigen');
+    }
+  } catch (e) {
+    m.textContent = 'Keine Verbindung.';
+    m.classList.add('zeigen');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Passwort speichern';
+  }
+}
+
+/* ---------- Start ---------- */
+
+async function start() {
+  $('st-name').textContent = S.name;
+  $('st-admin').hidden = S.rolle !== 'admin';
+  zeigeScreen('scr-start');
+
+  // Zwischenspeicher zuerst, damit die Listen sofort stehen
+  const cache = localStorage.getItem('stammdaten');
+  if (cache) {
+    try {
+      const c = JSON.parse(cache);
+      S.kunden = c.kunden || []; S.lieferanten = c.lieferanten || [];
+      fuelleStammdaten();
+    } catch (e) { /* beschaedigter Zwischenspeicher — wird gleich ersetzt */ }
+  }
+
+  ladeListe();
+
+  try {
+    const r = await get({ action: 'stammdaten' });
+    if (!antwortOk(r)) return;
+    S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
+    localStorage.setItem('stammdaten', JSON.stringify(r));
+    fuelleStammdaten();
+  } catch (e) {
+    if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
+  }
+}
+
+function fuelleStammdaten() {
+  const setze = (id, werte) => {
+    $(id).innerHTML = werte.map(w => '<option value="' + esc(w) + '">').join('');
+  };
+  setze('dl-kunden', S.kunden);
+  setze('dl-lieferanten', S.lieferanten);
+}
+
+const STATUS_TEXT = {
+  angenommen:  'angenommen',
+  gezaehlt:    'gezählt',
+  eingelagert: 'eingelagert'
+};
+
+async function ladeListe() {
+  $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+  try {
+    const r = await post({ action: 'we_liste', session: S.session });
+    if (!antwortOk(r)) {
+      $('st-liste').innerHTML = '<div class="leer">Nicht geladen.</div>';
+      return;
+    }
+    zeichneListe(r.liste || []);
+  } catch (e) {
+    $('st-liste').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+  }
+}
+
+function zeichneListe(liste) {
+  $('st-zahl').textContent = liste.length ? liste.length + ' Einträge' : '';
+  if (!liste.length) {
+    $('st-liste').innerHTML = '<div class="leer">Noch nichts erfasst.</div>';
+    return;
+  }
+
+  $('st-liste').innerHTML = liste.map(w => {
+    const fertig = w.status === 'eingelagert';
+    // Die Ueberschrift zeigt den Lieferanten; darunter nur, was noch fehlt.
+    const titel = w.lieferant || w.kunde || w.weNr;
+    const rest  = [
+      esc(datumText(w.datum)) + ' ' + esc(w.zeit),
+      esc(w.weNr),
+      w.lieferant && w.kunde ? esc(w.kunde) : ''
+    ].filter(Boolean).join(' <span class="trenn">|</span> ');
+    return '<div class="eintrag" data-nr="' + esc(w.weNr) + '">' +
+      '<div class="zellen">' +
+        '<div class="oben"><span>' + esc(titel) + '</span></div>' +
+        '<div class="unten">' + rest + '</div>' +
+      '</div>' +
+      '<span class="marke ' + (fertig ? 'fertig' : 'offen') + '">' +
+        esc(STATUS_TEXT[w.status] || w.status) + '</span>' +
+    '</div>';
+  }).join('');
+
+  $('st-liste').querySelectorAll('.eintrag').forEach(el =>
+    el.addEventListener('click', () => detailOeffnen(el.dataset.nr)));
+}
+
+/* ---------- Erfassung ---------- */
+
+function formularNeu() {
+  $('fm-kunde').value = '';
+  $('fm-lieferant').value = '';
+  $('fm-m2').value = '';
+  $('fm-bemerkung').value = '';
+  fotoWeg();
+  S.positionen = [];
+  for (let i = 0; i < MIN_ZEILEN; i++) S.positionen.push(leerePosition());
+  zeichnePositionen();
+  zeigeScreen('scr-form');
+}
+
+function leerePosition() {
+  return { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false };
+}
+
+/**
+ * Die Felder bleiben im DOM stehen; S.positionen wird bei jeder Eingabe
+ * nachgefuehrt. So geht beim Hinzufuegen oder Entfernen nichts verloren.
+ */
+function zeichnePositionen() {
+  const ziel = $('fm-positionen');
+  ziel.innerHTML = S.positionen.map((p, i) =>
+    '<div class="pos" data-i="' + i + '">' +
+      '<div class="zeile1">' +
+        '<span class="nr">POSITION ' + (i + 1) + '</span>' +
+        '<button type="button" class="pos-weg" data-i="' + i + '"' +
+          ' aria-label="Position entfernen">&times;</button>' +
+      '</div>' +
+
+      '<label>Artikelbezeichnung / Article description</label>' +
+      '<input type="text" data-f="artikel" value="' + esc(p.artikel) + '">' +
+
+      '<div class="drei">' +
+        '<div><label>Anzahl / QTY</label>' +
+          '<input type="text" inputmode="decimal" data-f="anzahl" value="' +
+            esc(p.anzahl) + '"></div>' +
+        '<div><label>kg</label>' +
+          '<input type="text" inputmode="decimal" data-f="kg" value="' +
+            esc(p.kg) + '"></div>' +
+        '<div><label>MHD</label>' +
+          '<input type="text" data-f="mhd" placeholder="TT.MM.JJJJ" value="' +
+            esc(p.mhd) + '"></div>' +
+      '</div>' +
+
+      '<label>Bemerkungen / Kontrolle</label>' +
+      '<input type="text" data-f="bemerkung" value="' + esc(p.bemerkung) + '">' +
+
+      '<label class="haken">' +
+        '<input type="checkbox" data-f="bestehend"' + (p.bestehend ? ' checked' : '') + '>' +
+        '<span class="marker">Bestehend / Existing</span>' +
+      '</label>' +
+    '</div>'
+  ).join('');
+
+  ziel.querySelectorAll('.pos').forEach(karte => {
+    const i = Number(karte.dataset.i);
+    karte.querySelectorAll('[data-f]').forEach(feld => {
+      const merken = () => {
+        S.positionen[i][feld.dataset.f] =
+          feld.type === 'checkbox' ? feld.checked : feld.value;
+        if (feld.dataset.f === 'artikel') zaehlePositionen();
+      };
+      feld.addEventListener('input', merken);
+      feld.addEventListener('change', merken);
+    });
+  });
+
+  ziel.querySelectorAll('.pos-weg').forEach(btn =>
+    btn.addEventListener('click', () => positionWeg(Number(btn.dataset.i))));
+
+  zaehlePositionen();
+}
+
+function zaehlePositionen() {
+  const n = S.positionen.filter(p => String(p.artikel).trim()).length;
+  $('fm-poszahl').textContent = n ? n + ' ausgefüllt' : '';
+}
+
+function positionWeg(i) {
+  // Die letzte Zeile wird geleert statt entfernt — sonst steht das Formular leer.
+  if (S.positionen.length <= 1) S.positionen[0] = leerePosition();
+  else S.positionen.splice(i, 1);
+  zeichnePositionen();
+}
+
+function positionDazu() {
+  S.positionen.push(leerePosition());
+  zeichnePositionen();
+  const karten = $('fm-positionen').querySelectorAll('.pos');
+  const letzte = karten[karten.length - 1];
+  if (letzte) {
+    letzte.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    letzte.querySelector('[data-f=artikel]').focus();
+  }
+}
+
+async function speichern() {
+  if (S.laeuft) return;
+
+  const kunde     = $('fm-kunde').value.trim();
+  const lieferant = $('fm-lieferant').value.trim();
+  const gefuellt  = S.positionen.filter(p => String(p.artikel).trim());
+
+  if (!kunde && !lieferant) {
+    toast('Kunde oder Lieferant ist erforderlich.', 'err'); return;
+  }
+  if (!gefuellt.length) {
+    toast('Mindestens eine Position mit Artikelbezeichnung.', 'err'); return;
+  }
+
+  const daten = {
+    action:    'we_speichern',
+    session:   S.session,
+    kunde:     kunde,
+    lieferant: lieferant,
+    lagerM2:   zahl($('fm-m2').value),
+    bemerkung: $('fm-bemerkung').value.trim(),
+    foto:      S.bild || '',
+    positionen: gefuellt.map(p => ({
+      artikel:   String(p.artikel).trim(),
+      anzahl:    zahl(p.anzahl),
+      kg:        zahl(p.kg),
+      mhd:       String(p.mhd).trim(),
+      bemerkung: String(p.bemerkung).trim(),
+      bestehend: p.bestehend === true
+    }))
+  };
+
+  S.laeuft = true;
+  const btn = $('fm-speichern');
+  btn.disabled = true;
+  btn.textContent = S.bild ? 'Foto wird geladen …' : 'Speichern …';
+
+  try {
+    const r = await post(daten);
+    if (r.ok) {
+      toast('Wareneingang ' + r.weNr + ' erfasst.', 'ok');
+      await ladeListe();
+      detailOeffnen(r.weNr);
+    } else if (!antwortOk(r)) {
+      const text = {
+        kunde_lieferant:  'Kunde oder Lieferant ist erforderlich.',
+        keine_positionen: 'Mindestens eine Position ist erforderlich.'
+      }[r.error];
+      if (text) toast(text, 'err');
+      else if (r.error !== 'session' && r.error !== 'passwort_noetig') {
+        toast('Speichern nicht möglich: ' + r.error, 'err');
+      }
+    }
+  } catch (e) {
+    toast('Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
+  } finally {
+    S.laeuft = false;
+    btn.disabled = false;
+    btn.textContent = 'Speichern';
+  }
+}
+
+/* ---------- Foto ---------- */
+
+/** Ohne Verkleinern sind Aufnahmen 4-8 MB und die Uebertragung scheitert. */
+function bildVerkleinern(datei, maxKante, qualitaet) {
+  return new Promise((erfolg, fehler) => {
+    const bild = new Image();
+    const url  = URL.createObjectURL(datei);
+    bild.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = bild.naturalWidth, h = bild.naturalHeight;
+      const f = Math.min(1, maxKante / Math.max(w, h));
+      w = Math.round(w * f); h = Math.round(h * f);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(bild, 0, 0, w, h);
+      erfolg(c.toDataURL('image/jpeg', qualitaet));
+    };
+    bild.onerror = () => { URL.revokeObjectURL(url); fehler(new Error('Bild')); };
+    bild.src = url;
+  });
+}
+
+async function fotoGewaehlt(ereignis) {
+  const datei = ereignis.target.files && ereignis.target.files[0];
+  if (!datei) return;
+  try {
+    // Der Lieferschein muss lesbar bleiben, daher etwas groesser als ein Beleg.
+    S.bild = await bildVerkleinern(datei, 1600, 0.72);
+    $('fm-foto-bild').src = S.bild;
+    $('fm-foto-vorschau').classList.add('da');
+    $('fm-foto-info').textContent = Math.round(S.bild.length * 0.75 / 1024) + ' KB';
+  } catch (e) {
+    toast('Foto konnte nicht verarbeitet werden.', 'err');
+  } finally {
+    ereignis.target.value = '';
+  }
+}
+
+function fotoWeg() {
+  S.bild = null;
+  $('fm-foto-bild').removeAttribute('src');
+  $('fm-foto-vorschau').classList.remove('da');
+  $('fm-foto-info').textContent = '';
+}
+
+/* ---------- Detail ---------- */
+
+async function detailOeffnen(weNr) {
+  $('dt-titel').textContent = weNr;
+  $('dt-daten').innerHTML = '';
+  $('dt-schritte').innerHTML = '<div class="leer">Wird geladen …</div>';
+  $('dt-positionen').innerHTML = '';
+  zeigeScreen('scr-detail');
+
+  try {
+    const r = await post({ action: 'we_detail', session: S.session, weNr: weNr });
+    if (!antwortOk(r)) {
+      $('dt-schritte').innerHTML = '<div class="leer">Nicht gefunden.</div>';
+      return;
+    }
+    S.detail = r;
+    zeichneDetail(r.kopf, r.positionen);
+  } catch (e) {
+    $('dt-schritte').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+  }
+}
+
+function zeichneDetail(kopf, pos) {
+  const zeile = (a, b) => b
+    ? '<div class="zeile"><span>' + esc(a) + '</span><span>' + esc(b) + '</span></div>'
+    : '';
+
+  $('dt-daten').innerHTML =
+    zeile('Kunde / Client', kopf.Kunde) +
+    zeile('Lieferant / Supplier', kopf.Lieferant) +
+    zeile('Lagerfläche m2', kopf.LagerM2) +
+    zeile('Bemerkung', kopf.Bemerkung) +
+    (kopf.FotoUrl
+      ? '<div class="zeile"><span>Lieferschein</span><span>' +
+        '<a href="' + esc(kopf.FotoUrl) + '" target="_blank" rel="noopener"' +
+        ' style="color:var(--akzent)">Foto öffnen</a></span></div>'
+      : '') +
+    zeile('Versandt', kopf.Gesendet);
+
+  const schritte = [
+    { s: 'angenommen',  t: 'Angenommen / Accepted',
+      nam: kopf.AngNam, dat: kopf.AngDat, zeit: kopf.AngZeit },
+    { s: 'gezaehlt',    t: 'Gezählt & kontrolliert',
+      nam: kopf.GezNam, dat: kopf.GezDat, zeit: kopf.GezZeit },
+    { s: 'eingelagert', t: 'Eingelagert / stored',
+      nam: kopf.EinNam, dat: kopf.EinDat, zeit: kopf.EinZeit }
+  ];
+
+  $('dt-schritte').innerHTML = schritte.map(x => {
+    const fertig = !!String(x.nam || '').trim();
+    return '<div class="schritt' + (fertig ? ' erledigt' : '') + '">' +
+      '<div><div class="was">' + esc(x.t) + '</div>' +
+        '<div class="wer">' + (fertig
+          ? esc(x.nam) + ' <span class="trenn">|</span> ' +
+            esc(datumText(x.dat)) + ' ' + esc(x.zeit)
+          : 'offen') + '</div>' +
+      '</div>' +
+      (fertig || x.s === 'angenommen' ? '<span></span>'
+        : '<button class="klein" data-schritt="' + x.s + '">Quittieren</button>') +
+    '</div>';
+  }).join('');
+
+  $('dt-schritte').querySelectorAll('[data-schritt]').forEach(btn =>
+    btn.addEventListener('click', () => schrittKlick(btn.dataset.schritt, btn)));
+
+  $('dt-poszahl').textContent = pos.length + (pos.length === 1 ? ' Position' : ' Positionen');
+  $('dt-positionen').innerHTML = pos.map(p => {
+    // Erst sammeln, dann verbinden — sonst haengt bei fehlendem MHD
+    // ein Trennstrich am Zeilenanfang.
+    const menge = [
+      p.anzahl !== '' ? esc(p.anzahl) + ' Stk' : '',
+      p.kg !== '' ? esc(p.kg) + ' kg' : ''
+    ].filter(Boolean).join(' / ');
+
+    const zusatz = [
+      p.mhd ? 'MHD ' + esc(p.mhd) : '',
+      p.regalplatz ? 'Regal ' + esc(p.regalplatz) : '',
+      p.bemerkung ? esc(p.bemerkung) : '',
+      p.bestehend ? '<span class="gelb">bestehend</span>' : ''
+    ].filter(Boolean).join(' <span class="trenn">|</span> ');
+
+    return '<div class="zeigepos">' +
+      '<div class="a"><span>' + p.nr + '. ' + esc(p.artikel) + '</span>' +
+        '<span>' + menge + '</span></div>' +
+      (zusatz ? '<div class="b">' + zusatz + '</div>' : '') +
+    '</div>';
+  }).join('') || '<div class="leer">Keine Positionen.</div>';
+}
+
+function schrittKlick(schritt, btn) {
+  // Regalplaetze traegt das zweite Team beim Einlagern nach.
+  if (schritt === 'eingelagert') { regalOeffnen(); return; }
+  schrittSenden(schritt, null, btn);
+}
+
+async function schrittSenden(schritt, regalplaetze, btn) {
+  if (S.laeuft) return;
+  S.laeuft = true;
+  const alt = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  try {
+    const r = await post({
+      action: 'we_schritt', session: S.session,
+      weNr: S.detail.kopf.WeNr, schritt: schritt, regalplaetze: regalplaetze
+    });
+    if (r.ok) {
+      toast('Quittiert.', 'ok');
+      await detailOeffnen(S.detail.kopf.WeNr);
+      ladeListe();
+    } else if (!antwortOk(r)) {
+      toast({
+        bereits_quittiert: 'Dieser Schritt ist bereits quittiert.',
+        storniert:         'Der Wareneingang wurde zurückgezogen.'
+      }[r.error] || 'Nicht möglich: ' + r.error, 'err');
+    }
+  } catch (e) {
+    toast('Keine Verbindung.', 'err');
+  } finally {
+    S.laeuft = false;
+    if (btn) { btn.disabled = false; btn.textContent = alt; }
+  }
+}
+
+/* ---------- Einlagern ---------- */
+
+function regalOeffnen() {
+  const pos = S.detail.positionen;
+  $('rg-liste').innerHTML = pos.map(p =>
+    '<div class="regal">' +
+      '<div class="txt">' + p.nr + '. ' + esc(p.artikel) +
+        '<small>' + esc(p.anzahl !== '' ? p.anzahl + ' Stk ' : '') +
+        esc(p.kg !== '' ? p.kg + ' kg' : '') + '</small></div>' +
+      '<input type="text" data-nr="' + p.nr + '" placeholder="Regalplatz"' +
+        ' value="' + esc(p.regalplatz) + '">' +
+    '</div>').join('') || '<div class="leer">Keine Positionen.</div>';
+  zeigeScreen('scr-regal');
+}
+
+function regalSenden() {
+  const werte = [];
+  $('rg-liste').querySelectorAll('input[data-nr]').forEach(feld => {
+    werte[Number(feld.dataset.nr) - 1] = feld.value.trim();
+  });
+  schrittSenden('eingelagert', werte, $('rg-senden'));
+}
+
+/* ---------- Excel senden ---------- */
+
+function sendenKlick() {
+  frage('Das ausgefüllte Formular wird als Excel-Datei verschickt und abgelegt. Fortfahren?',
+    async () => {
+      const btn = $('dt-senden');
+      btn.disabled = true; btn.textContent = 'Wird gesendet …';
+      try {
+        const r = await post({
+          action: 'we_senden', session: S.session, weNr: S.detail.kopf.WeNr
+        });
+        if (r.ok) {
+          toast('Gesendet an ' + r.an, 'ok');
+          await detailOeffnen(S.detail.kopf.WeNr);
+        } else if (!antwortOk(r)) {
+          toast(r.error === 'kein_empfaenger'
+            ? 'Keine Empfängeradresse hinterlegt (Parameter «MailAn»).'
+            : 'Senden nicht möglich: ' + r.error, 'err');
+        }
+      } catch (e) {
+        toast('Keine Verbindung.', 'err');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Als Excel senden';
+      }
+    });
+}
+
+function stornoKlick() {
+  frage('Diesen Wareneingang zurückziehen? Er verschwindet aus der Liste und aus Excel.',
+    async () => {
+      try {
+        const r = await post({
+          action: 'we_storno', session: S.session, weNr: S.detail.kopf.WeNr
+        });
+        if (r.ok) {
+          toast('Zurückgezogen.', 'ok');
+          await ladeListe();
+          zeigeScreen('scr-start');
+        } else if (!antwortOk(r)) {
+          toast('Nicht möglich: ' + r.error, 'err');
+        }
+      } catch (e) {
+        toast('Keine Verbindung.', 'err');
+      }
+    });
+}
+
+/* ---------- Dialog ---------- */
+
+function frage(text, dann) {
+  $('frage-text').textContent = text;
+  $('dlg-frage').classList.add('zeigen');
+  frage._dann = dann;
+}
+
+/* ---------- Admin ---------- */
+
+async function adminOeffnen() {
+  $('adm-meldung').classList.remove('zeigen');
+  $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+  zeigeScreen('scr-admin');
+  await adminLaden();
+}
+
+async function adminLaden() {
+  try {
+    const r = await post({ action: 'admin_liste', session: S.session });
+    if (!antwortOk(r)) {
+      $('adm-liste').innerHTML = '<div class="leer">' + esc(r.error) + '</div>';
+      return;
+    }
+    adminZeichnen(r.benutzer || []);
+  } catch (e) {
+    $('adm-liste').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+  }
+}
+
+function adminZeichnen(liste) {
+  $('adm-liste').innerHTML = liste.map(b => {
+    const marken =
+      (b.aktiv ? '' : '<span class="marke aus">inaktiv</span>') +
+      (b.admin ? '<span class="marke adm">Admin</span>' : '') +
+      (b.gesperrt ? '<span class="marke aus">gesperrt</span>' : '') +
+      (b.neu ? '<span class="marke neu">noch nicht angemeldet</span>' : '');
+    const t = (was, txt) =>
+      '<button class="klein" data-email="' + esc(b.email) + '" data-was="' + was + '">' +
+      txt + '</button>';
+    return '<div class="nutzer">' +
+      '<div class="zeile1"><span class="nm">' + esc(b.name) + '</span>' +
+        '<span>' + marken + '</span></div>' +
+      '<div class="ml">' + esc(b.email) + '</div>' +
+      '<div class="tasten">' +
+        (b.aktiv ? t('aus', 'Deaktivieren') : t('an', 'Aktivieren')) +
+        (b.admin ? t('kein_admin', 'Adminrechte entziehen') : t('admin', 'Zum Admin machen')) +
+        t('passwort', 'Neues Passwort') +
+      '</div></div>';
+  }).join('') || '<div class="leer">Keine Benutzer.</div>';
+
+  $('adm-liste').querySelectorAll('[data-was]').forEach(btn =>
+    btn.addEventListener('click', () => adminAktion(btn)));
+}
+
+async function adminAktion(btn) {
+  btn.disabled = true;
+  try {
+    const r = await post({
+      action: 'admin_aktion', session: S.session,
+      email: btn.dataset.email, was: btn.dataset.was, mail: $('adm-mail').checked
+    });
+    if (r.ok) {
+      if (r.passwort) zeigePwDialog(r);
+      await adminLaden();
+    } else if (!antwortOk(r)) {
+      toast(r.error === 'nicht_selbst'
+        ? 'Der eigene Zugang lässt sich so nicht ändern.'
+        : 'Nicht möglich: ' + r.error, 'err');
+      btn.disabled = false;
+    }
+  } catch (e) {
+    toast('Keine Verbindung.', 'err');
+    btn.disabled = false;
+  }
+}
+
+async function adminNeu() {
+  const m = $('adm-meldung');
+  m.classList.remove('zeigen');
+  const name  = $('adm-name').value.trim();
+  const email = $('adm-email').value.trim();
+  if (!name || !email) {
+    m.textContent = 'Name und E-Mail sind erforderlich.';
+    m.classList.add('zeigen'); return;
+  }
+
+  const btn = $('adm-neu');
+  btn.disabled = true; btn.textContent = 'Wird angelegt …';
+  try {
+    const r = await post({
+      action: 'admin_neu', session: S.session,
+      name: name, email: email, mail: $('adm-mail').checked
+    });
+    if (r.ok) {
+      $('adm-name').value = ''; $('adm-email').value = '';
+      zeigePwDialog(r);
+      await adminLaden();
+    } else if (!antwortOk(r)) {
+      m.textContent = {
+        existiert:      'Diese E-Mail ist bereits erfasst.',
+        unvollstaendig: 'Name und E-Mail sind erforderlich.'
+      }[r.error] || 'Nicht möglich: ' + r.error;
+      m.classList.add('zeigen');
+    }
+  } catch (e) {
+    m.textContent = 'Keine Verbindung.';
+    m.classList.add('zeigen');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Benutzer anlegen';
+  }
+}
+
+function zeigePwDialog(r) {
+  $('pw-hinweis').textContent = $('adm-mail').checked
+    ? 'Das Zugangsmail ist unterwegs.'
+    : 'Es wurde kein Mail verschickt — bitte die Nachricht kopieren.';
+  $('pw-wem').textContent  = r.wem || '';
+  $('pw-wert').textContent = r.passwort || '';
+  $('pw-text').value       = r.text || '';
+  $('dlg-pw').classList.add('zeigen');
+}
+
+/* ============================================================
+   Ereignisse
+   ============================================================ */
+
+$('lg-senden').addEventListener('click', anmelden);
+$('lg-pass').addEventListener('keydown', e => { if (e.key === 'Enter') anmelden(); });
+
+$('pw-senden').addEventListener('click', passwortSpeichern);
+$('pw-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
+$('pw-neu2').addEventListener('keydown', e => {
+  if (e.key === 'Enter') passwortSpeichern();
+});
+
+$('st-neu').addEventListener('click', formularNeu);
+$('st-admin').addEventListener('click', adminOeffnen);
+$('st-passwort').addEventListener('click', () => zeigePasswort(false));
+$('st-abmelden').addEventListener('click', abmelden);
+
+$('fm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
+$('fm-plus').addEventListener('click', positionDazu);
+$('fm-speichern').addEventListener('click', speichern);
+$('fm-foto-knopf').addEventListener('click', () => $('fm-foto').click());
+$('fm-foto').addEventListener('change', fotoGewaehlt);
+$('fm-foto-weg').addEventListener('click', fotoWeg);
+
+$('dt-zurueck').addEventListener('click', () => { zeigeScreen('scr-start'); ladeListe(); });
+$('dt-senden').addEventListener('click', sendenKlick);
+$('dt-storno').addEventListener('click', stornoKlick);
+
+$('rg-zurueck').addEventListener('click', () => zeigeScreen('scr-detail'));
+$('rg-senden').addEventListener('click', regalSenden);
+
+$('adm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
+$('adm-neu').addEventListener('click', adminNeu);
+
+$('pw-fertig').addEventListener('click', () => $('dlg-pw').classList.remove('zeigen'));
+$('pw-kopieren').addEventListener('click', async () => {
+  const feld = $('pw-text');
+  try {
+    await navigator.clipboard.writeText(feld.value);
+    toast('Nachricht kopiert.', 'ok');
+  } catch (e) {
+    feld.select();                       // aelteres iOS ohne Clipboard-API
+    document.execCommand('copy');
+    toast('Nachricht kopiert.', 'ok');
+  }
+});
+
+$('frage-nein').addEventListener('click', () => $('dlg-frage').classList.remove('zeigen'));
+$('frage-ja').addEventListener('click', () => {
+  $('dlg-frage').classList.remove('zeigen');
+  if (frage._dann) frage._dann();
+});
+
+if (S.session) start(); else zeigeScreen('scr-login');
+</script>
+</body>
+</html>
