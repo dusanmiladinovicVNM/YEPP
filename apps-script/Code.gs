@@ -56,7 +56,7 @@ function doGet(e) {
     if (!TOKEN_READ || p.token !== TOKEN_READ) {
       return ContentService.createTextOutput('kein Zugriff');
     }
-    return ContentService.createTextOutput(csvExport())
+    return ContentService.createTextOutput(csvExport(p))
       .setMimeType(ContentService.MimeType.CSV);
   }
 
@@ -834,32 +834,69 @@ function zugangText(name, pass) {
    11) CSV fuer Excel / Power Query
    ============================================================ */
 
-function csvExport() {
+/**
+ * Feste Spalten der CSV-Schnittstelle. Reihenfolge und Anzahl aendern sich
+ * NICHT — auf ihnen steht die Excel-Vorlage. Eine neue Spalte im Blatt
+ * «Wareneingang» oder «Positionen» kommt hier nicht automatisch an; wer sie
+ * braucht, haengt sie hier hinten an, nie dazwischen.
+ *
+ * Eine Zeile je Position; die Kopfdaten wiederholen sich in jeder Zeile,
+ * damit die Vorlage mit einem einzigen VERGLEICH auskommt. Die letzte
+ * Spalte «Schluessel» (WeNr-Nr) macht daraus auch fuer die Positionen
+ * einen einfachen Nachschlag — siehe EXCEL.md.
+ */
+const CSV_SPALTEN = [
+  'WeNr', 'Kunde', 'Lieferant', 'LagerM2', 'KopfBemerkung',
+  'AngNam', 'AngDat', 'AngZeit',
+  'GezNam', 'GezDat', 'GezZeit',
+  'EinNam', 'EinDat', 'EinZeit',
+  'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD', 'Regalplatz', 'Bemerkung', 'Bestehend',
+  'Schluessel'
+];
+
+/**
+ * @param p  Abfrageparameter: `we` schraenkt auf einen Wareneingang ein,
+ *           `tage` auf die letzten n Tage. Ohne beides kommt alles,
+ *           was nicht zurueckgezogen ist.
+ */
+function csvExport(p) {
+  p = p || {};
+  const nurWe = String(p.we || '').trim();
+  const tage  = Number(p.tage || 0);
+  // AngDat steht als Text yyyy-MM-dd, deshalb genuegt ein Textvergleich.
+  const abDatum = tage > 0
+    ? fmt(new Date(Date.now() - tage * 86400000), 'yyyy-MM-dd') : '';
+
   const wd = blatt(T.we).getDataRange().getValues();
   const wk = spalten(wd[0]);
   const kopf = {};
   for (let i = 1; i < wd.length; i++) {
     if (String(wd[i][wk.Storniert]).toLowerCase() === 'true') continue;
-    kopf[String(wd[i][wk.WeNr])] = wd[i];
+    const nr = String(wd[i][wk.WeNr]);
+    if (nurWe && nr !== nurWe) continue;
+    if (abDatum && String(wd[i][wk.AngDat]) < abDatum) continue;
+    kopf[nr] = wd[i];
   }
 
   const pd = blatt(T.pos).getDataRange().getValues();
   const pk = spalten(pd[0]);
-  const aus = [[
-    'WeNr', 'Datum', 'Zeit', 'Kunde', 'Lieferant', 'Nr', 'Artikel',
-    'Anzahl', 'KG', 'MHD', 'Regalplatz', 'Bestehend', 'Bemerkung',
-    'Angenommen', 'Gezaehlt', 'Eingelagert'
-  ]];
+  const aus = [CSV_SPALTEN.slice()];
 
   for (let i = 1; i < pd.length; i++) {
     const w = kopf[String(pd[i][pk.WeNr])];
     if (!w) continue;
     aus.push([
-      w[wk.WeNr], w[wk.AngDat], w[wk.AngZeit], w[wk.Kunde], w[wk.Lieferant],
+      w[wk.WeNr], w[wk.Kunde], w[wk.Lieferant], w[wk.LagerM2], w[wk.Bemerkung],
+      w[wk.AngNam], w[wk.AngDat], w[wk.AngZeit],
+      w[wk.GezNam], w[wk.GezDat], w[wk.GezZeit],
+      w[wk.EinNam], w[wk.EinDat], w[wk.EinZeit],
       pd[i][pk.Nr], pd[i][pk.Artikel], pd[i][pk.Anzahl], pd[i][pk.KG],
-      pd[i][pk.MHD], pd[i][pk.Regalplatz],
+      pd[i][pk.MHD], pd[i][pk.Regalplatz], pd[i][pk.Bemerkung],
       String(pd[i][pk.Bestehend]).toLowerCase() === 'true' ? 'X' : '',
-      pd[i][pk.Bemerkung], w[wk.AngNam], w[wk.GezNam], w[wk.EinNam]
+      // WeNr-Nr: damit das Formularblatt eine Position mit einem
+      // gewoehnlichen INDEX/VERGLEICH findet, statt mit einer
+      // Matrixformel ueber zwei Kriterien.
+      String(w[wk.WeNr]) + '-' + String(pd[i][pk.Nr])
     ]);
   }
 

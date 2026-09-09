@@ -158,6 +158,24 @@ function mitBenutzer(ctx, ss) {
   return ctx.sitzungPruefen('tokA');
 }
 
+/** Zerlegt eine CSV-Zeile; naives split(',') bricht bei gequoteten Feldern. */
+function felder(zeile) {
+  const aus = [];
+  let feld = '', inAnf = false;
+  for (let i = 0; i < zeile.length; i++) {
+    const c = zeile[i];
+    if (inAnf) {
+      if (c === '"' && zeile[i + 1] === '"') { feld += '"'; i++; }
+      else if (c === '"') inAnf = false;
+      else feld += c;
+    } else if (c === '"') inAnf = true;
+    else if (c === ',') { aus.push(feld); feld = ''; }
+    else feld += c;
+  }
+  aus.push(feld);
+  return aus;
+}
+
 const POS = [
   { artikel: 'Schrauben M6', anzahl: 120, kg: 3.4, mhd: '10.2027', bemerkung: '', bestehend: true },
   { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false },
@@ -278,23 +296,73 @@ console.log('\n5) Zuruecknehmen und Liste');
      ctx.weSchritt({ weNr: nr, schritt: 'gezaehlt' }, u).error === 'storniert');
 }
 
-console.log('\n6) CSV');
+console.log('\n6) CSV — feste Schnittstelle fuer die Excel-Vorlage');
 {
   const ss = neueTabelle(), ctx = laden(ss);
   const u = mitBenutzer(ctx, ss);
-  ctx.weSpeichern({ kunde: 'Meier, Sohn & Co', lieferant: 'L',
+  const nr1 = ctx.weSpeichern({ kunde: 'Meier, Sohn & Co', lieferant: 'L', lagerM2: 12.5,
+    bemerkung: 'Palette beschädigt',
     positionen: [{ artikel: 'Rohr "40mm"', anzahl: 2, kg: '', mhd: '',
-                   bemerkung: '', bestehend: true }] }, u);
-  const nr2 = ctx.weSpeichern({ kunde: 'Weg', positionen: POS }, u).weNr;
-  ctx.weStorno({ weNr: nr2 }, u);
+                   bemerkung: '', bestehend: true }] }, u).weNr;
+  ctx.weSchritt({ weNr: nr1, schritt: 'gezaehlt' }, u);
+  const nr2 = ctx.weSpeichern({ kunde: 'Zweiter', positionen: POS }, u).weNr;
+  const nr3 = ctx.weSpeichern({ kunde: 'Weg', positionen: POS }, u).weNr;
+  ctx.weStorno({ weNr: nr3 }, u);
 
-  const csv = ctx.csvExport();
-  const zeilen = csv.split('\n');
-  ok('Kopfzeile', zeilen[0].startsWith('WeNr,Datum,Zeit,Kunde,Lieferant,Nr,Artikel'));
-  ok('nur die nicht stornierte Erfassung', zeilen.length === 2, zeilen.length + ' Zeilen');
-  ok('Komma im Feld wird gequotet', csv.includes('"Meier, Sohn & Co"'));
-  ok('Anfuehrungszeichen verdoppelt', csv.includes('"Rohr ""40mm"""'), zeilen[1]);
-  ok('Bestehend als X', zeilen[1].includes(',X,'));
+  const zeilen = ctx.csvExport().split('\n');
+  const kopf = zeilen[0].split(',');
+
+  ok('23 Spalten, feste Reihenfolge', kopf.length === 23, kopf.length + ' Spalten');
+  ok('Kopfblock zuerst',
+     kopf.slice(0, 5).join(',') === 'WeNr,Kunde,Lieferant,LagerM2,KopfBemerkung',
+     kopf.slice(0, 5).join(','));
+  ok('alle drei Quittungen mit Datum und Zeit',
+     kopf.slice(5, 14).join(',') ===
+     'AngNam,AngDat,AngZeit,GezNam,GezDat,GezZeit,EinNam,EinDat,EinZeit',
+     kopf.slice(5, 14).join(','));
+  ok('Positionsblock danach',
+     kopf.slice(14, 22).join(',') ===
+     'Nr,Artikel,Anzahl,KG,MHD,Regalplatz,Bemerkung,Bestehend',
+     kopf.slice(14, 22).join(','));
+  ok('Schluessel als letzte Spalte', kopf[22] === 'Schluessel', kopf[22]);
+
+  ok('eine Zeile je Position, storniert faellt weg',
+     zeilen.length === 1 + 1 + 2, zeilen.length + ' Zeilen');
+  ok('Komma im Feld wird gequotet', zeilen[1].includes('"Meier, Sohn & Co"'));
+  ok('Anfuehrungszeichen verdoppelt', zeilen[1].includes('"Rohr ""40mm"""'), zeilen[1]);
+  ok('Bestehend als X', felder(zeilen[1])[21] === 'X');
+  ok('Kopfdaten wiederholen sich je Zeile',
+     zeilen[2].startsWith(nr2 + ',Zweiter') && zeilen[3].startsWith(nr2 + ',Zweiter'),
+     zeilen[2] + ' / ' + zeilen[3]);
+  const f = felder(zeilen[1]);
+  ok('23 Felder auch mit Komma im Text', f.length === 23, f.length + ' Felder');
+  ok('Kunde mit Komma bleibt ein Feld', f[1] === 'Meier, Sohn & Co', f[1]);
+  ok('LagerM2 im Kopfblock', f[3] === '12.5', f[3]);
+  ok('KopfBemerkung im Kopfblock', f[4] === 'Palette beschädigt', f[4]);
+  ok('Gezaehlt-Datum gefuellt', /^\d{4}-\d{2}-\d{2}$/.test(f[9]), f[9]);
+  ok('Eingelagert bleibt leer', f[11] === '');
+  ok('Artikel mit Anfuehrungszeichen', f[15] === 'Rohr "40mm"', f[15]);
+  ok('Schluessel ist WeNr-Nr', f[22] === nr1 + '-1', f[22]);
+  ok('Schluessel je Position verschieden',
+     felder(zeilen[2])[22] === nr2 + '-1' && felder(zeilen[3])[22] === nr2 + '-2',
+     felder(zeilen[2])[22] + ' / ' + felder(zeilen[3])[22]);
+
+  // ?we= — genau ein Wareneingang, fuer das Formularblatt
+  const eins = ctx.csvExport({ we: nr2 }).split('\n');
+  ok('we-Filter liefert nur diesen Wareneingang', eins.length === 3, eins.length + ' Zeilen');
+  ok('we-Filter behaelt die Kopfzeile', eins[0] === zeilen[0]);
+  ok('we-Filter auf Stornierten liefert nur die Kopfzeile',
+     ctx.csvExport({ we: nr3 }).split('\n').length === 1);
+  ok('unbekannte Nummer liefert nur die Kopfzeile',
+     ctx.csvExport({ we: 'WE-1999-0001' }).split('\n').length === 1);
+
+  // ?tage= — Fenster, damit die Arbeitsmappe klein bleibt
+  const w = ss.blaetter.Wareneingang, wk = ctx.spalten(w.daten[0]);
+  w.daten[1][wk.AngDat] = '2020-01-01';                  // alt
+  ok('tage-Fenster laesst Altes weg',
+     ctx.csvExport({ tage: 30 }).split('\n').length === 3,
+     ctx.csvExport({ tage: 30 }).split('\n').length + ' Zeilen');
+  ok('ohne tage kommt alles', ctx.csvExport().split('\n').length === 4);
 }
 
 console.log('\n7) Benutzerverwaltung');

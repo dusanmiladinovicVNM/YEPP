@@ -1,12 +1,19 @@
 # Wareneingang
 
-Kompletno rešenje: PWA → Google Sheets → Excel po mejlu.
+Kompletno rešenje: PWA → Google Sheets → Excel šablon na SharePointu.
 Bez Microsoft licenci, bez Azure-a, bez SharePoint API-ja.
 
 ```
-PWA  →  Apps Script Web-App  →  Google Sheets
-                             →  .xlsx  →  mejl + Drive folder
+PWA  →  Apps Script Web-App  →  Google Sheets  →  CSV  →  Excel .xlsm
+                                               →  .xlsx  →  mejl + Drive
 ```
+
+**Excel povlači, aplikacija ne gura.** `.xlsm` leži u SharePoint biblioteci i
+Power Query ga puni sa Apps Script URL-a; jedan klik = otvaranje fajla.
+Aplikacija ne pristupa SharePointu nikad. Detaljno u **`EXCEL.md`**.
+
+Drugi, sporedni put je **Als Excel senden**: zamrznut `.xlsx` po dokumentu,
+mejlom i u Drive arhivu — za slanje napolje, kupcu ili dobavljaču.
 
 Sheets nikada nije javan. Sve ide kroz Apps Script, koji proverava sesiju.
 Identitet dolazi iz sesije, ne iz zahteva — radnik ne može kvitirati
@@ -33,6 +40,7 @@ tests/pwa.mjs              vozi pravi UI u Chromiumu sa lažnim backendom
 tests/backend.mjs          vozi Code.gs nad Sheets-om u memoriji
 
 README.md                  ovaj fajl
+EXCEL.md                   šablon na SharePointu, Power Query, formule
 Wareneingang - Kurzanleitung.md   uputstvo za radnike, na nemačkom
 ```
 
@@ -120,10 +128,8 @@ ID foldera je deo URL-a posle `/folders/`.
 znači: slika se tiho preskače, unos i dalje prolazi. Prazan `MailAn` je
 jedina od te tri koja blokira — slanje tada javlja `kein_empfaenger`.
 
-**Ako računovodstvu treba SharePoint,** najjeftiniji put je da `MailAn`
-pokazuje na adresu SharePoint biblioteke; Microsoft to prima kao običan
-mejl i sam odlaže prilog. Drugi put je sinhronizacija Drive foldera. Nijedan
-ne traži registraciju aplikacije ni Azure.
+Ova tri parametra tiču se samo **slanja**. Šablon na SharePointu ne koristi
+nijedan od njih — on povlači CSV i ne zna ni za mejl ni za Drive.
 
 ## Faza 4 — PWA (~15 min)
 
@@ -175,29 +181,35 @@ ali ostaje u tabeli.
 
 ## Excel
 
-Popunjeni obrazac stiže kao **.xlsx u prilogu mejla**, jedan po
-wareneingangu, i istovremeno se odlaže u `ArchivOrdner/GGGG-MM/`.
+**Glavni put: šablon na SharePointu.** `.xlsm` u biblioteci, Power Query
+povlači CSV sa Apps Script URL-a, `Workbook_Open` osvežava pri otvaranju.
+Arbeitsmappa ima list `Formular` (obrazac kao na papiru, dokument se bira
+padajućom listom) i list `Liste` (zbirna evidencija). Prebacivanje sa
+dokumenta na dokument ne traži osvežavanje.
 
-Raspored preslikava papir: kolone A–H, potpisi u redovima 3–6, Kunde i
-Lieferant u 10–11, zaglavlje pozicija u redu 15, pozicije od 16. Minimum
-je pet redova kao na papiru; ako ih ima više, tabela raste i podnožje
-(`Lagerfläche`, `Umrechnung`) se pomera naniže.
-
-Layout stoji u funkciji `blattAufbauen` u `Code.gs`. **Datoteke-šablona
-namerno nema** — šablon koji se odvoji od koda je izvor tihih grešaka.
-
-Za **zbirni** pregled preko svih wareneingänge postoji CSV:
+Ceo postupak, sa formulama i rasporedom ćelija: **`EXCEL.md`**.
 
 ```
-<URL>?token=<TOKEN_READ>&format=csv
+<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
 ```
 
-Jedan red po poziciji, sa podacima zaglavlja uz svaku. U Excelu:
-**Daten → Aus dem Web**, autentifikacija **Anonym**.
+Jedan red po poziciji, podaci zaglavlja se ponavljaju u svakom redu,
+stornirani ispadaju. **23 kolone u fiksnom redosledu** — na njima stoje sve
+formule šablona, pa nova kolona ide u `CSV_SPALTEN` **na kraj**, nikad
+između. Poslednja kolona `Schluessel` (`WeNr-Nr`) je ono što pozicijama
+dozvoljava običan `INDEX/VERGLEICH` umesto matrične formule.
 
-**Fajl na SharePointu se ne otvara iz browsera** — Excel for Web ne
-osvežava Power Query i to ne javlja. Sinhronizuj biblioteku i otvaraj ga
-iz Findera.
+Parametri: `&tage=` sužava na poslednjih n dana, `&we=` na jedan dokument.
+
+**Sporedni put: Als Excel senden.** Zamrznut `.xlsx` po dokumentu, u prilogu
+mejla i u `ArchivOrdner/GGGG-MM/`. Za slanje napolje — kupcu, dobavljaču, u
+arhivu. Raspored je isti kao u listu `Formular`, namerno: kolone A–H, potpisi
+u redovima 3–6, Kunde i Lieferant u 10–11, zaglavlje pozicija u redu 15.
+Layout stoji u `blattAufbauen` u `Code.gs`; **datoteke-šablona namerno nema**,
+jer šablon koji se odvoji od koda je izvor tihih grešaka.
+
+**Fajl na SharePointu se ne otvara iz browsera** — Excel for Web ne osvežava
+Power Query i to ne javlja. Sinhronizuj biblioteku i otvaraj ga iz Findera.
 
 ## Foto otpremnice
 
@@ -273,6 +285,7 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 10 | *Eingelagert* sa praznim regalima | prolazi, polja ostaju prazna |
 | 11 | Slanje pre nego što je sve kvitirano | prolazi, prazna polja u xlsx-u |
 | 12 | Otvoriti xlsx u Excelu na Macu | raspored kao na papiru, žuta kolona H |
+| 12b | Otvoriti .xlsm sa SharePointa iz Findera | podaci trenutni, padajuća lista puna |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |

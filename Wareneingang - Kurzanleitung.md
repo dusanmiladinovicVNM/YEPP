@@ -13,8 +13,10 @@ Die drei Quittungen des Formulars — **Angenommen**, **Gezählt & kontrolliert*
 **Eingelagert** — macht in der App jeder selbst, dann wenn er den Schritt
 erledigt hat. Sie quittieren nur, was Sie selbst getan haben.
 
-Am Schluss wird das ausgefüllte Formular als Excel-Datei verschickt. Es sieht
-aus wie das Papier, nur getippt.
+Das Büro sieht die Erfassung sofort — dort liegt eine Excel-Datei, die sich
+beim Öffnen selbst aktualisiert und das Formular zu jedem Wareneingang
+anzeigt und druckt. Es sieht aus wie das Papier, nur getippt. Verschicken
+müssen Sie nichts; das brauchen Sie nur, wenn das Formular nach aussen geht.
 
 ---
 
@@ -153,6 +155,14 @@ aktuelle Stand. Senden Sie, bevor alle drei Schritte quittiert sind, bleiben
 diese Felder leer — genau wie auf einem Papierformular, das noch unterwegs ist.
 
 Nach dem Senden steht **Versandt** mit Datum und Uhrzeit oben im Eintrag.
+
+**Sie müssen nicht senden.** Das Büro sieht Ihre Erfassungen ohnehin: dort
+liegt eine Excel-Datei, die sich beim Öffnen selbst aktualisiert und das
+Formular zu jedem Wareneingang anzeigt und druckt.
+
+**Als Excel senden** brauchen Sie nur, wenn das Formular nach aussen geht —
+zum Kunden, zum Lieferanten, oder wenn jemand ausdrücklich eine Datei per
+Mail möchte.
 
 ---
 
