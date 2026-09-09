@@ -44,5 +44,14 @@ const c = ctx.weSpeichern({ kunde: 'Storniert AG',
                  mhd: '', bemerkung: '', bestehend: false }] }, u).weNr;
 ctx.weStorno({ weNr: c }, u);
 
+// 4) Mehr Positionen, als das Formularblatt Zeilen hat — dafuer die Warnzeile
+const d = ctx.weSpeichern({
+  kunde: 'Grosslieferung AG', lieferant: 'Nordwind Logistik',
+  positionen: Array.from({ length: 12 }, (_, i) => ({
+    artikel: 'Palette ' + (i + 1), anzahl: i + 1, kg: '',
+    mhd: '', bemerkung: '', bestehend: false
+  }))
+}, u).weNr;
+
 process.stdout.write(ctx.csvExport());
-process.stderr.write(['ERWARTET', a, b, c].join('\t') + '\n');
+process.stderr.write(['ERWARTET', a, b, c, d].join('\t') + '\n');

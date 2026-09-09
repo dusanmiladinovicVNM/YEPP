@@ -442,8 +442,25 @@ button.sekundaer:active{background:#1d1d1d}
       <textarea id="fm-bemerkung" placeholder="optional"></textarea>
     </div>
 
+    <div class="pos-kopf" style="margin-top:24px">
+      <h2>Quittieren</h2>
+      <span class="zahl">auf Ihren Namen</span>
+    </div>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-angenommen" checked>
+      <span>Angenommen / Accepted</span>
+    </label>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-gezaehlt">
+      <span>Gezählt &amp; kontrolliert / counted &amp; controlled</span>
+    </label>
+    <label class="haken">
+      <input type="checkbox" id="fm-s-eingelagert">
+      <span>Eingelagert / stored</span>
+    </label>
     <p class="hinweis">
-      Mit dem Speichern wird «Angenommen / Accepted» auf Ihren Namen quittiert.
+      Nur ankreuzen, was Sie selbst getan haben. Alles andere wird später im
+      Dokument quittiert — mit dem Namen dessen, der es tut.
     </p>
 
     <div class="knopfzeile">
@@ -809,7 +826,10 @@ function fuelleStammdaten() {
   setze('dl-lieferanten', S.lieferanten);
 }
 
+const SCHRITT_FOLGE = ['angenommen', 'gezaehlt', 'eingelagert'];
+
 const STATUS_TEXT = {
+  erfasst:     'erfasst',
   angenommen:  'angenommen',
   gezaehlt:    'gezählt',
   eingelagert: 'eingelagert'
@@ -866,6 +886,7 @@ function formularNeu() {
   $('fm-lieferant').value = '';
   $('fm-m2').value = '';
   $('fm-bemerkung').value = '';
+  SCHRITT_FOLGE.forEach(s => $('fm-s-' + s).checked = s === 'angenommen');
   fotoWeg();
   S.positionen = [];
   for (let i = 0; i < MIN_ZEILEN; i++) S.positionen.push(leerePosition());
@@ -874,7 +895,8 @@ function formularNeu() {
 }
 
 function leerePosition() {
-  return { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false };
+  return { artikel: '', anzahl: '', kg: '', mhd: '', regalplatz: '',
+           bemerkung: '', bestehend: false };
 }
 
 /**
@@ -905,6 +927,9 @@ function zeichnePositionen() {
           '<input type="text" data-f="mhd" placeholder="TT.MM.JJJJ" value="' +
             esc(p.mhd) + '"></div>' +
       '</div>' +
+
+      '<label>Regalplatznr. / shelf no.</label>' +
+      '<input type="text" data-f="regalplatz" value="' + esc(p.regalplatz) + '">' +
 
       '<label>Bemerkungen / Kontrolle</label>' +
       '<input type="text" data-f="bemerkung" value="' + esc(p.bemerkung) + '">' +
@@ -972,21 +997,27 @@ async function speichern() {
     toast('Mindestens eine Position mit Artikelbezeichnung.', 'err'); return;
   }
 
+  // Was der Erfasser selbst getan hat. Der Server setzt dazu seinen Namen
+  // aus der Sitzung; hier steht nur, welche Zeilen es betrifft.
+  const schritte = SCHRITT_FOLGE.filter(s => $('fm-s-' + s).checked);
+
   const daten = {
     action:    'we_speichern',
     session:   S.session,
     kunde:     kunde,
     lieferant: lieferant,
+    schritte:  schritte,
     lagerM2:   zahl($('fm-m2').value),
     bemerkung: $('fm-bemerkung').value.trim(),
     foto:      S.bild || '',
     positionen: gefuellt.map(p => ({
-      artikel:   String(p.artikel).trim(),
-      anzahl:    zahl(p.anzahl),
-      kg:        zahl(p.kg),
-      mhd:       String(p.mhd).trim(),
-      bemerkung: String(p.bemerkung).trim(),
-      bestehend: p.bestehend === true
+      artikel:    String(p.artikel).trim(),
+      anzahl:     zahl(p.anzahl),
+      kg:         zahl(p.kg),
+      mhd:        String(p.mhd).trim(),
+      regalplatz: String(p.regalplatz).trim(),
+      bemerkung:  String(p.bemerkung).trim(),
+      bestehend:  p.bestehend === true
     }))
   };
 
@@ -1122,7 +1153,7 @@ function zeichneDetail(kopf, pos) {
             esc(datumText(x.dat)) + ' ' + esc(x.zeit)
           : 'offen') + '</div>' +
       '</div>' +
-      (fertig || x.s === 'angenommen' ? '<span></span>'
+      (fertig ? '<span></span>'
         : '<button class="klein" data-schritt="' + x.s + '">Quittieren</button>') +
     '</div>';
   }).join('');

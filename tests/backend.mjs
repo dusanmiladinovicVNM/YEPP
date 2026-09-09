@@ -76,6 +76,29 @@ console.log('\n3) Erfassen');
   ok('Bemerkung in der Position', p.daten[2][pk.Bemerkung] === 'Ecke gedrückt');
   ok('leeres kg bleibt leer', p.daten[2][pk.KG] === '');
 
+  // Der Erfasser quittiert nur, was er selbst getan hat.
+  ctx.weSpeichern({ kunde: 'K', positionen: POS,
+                    schritte: ['angenommen', 'gezaehlt'] }, u);
+  const zwei = w.daten[w.daten.length - 1];
+  ok('gewaehlter Schritt quittiert', zwei[k.GezNam] === 'Anna Muster');
+  ok('nicht gewaehlter Schritt bleibt leer', !zwei[k.EinNam], String(zwei[k.EinNam]));
+  ok('Status ist der weiteste gewaehlte', zwei[k.Status] === 'gezaehlt',
+     String(zwei[k.Status]));
+
+  ctx.weSpeichern({ kunde: 'K', positionen: POS, schritte: [] }, u);
+  const keins = w.daten[w.daten.length - 1];
+  ok('ohne Auswahl bleibt jede Zeile offen',
+     !keins[k.AngNam] && !keins[k.GezNam] && !keins[k.EinNam]);
+  ok('Status erfasst', keins[k.Status] === 'erfasst', String(keins[k.Status]));
+
+  // Regalplatznr. traegt jetzt auch der Erfasser ein, nicht erst das zweite Team
+  ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Direkt ins Regal', anzahl: 1, kg: '', mhd: '',
+      regalplatz: 'A-01', bemerkung: '', bestehend: false }] }, u);
+  ok('Regalplatz schon beim Erfassen',
+     p.daten[p.daten.length - 1][pk.Regalplatz] === 'A-01',
+     String(p.daten[p.daten.length - 1][pk.Regalplatz]));
+
   ok('ohne Positionen abgewiesen',
      ctx.weSpeichern({ kunde: 'X', positionen: [] }, u).error === 'keine_positionen');
   ok('ohne Kunde und Lieferant abgewiesen',
@@ -105,6 +128,23 @@ console.log('\n4) Quittieren');
   ok('Regalplatz an Position 1', p.daten[1][pk.Regalplatz] === 'A-12');
   ok('Regalplatz an Position 2', p.daten[2][pk.Regalplatz] === 'B-03');
   ok('Eingelagert quittiert', w.daten[1][k.EinNam] === 'Anna Muster');
+
+  // Wer nur abgetippt hat, laesst die Annahme vom Kollegen quittieren.
+  const offen = ctx.weSpeichern({ kunde: 'K', positionen: POS, schritte: [] }, u).weNr;
+  ok('Angenommen nachtragbar',
+     ctx.weSchritt({ weNr: offen, schritt: 'angenommen' }, bob).ok === true);
+  const zOffen = w.daten[w.daten.length - 1];
+  ok('Annahme auf den Namen des Kollegen', zOffen[k.AngNam] === 'Bob Meier');
+  ok('Status nach dem Nachtragen', zOffen[k.Status] === 'angenommen',
+     String(zOffen[k.Status]));
+
+  // Der zuletzt geklickte Schritt darf den Status nicht zurueckwerfen.
+  const spaet = ctx.weSpeichern({ kunde: 'K', positionen: POS,
+                                  schritte: ['gezaehlt', 'eingelagert'] }, u).weNr;
+  ctx.weSchritt({ weNr: spaet, schritt: 'angenommen' }, bob);
+  const zSpaet = w.daten[w.daten.length - 1];
+  ok('Status faellt nicht zurueck', zSpaet[k.Status] === 'eingelagert',
+     String(zSpaet[k.Status]));
 }
 
 console.log('\n5) Zuruecknehmen und Liste');
@@ -279,6 +319,46 @@ console.log('\n9) Excel-Blatt');
   const z2 = (r, c) => (sh2.daten[r - 1] || [])[c - 1];
   ok('neunte Position in Zeile 24', z2(24, 2) === 'A8');
   ok('Fuss wandert auf Zeile 26', z2(26, 1) === 'Lagerfläche / storage space');
+}
+
+console.log('\n10) Einrichtung — Textspalten');
+{
+  const ZEIT = ['AngDat', 'AngZeit', 'GezDat', 'GezZeit', 'EinDat', 'EinZeit'];
+
+  const ss = neueTabelle(), ctx = laden(ss);
+  // Ueber die alte Grenze von 5000 Zeilen hinaus: dort hoerte das Format auf,
+  // und ab da fing Sheets an, die Strings wieder als Datum zu lesen.
+  for (let i = 0; i < 6000; i++) {
+    ss.blaetter.Wareneingang.daten.push([]);
+    ss.blaetter.Positionen.daten.push([]);
+  }
+  ctx.setupAnlegen();
+
+  const textSpalte = (blatt, name) => {
+    const bl = ss.blaetter[blatt];
+    const k  = ctx.spalten(bl.daten[0]);
+    return bl.formate.some(f => f.format === '@' && f.spalte === k[name] + 1 &&
+                                f.zeile === 2 && f.zeilen >= bl.getMaxRows() - 1);
+  };
+
+  // Ohne Textformat macht Sheets aus «2026-09-09» ein Datum und aus «08:30»
+  // eine Uhrzeit; zurueck kommt dann ein Zeitstempel, der so in der Liste,
+  // in der CSV und im Excel-Formular landet.
+  ZEIT.forEach(name =>
+    ok(name + ' als Text, ueber das ganze Blatt', textSpalte('Wareneingang', name)));
+  ok('MHD als Text, ueber das ganze Blatt', textSpalte('Positionen', 'MHD'));
+
+  // Die Spalten werden ueber ihre Namen gefunden, nicht ueber feste Nummern —
+  // sonst formatiert eine umgestellte Tabelle die falschen Spalten.
+  const ss2 = neueTabelle(), ctx2 = laden(ss2);
+  const w2 = ss2.blaetter.Wareneingang;
+  w2.daten[0] = w2.daten[0].slice().reverse();
+  ctx2.setupAnlegen();
+  const k2 = ctx2.spalten(w2.daten[0]);
+  const daneben = ZEIT.filter(name =>
+    !w2.formate.some(f => f.format === '@' && f.spalte === k2[name] + 1));
+  ok('Textformat folgt der umgestellten Spalte', daneben.length === 0,
+     'ohne Format: ' + daneben.join(', '));
 }
 
 console.log('\n' + '='.repeat(46));

@@ -104,6 +104,18 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
 5. Prvi put traži odobrenje za tabelu, Drive i slanje pošte — potvrdi
 6. Zapiši **Web-App-URL**
 
+**`setupAnlegen` sme da se pokrene i kasnije, više puta.** Zaglavlja se ne
+diraju ako već postoje; ono što svaki put iznova postavlja jeste **tekstualni
+format** na kolonama sa datumom i vremenom — `AngDat` `AngZeit` `GezDat`
+`GezZeit` `EinDat` `EinZeit`, i `MHD` u `Positionen`. Bez njega Sheets upisano
+`2026-09-09` čita kao datum a `08:30` kao vreme i vraća ih kao vremenske
+pečate; u aplikaciji, u CSV-u i u Excel obrascu onda piše `Sat Dec 30 1899 …`.
+Format ide preko cele visine lista, ne preko prvih n redova, i kolone se traže
+po imenu.
+
+Ako tabela već radi, pokreni `setupAnlegen` ponovo posle ažuriranja koda.
+**Redovi upisani pre toga se time ne popravljaju** — njih treba prekucati.
+
 Test u browseru:
 
 ```
@@ -167,16 +179,26 @@ Dalje naloge otvaraš iz same aplikacije, dugmetom **Benutzer verwalten**.
 
 ## Tok rada
 
-**Angenommen** se kvitira sam, u trenutku unosa — ko je uneo, taj je primio.
-Zato se u formularu ne bira ime; ono dolazi iz sesije.
+Na dnu obrasca stoje **tri kućice — Angenommen, Gezählt & kontrolliert,
+Eingelagert**. Čekira se ono što je onaj ko unosi **sam uradio**; podrazumevano
+je čekiran samo `Angenommen`, jer u najčešćem slučaju roba se prima i odmah
+unosi. Ko samo prekucava tuđi papir, skida sve tri.
 
-**Gezählt & kontrolliert** i **Eingelagert** kvitiraju se kasnije, iz
-pregleda. Otvoreni unosi vidljivi su celom timu, jer bi inače kolega koji
-broji morao da čeka onog ko je primio.
+**Ime se nikad ne bira** — dolazi iz sesije, a datum i vreme sa servera.
+Kućica kaže samo *koji red* se potpisuje, ne *ko* ga potpisuje.
+
+Sve što nije čekirano kvitira se kasnije, iz pregleda dokumenta — i to važi
+i za `Angenommen`. Otvoreni unosi vidljivi su celom timu, jer bi inače
+kolega koji broji morao da čeka onog ko je primio.
 
 Kod **Eingelagert** aplikacija prvo nudi listu pozicija sa poljem za
-Regalplatznr. — to je kolona koju na papiru popunjava „Second Team".
+Regalplatznr. Isto polje stoji i u samom obrascu, po poziciji: ko odmah zna
+gde roba ide, upisuje ga pri unosu. Na papiru je to kolona „Second Team".
 Prazna polja ostaju prazna, kvitiranje ide svejedno.
+
+**Status** je uvek najdalji kvitirani korak, ne poslednji kliknuti —
+naknadno kvitiranje `Angenommen` ne vraća eingelagert dokument na početak.
+Dokument bez ijednog potpisa ima status `erfasst`.
 
 **Als Excel senden** može se pozvati u bilo kom trenutku i više puta.
 Šalje trenutno stanje; ako se pošalje pre nego što je sve kvitirano,
@@ -198,6 +220,10 @@ Ceo postupak, sa formulama i rasporedom ćelija: **`EXCEL.md`**.
 ```
 <Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
 ```
+
+Obrazac ima deset redova za pozicije. Duži dokument se ne odseca tiho:
+red `A26`, unutar oblasti štampe, tada crveno javi koliko pozicija dokument
+zaista ima. Isti red javi i kad `J2` pokazuje na broj kojeg u `Daten` nema.
 
 Jedan red po poziciji, podaci zaglavlja se ponavljaju u svakom redu,
 stornirani ispadaju. **23 kolone u fiksnom redosledu** — na njima stoje sve
@@ -253,7 +279,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Dve suite, obe bez mreže i bez Google naloga:
+Tri suite, sve bez mreže i bez Google naloga — **254 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -266,12 +292,14 @@ globalno preko `NODE_PATH`; `vorlage.py` traži `openpyxl`. Ništa se ne dodaje
 u repo.
 
 `backend.mjs` cilja mesta gde klize indeksi kolona i redova: raspored kolona,
-brojni niz po godini, upis pozicija, kvitiranje, storno, CSV, admin prava i
-raspored ćelija u Excel listu. `pwa.mjs` vozi ceo tok — prijava, unos, brisanje
-pozicije, čuvanje, kvitiranje, Regalplatz, slanje, istekla sesija.
+brojni niz po godini, upis pozicija, izbor kvitiranih koraka, naknadno
+kvitiranje, storno, CSV, admin prava, raspored ćelija u Excel listu i
+tekstualni format kolona sa datumom i vremenom. `pwa.mjs` vozi ceo tok —
+prijava, unos, brisanje pozicije, Regalplatz pri unosu, čuvanje sa i bez
+sopstvene kvitancije, kvitiranje, slanje, istekla sesija.
 `vorlage.py` puni šablonu izlazom iz `csv_beispiel.mjs` i računa svaku formulu:
 da li vuče pravu kolonu, da li se prazni redovi drže praznih, da li prelazak na
-drugi dokument menja sve.
+drugi dokument menja sve i da li se duži dokument javi umesto da se odseče.
 
 **Šta `vorlage.py` NE dokazuje:** da Excel otvori fajl bez prigovora. Formule
 su izračunate sopstvenim auswerter-om, ne Excel-kompatibilnim motorom.
@@ -296,9 +324,15 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 8 | Kolega kvitira *Gezählt* | njegovo ime, ne ime onog ko je uneo |
 | 9 | Isti korak dva puta | drugi put odbijen |
 | 10 | *Eingelagert* sa praznim regalima | prolazi, polja ostaju prazna |
+| 10b | Unos sa sve tri kućice čekirane | sva tri potpisa na tvoje ime, status `eingelagert` |
+| 10c | Unos bez ijedne kućice | status `erfasst`, sva tri koraka nude *Quittieren* |
+| 10d | Regalplatznr. upisan pri unosu | vidi se u detalju i u Excelu, bez koraka *Eingelagert* |
 | 11 | Slanje pre nego što je sve kvitirano | prolazi, prazna polja u xlsx-u |
 | 12 | Otvoriti xlsx u Excelu na Macu | raspored kao na papiru, žuta kolona H |
 | 12b | Otvoriti .xlsm sa SharePointa iz Findera | podaci trenutni, padajuća lista puna |
+| 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
+| 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
+| 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |

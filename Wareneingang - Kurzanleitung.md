@@ -87,6 +87,7 @@ Fünf leere Blöcke stehen bereit, wie die fünf Zeilen auf dem Papier.
 | **Anzahl / QTY** | Stückzahl |
 | **kg** | Gewicht, falls relevant |
 | **MHD** | Mindesthaltbarkeit — `10.2027` oder `31.10.2027`, beides geht |
+| **Regalplatznr.** | wenn Sie schon wissen, wohin die Ware kommt |
 | **Bemerkungen / Kontrolle** | Auffälligkeiten, Beschädigungen |
 | **Bestehend / Existing** | Haken, wenn der Artikel bereits im Lager geführt wird |
 
@@ -99,8 +100,9 @@ Werte und werden neu durchnummeriert.
 
 **Beim Gewicht** spielt es keine Rolle, ob Sie `3.4` oder `3,4` eintippen.
 
-**Die Regalplatznummer fehlt hier mit Absicht.** Die trägt das zweite Team
-später beim Einlagern nach.
+**Die Regalplatznr. dürfen Sie leer lassen.** Wer sie beim Erfassen noch
+nicht kennt, überspringt sie — das zweite Team trägt sie später beim
+Einlagern nach. Wer sie kennt, spart dem Kollegen den Weg.
 
 ### Lieferschein-Foto
 
@@ -112,11 +114,27 @@ Empfang rasch geht. Der Lieferschein bleibt lesbar.
 
 Sie brauchen kein Foto zu machen — der Wareneingang wird auch ohne gespeichert.
 
-### Speichern
+### Quittieren — was haben Sie selbst getan?
 
-Mit dem Speichern wird **Angenommen / Accepted** auf Ihren Namen quittiert,
-mit dem aktuellen Datum und der Uhrzeit. Wer erfasst, hat die Ware
-angenommen — deshalb wird hier kein Name ausgewählt.
+Ganz unten stehen die drei Zeilen des Papierformulars als Häkchen:
+
+| Häkchen | Wann setzen |
+|---|---|
+| **Angenommen / Accepted** | Sie haben die Ware entgegengenommen |
+| **Gezählt & kontrolliert** | Sie haben gleich mitgezählt und geprüft |
+| **Eingelagert / stored** | Sie haben die Ware gleich eingeräumt |
+
+**Angenommen ist vorausgewählt**, weil das der übliche Fall ist: wer die
+Lieferung annimmt, erfasst sie auch. Haben Sie mehr als das getan, setzen
+Sie den zweiten oder dritten Haken gleich dazu — dann muss niemand denselben
+Wareneingang noch einmal öffnen.
+
+**Tippen Sie nur einen Papierbogen ab, den ein Kollege ausgefüllt hat?**
+Dann nehmen Sie alle drei Haken weg. Der Eintrag erscheint als *erfasst*, und
+jeder Schritt wird von dem quittiert, der ihn wirklich getan hat.
+
+Ein Name wird nie ausgewählt: eingetragen wird immer **Ihrer**, mit Datum und
+Uhrzeit vom Server. Das Häkchen sagt nur, *welche Zeile* unterschrieben wird.
 
 Die Artikelanzahl haken Sie bitte weiterhin direkt auf dem Lieferschein ab
 beziehungsweise passen sie dort an.
@@ -130,10 +148,11 @@ Kolleginnen und Kollegen. Das ist Absicht: wer zählt, ist selten der, der
 angenommen hat.
 
 Tippen Sie den Eintrag an. Unter **Aufgabe / Task** stehen die drei Schritte.
-Bei jedem offenen Schritt steht ein Knopf **Quittieren**.
+Bei jedem offenen Schritt steht ein Knopf **Quittieren** — auch bei
+**Angenommen**, falls es beim Erfassen niemand angehakt hat.
 
-**Gezählt & kontrolliert:** einmal tippen, fertig. Ihr Name und die Uhrzeit
-werden eingetragen.
+**Angenommen** und **Gezählt & kontrolliert:** einmal tippen, fertig. Ihr
+Name und die Uhrzeit werden eingetragen.
 
 **Eingelagert:** hier erscheint zuerst die Liste der Positionen mit je einem
 Feld für die **Regalplatznr.** Tragen Sie ein, was Sie wissen; leere Felder
