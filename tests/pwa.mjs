@@ -20,6 +20,8 @@ page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.messag
 await page.addInitScript(() => {
   window.__gesendet = [];
   window.__methoden = [];
+  window.__gleichzeitig = 0;      // gerade unterwegs
+  window.__hoechstens = 0;        // hoechster je erreichter Stand
   const DB = { kopf: null, positionen: [] };
   // Der weiteste quittierte Schritt, wie statusAus() im Backend.
   const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
@@ -31,6 +33,10 @@ await page.addInitScript(() => {
     else d = Object.fromEntries(new URL('http://x/' + url.replace(/^[^?]*/, '')).searchParams);
     window.__gesendet.push(d);
     window.__methoden.push(opt && opt.method ? opt.method : 'GET');
+    window.__gleichzeitig++;
+    window.__hoechstens = Math.max(window.__hoechstens, window.__gleichzeitig);
+    await new Promise(r => setTimeout(r, 5));      // eine Antwort dauert
+    window.__gleichzeitig--;
 
     const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
 
@@ -124,6 +130,11 @@ await page.click('#lg-senden');
 await page.waitForSelector('#scr-start.aktiv');
 ok('nach Login auf der Uebersicht', await sichtbar('#scr-start'));
 ok('Name im Kopf', (await page.textContent('#st-name')) === 'Anna Muster');
+// Apps Script ist mit zwei gleichzeitigen Aufrufen desselben Skripts nicht
+// zuverlaessig; der zweite kann eine Fehlerseite statt JSON zurueckgeben.
+ok('Aufrufe gehen nacheinander',
+   (await page.evaluate(() => window.__hoechstens)) === 1,
+   'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Adminknopf sichtbar fuer Admin', !(await page.$eval('#st-admin', e => e.hidden)));
 
 // --- 2) Formular ------------------------------------------------------------
@@ -275,6 +286,9 @@ await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
 await page.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
 
+ok('auch die Verwaltung ruft nacheinander',
+   (await page.evaluate(() => window.__hoechstens)) === 1,
+   'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Empfaengeradresse geladen',
    (await page.inputValue('#adm-mailan')) === 'lager@firma.ch');
 ok('Ordner-ID geladen', (await page.inputValue('#adm-archiv')) === '1Arch');
@@ -408,6 +422,12 @@ ok('leeres Feld zeigt wieder die Uebersicht',
 
 await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
+// Erst weiter, wenn beide Aufrufe des Adminbereichs durch sind. Sonst
+// laeuft einer von ihnen noch, waehrend der naechste Abschnitt fetch
+// austauscht — und faellt dann in dessen «Sitzung abgelaufen».
+await page.waitForFunction(() =>
+  document.getElementById('adm-mailan').value !== '' &&
+  document.getElementById('adm-liste').textContent.includes('Anna Muster'));
 
 // --- 11) Abgelaufene Sitzung ------------------------------------------------
 console.log('\n11) Abgelaufene Sitzung');

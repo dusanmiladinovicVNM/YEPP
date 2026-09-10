@@ -921,7 +921,11 @@ async function start() {
     } catch (e) { /* beschaedigter Zwischenspeicher — wird gleich ersetzt */ }
   }
 
-  ladeListe();
+  // Nacheinander, nicht gleichzeitig. Zwei Aufrufe im selben Augenblick sind
+  // fuer Apps Script zwei Ausfuehrungen desselben Skripts; die zweite kann
+  // mit einer Fehlerseite statt mit JSON zurueckkommen. Beim Anmelden war das
+  // bisher jedes Mal so, und es sah aus wie ein Netzproblem.
+  await ladeListe();
 
   try {
     // Alles ueber POST: in einer Adresse stuende der Sitzungstoken im
@@ -1445,7 +1449,7 @@ async function adminOeffnen() {
   $('adm-par-meldung').classList.remove('zeigen');
   $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   zeigeScreen('scr-admin');
-  adminParameter();
+  await adminParameter();          // nacheinander, siehe start()
   await adminLaden();
 }
 
