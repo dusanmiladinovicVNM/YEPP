@@ -57,6 +57,7 @@ class Sheet {
     this.geloescht = [];
     this.formate = [];
     this.verbunden = [];
+    this.gelesen = 0;
     if (kopf) this.daten.push(kopf.slice());
   }
   _z(n) { while (this.daten.length < n) this.daten.push([]); return this.daten[n - 1]; }
@@ -73,7 +74,12 @@ class Sheet {
     }
     return new Range(this, r, c, nr || 1, nc || 1);
   }
-  getDataRange() { return new Range(this, 1, 1, Math.max(1, this.getLastRow()), Math.max(1, this.getLastColumn())); }
+  // Gezaehlt, weil daran haengt, ob ein Aufruf ein Blatt zweimal liest.
+  // In Apps Script ist jedes Lesen ein Gang zum Dienst, kein Speicherzugriff.
+  getDataRange() {
+    this.gelesen++;
+    return new Range(this, 1, 1, Math.max(1, this.getLastRow()), Math.max(1, this.getLastColumn()));
+  }
   appendRow(z) { this.daten.push(z.slice()); }
   deleteRow(n) { this.geloescht.push(n); this.daten.splice(n - 1, 1); }
   setColumnWidth() { return this; } setColumnWidths() { return this; }

@@ -17,12 +17,21 @@ const page = await browser.newPage();
 page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
 
 // --- Apps Script nachbilden -------------------------------------------------
-await page.addInitScript(() => {
+// Benannt, nicht inline: eine zweite Seite braucht dieselbe Attrappe, und
+// zwei Abschriften laufen frueher oder spaeter auseinander.
+const attrappe = () => {
   window.__gesendet = [];
   window.__methoden = [];
   window.__gleichzeitig = 0;      // gerade unterwegs
   window.__hoechstens = 0;        // hoechster je erreichter Stand
-  const DB = { kopf: null, positionen: [] };
+  // Der Server vergisst beim Neuladen der Seite nichts — die Attrappe darf
+  // es auch nicht, sonst prueft «was steht nach einem Reload da» nichts.
+  // sessionStorage, nicht localStorage: Abmelden raeumt localStorage aus.
+  const DB = JSON.parse(sessionStorage.getItem('__db') || 'null') ||
+             { kopf: null, positionen: [] };
+  const merken = () => {
+    try { sessionStorage.setItem('__db', JSON.stringify(DB)); } catch (e) {}
+  };
   // Der weiteste quittierte Schritt, wie statusAus() im Backend.
   const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
                              : DB.ang ? 'angenommen' : 'erfasst';
@@ -35,35 +44,58 @@ await page.addInitScript(() => {
     window.__methoden.push(opt && opt.method ? opt.method : 'GET');
     window.__gleichzeitig++;
     window.__hoechstens = Math.max(window.__hoechstens, window.__gleichzeitig);
-    await new Promise(r => setTimeout(r, 5));      // eine Antwort dauert
+    // Eine Antwort dauert. Einstellbar, damit sich pruefen laesst, was auf
+    // dem Schirm steht, WAEHREND sie unterwegs ist.
+    await new Promise(r => setTimeout(r, window.__langsam || 5));
     window.__gleichzeitig--;
 
-    const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
+    const A = o => {
+      merken();
+      return { text: async () => JSON.stringify(o), json: async () => o, status: 200 };
+    };
+
+    // Wie im Code.gs: die Liste steht an einer Stelle, und «start» und
+    // «we_liste» geben dieselbe zurueck. Eine Attrappe, in der die beiden
+    // auseinanderlaufen koennen, prueft nichts mehr.
+    const liste = () => {
+      const eigen = DB.kopf ? [{
+        weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
+        kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
+        status: DB.status || 'angenommen', erfasser: 'Anna Muster',
+        gesendet: '' }] : [];
+      // Ein alter, abgeschlossener Eintrag eines Kollegen: ohne Suche
+      // taucht er nicht auf, mit Suche schon.
+      const fremd = { weNr: 'WE-2026-0009', datum: '2026-09-01', zeit: '07:15',
+        kunde: 'Alte Kunde AG', lieferant: 'Nordwind Logistik',
+        status: 'eingelagert', erfasser: 'Bob Meier',
+        gesendet: '2026-09-01 08:00' };
+      const s = String(d.suche || '').toLowerCase();
+      if (!s) return eigen;
+      const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
+                          x.erfasser).toLowerCase().includes(s);
+      return eigen.concat([fremd]).filter(passt);
+    };
+    const stamm = { kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] };
+    const startDaten = () => ({ ok: true, liste: liste(),
+                                kunden: stamm.kunden, lieferanten: stamm.lieferanten });
 
     switch (d.action) {
       case 'login':
-        return A({ ok: true, session: 'tok', name: 'Anna Muster',
-                   rolle: 'admin', pwGeaendert: true });
+        // Der Server gibt die Startdaten mit — sonst folgte auf das
+        // Anmelden sofort ein zweiter Weg fuer genau diese Zeilen.
+        return A(window.__ohneStart
+          ? { ok: true, session: 'tok', name: 'Anna Muster',
+              rolle: 'admin', pwGeaendert: true }
+          : { ok: true, session: 'tok', name: 'Anna Muster',
+              rolle: 'admin', pwGeaendert: true, start: startDaten() });
+      case 'start':
+        // Eine aeltere Bereitstellung kennt die Aktion nicht.
+        if (window.__ohneStart) return A({ ok: false, error: 'unbekannte Aktion' });
+        return A(startDaten());
       case 'stammdaten':
-        return A({ ok: true, kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] });
-      case 'we_liste': {
-        const eigen = DB.kopf ? [{
-          weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
-          kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
-          status: DB.status || 'angenommen', erfasser: 'Anna Muster',
-          gesendet: '' }] : [];
-        // Ein alter, abgeschlossener Eintrag eines Kollegen: ohne Suche
-        // taucht er nicht auf, mit Suche schon.
-        const fremd = { weNr: 'WE-2026-0009', datum: '2026-09-01', zeit: '07:15',
-          kunde: 'Alte Kunde AG', lieferant: 'Nordwind Logistik',
-          status: 'eingelagert', erfasser: 'Bob Meier',
-          gesendet: '2026-09-01 08:00' };
-        const s = String(d.suche || '').toLowerCase();
-        if (!s) return A({ ok: true, liste: eigen });
-        const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
-                            x.erfasser).toLowerCase().includes(s);
-        return A({ ok: true, liste: eigen.concat([fremd]).filter(passt) });
-      }
+        return A({ ok: true, kunden: stamm.kunden, lieferanten: stamm.lieferanten });
+      case 'we_liste':
+        return A({ ok: true, liste: liste() });
       case 'we_speichern': {
         DB.vorgaenge = DB.vorgaenge || {};
         if (d.vorgang && DB.vorgaenge[d.vorgang]) {
@@ -114,7 +146,8 @@ await page.addInitScript(() => {
         return A({ ok: true });
     }
   };
-});
+};
+await page.addInitScript(attrappe);
 
 const sichtbar = id => page.$eval(id, e => e.classList.contains('aktiv'));
 const feld = async (i, f, wert) =>
@@ -136,6 +169,20 @@ ok('Aufrufe gehen nacheinander',
    (await page.evaluate(() => window.__hoechstens)) === 1,
    'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Adminknopf sichtbar fuer Admin', !(await page.$eval('#st-admin', e => e.hidden)));
+
+// Anmelden ist EIN Weg zum Server. Vorher waren es drei — login, we_liste,
+// stammdaten — und jeder einzelne schleppt die Weiterleitung von /exec, die
+// Antwort von einem zweiten Host und moeglicherweise einen kalten
+// Skriptstart mit sich. Das war der groesste Teil der Wartezeit.
+const nachLogin = await page.evaluate(() => window.__gesendet.map(x => x.action));
+ok('Anmelden braucht einen einzigen Aufruf',
+   nachLogin.length === 1 && nachLogin[0] === 'login', nachLogin.join(','));
+ok('und bringt die Stammdaten gleich mit',
+   (await page.$$('#dl-kunden option')).length === 1 &&
+   (await page.$$('#dl-lieferanten option')).length === 1);
+ok('und die Uebersicht wartet nicht mehr',
+   !(await page.textContent('#st-liste')).includes('Wird geladen'),
+   await page.textContent('#st-liste'));
 
 // --- 2) Formular ------------------------------------------------------------
 console.log('\n2) Formular');
@@ -415,9 +462,14 @@ await page.waitForFunction(() =>
 ok('leere Suche sagt es', (await page.textContent('#st-liste')).includes('Nichts gefunden'));
 
 await page.fill('#st-suche', '');
+// Auf die Liste warten, nicht auf den Titel: den setzt ladeListe() sofort,
+// noch bevor der Aufruf hinausgeht — danach steht in der Liste «Wird
+// geladen …» und noch nicht der Eintrag. Der Titel als Signal liess diese
+// Pruefung etwa jedes fuenfte Mal zu frueh laufen.
 await page.waitForFunction(() =>
-  document.getElementById('st-titel').textContent === 'Offene und letzte');
+  document.getElementById('st-liste').textContent.includes('WE-2026-0001'));
 ok('leeres Feld zeigt wieder die Uebersicht',
+   (await page.textContent('#st-titel')) === 'Offene und letzte' &&
    (await page.textContent('#st-liste')).includes('WE-2026-0001'));
 
 await page.click('#st-admin');
@@ -670,6 +722,116 @@ ok('anhaltendes 404 nennt CONFIG.url',
 ok('und sagt, dass auch der zweite Versuch scheiterte',
    zweimal404.includes('zweite Versuch'), zweimal404);
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
+
+// --- 15) Aeltere Bereitstellung ---------------------------------------------
+// Front und Backend werden nicht im selben Augenblick aktualisiert. Kennt
+// das Skript «start» noch nicht, muss die App trotzdem starten — auf dem
+// alten Weg, langsamer, aber sie startet.
+console.log('\n15) Aeltere Bereitstellung ohne «start»');
+const alt = await browser.newPage();
+alt.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await alt.addInitScript(attrappe);
+await alt.addInitScript(() => { window.__ohneStart = true; });
+await alt.goto(APP);
+await alt.fill('#lg-email', 'anna@firma.ch');
+await alt.fill('#lg-pass', 'geheim123');
+await alt.click('#lg-senden');
+await alt.waitForSelector('#scr-start.aktiv');
+await alt.waitForFunction(() => document.querySelectorAll('#dl-kunden option').length > 0);
+ok('App startet auch ohne die neue Aktion',
+   await alt.$eval('#scr-start', e => e.classList.contains('aktiv')));
+ok('faellt auf die beiden alten Aufrufe zurueck',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(',') ===
+     'login,start,we_liste,stammdaten',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
+ok('Stammdaten stehen trotzdem',
+   (await alt.$$('#dl-kunden option')).length === 1);
+ok('auch dabei geht nur ein Aufruf zur Zeit',
+   (await alt.evaluate(() => window.__hoechstens)) === 1);
+
+// Das zweite Mal wird der vergebliche Weg nicht wiederholt.
+await alt.evaluate(() => { window.__gesendet.length = 0; });
+await alt.evaluate(() => start());
+await alt.waitForFunction(() => window.__gesendet.length >= 2);
+ok('der vergebliche Aufruf wird nicht wiederholt',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(',') ===
+     'we_liste,stammdaten',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
+await alt.close();
+
+// --- 16) Die Liste steht sofort ---------------------------------------------
+// Der Weg zum Server dauert Sekunden. Solange auf «Wird geladen …» zu
+// starren ist genau die Wartezeit, die weg sollte — also zeichnet die App
+// zuerst, was das Geraet zuletzt gesehen hat, und sagt dabei, dass es alt ist.
+console.log('\n16) Die Liste steht sofort');
+const lok = await browser.newPage();
+lok.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await lok.addInitScript(attrappe);
+await lok.goto(APP);
+await lok.fill('#lg-email', 'anna@firma.ch');
+await lok.fill('#lg-pass', 'geheim123');
+await lok.click('#lg-senden');
+await lok.waitForSelector('#scr-start.aktiv');
+
+// Ein Eintrag, damit es etwas zu merken gibt
+await lok.click('#st-neu');
+await lok.waitForSelector('#scr-form.aktiv');
+await lok.fill('#fm-kunde', 'Kunde AG');
+await lok.fill('#fm-lieferant', 'Lieferant GmbH');
+await lok.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await lok.click('#fm-speichern');
+await lok.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('WE-2026-0001'));
+ok('die Liste wird gemerkt',
+   (await lok.evaluate(() => JSON.parse(localStorage.getItem('liste') || 'null')
+                              ?.liste?.length)) === 1);
+
+// Jetzt langsam antworten und neu laden: die Zeilen muessen VOR der Antwort stehen
+await lok.evaluate(() => localStorage.setItem('langsam', '1'));
+await lok.addInitScript(() => { window.__langsam = 600; });
+await lok.reload();
+await lok.waitForSelector('#scr-start.aktiv');
+ok('gezeichnet, bevor die Antwort da ist',
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'),
+   await lok.textContent('#st-liste'));
+ok('und es steht dabei, dass der Stand vom Geraet ist',
+   !(await lok.$eval('#st-alt', e => e.hidden)) &&
+   (await lok.textContent('#st-alt')).includes('Gerät'),
+   await lok.textContent('#st-alt'));
+ok('kein «Wird geladen» ueber vorhandenen Zeilen',
+   !(await lok.textContent('#st-liste')).includes('Wird geladen'));
+
+// Sobald die frischen Zeilen da sind, verschwindet der Hinweis
+await lok.waitForFunction(() => document.getElementById('st-alt').hidden);
+ok('frische Zeilen loeschen den Hinweis',
+   (await lok.$eval('#st-alt', e => e.hidden)) &&
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'));
+
+// Scheitert die Erneuerung, bleibt die alte Liste stehen — mit Grund
+// Nach der Attrappe eingehaengt, also gewinnt es — und es steht schon,
+// bevor start() den ersten Aufruf schickt. Danach eingesetzt waere es ein
+// Rennen gegen den eigenen Start.
+await lok.addInitScript(() => {
+  window.__langsam = 0;
+  window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+});
+await lok.reload();
+await lok.waitForSelector('#scr-start.aktiv');
+await lok.waitForFunction(() =>
+  document.getElementById('st-alt').textContent.includes('Verbindung'));
+ok('nach einem Fehlschlag bleiben die alten Zeilen stehen',
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'),
+   await lok.textContent('#st-liste'));
+ok('und der Hinweis nennt den Grund',
+   (await lok.textContent('#st-alt')).includes('Gerät') &&
+   (await lok.textContent('#st-alt')).includes('Verbindung'),
+   await lok.textContent('#st-alt'));
+// Auf einem geteilten iPad hat der naechste Benutzer die Kunden- und
+// Lieferantennamen des vorigen nichts anzugehen.
+await lok.evaluate(() => abmelden());
+ok('Abmelden vergisst die gemerkte Liste',
+   (await lok.evaluate(() => localStorage.getItem('liste'))) === null);
+await lok.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
