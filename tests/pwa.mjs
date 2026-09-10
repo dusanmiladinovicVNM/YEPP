@@ -541,6 +541,73 @@ const flaechen = await page.evaluate(async () => {
   return { liste: liste, detail: detail };
 });
 ok('Liste nennt die Bereitstellung', flaechen.liste.includes('Bereitstellung'), flaechen.liste);
+// Ohne Statuszahl und Anfang der Antwort bleibt «kein JSON» eine Diagnose
+// ohne Befund: 200 mit HTML, 401 und 429 verlangen verschiedene Schritte.
+ok('Liste nennt die Statuszahl', flaechen.liste.includes('HTTP 200'), flaechen.liste);
+ok('Liste zeigt den Anfang der Antwort',
+   flaechen.liste.includes('<html>Anmelden</html>'), flaechen.liste);
+
+// Beobachtet im Betrieb: Google antwortet einmal mit 404, nach dem naechsten
+// Versuch geht es. Das Skript lief dabei nicht — also wiederholen, auch bei
+// Aufrufen, die sonst kein zweites Mal geschickt werden duerfen.
+const einmal404 = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    if (n === 1) return { status: 404, text: async () => '<!DOCTYPE html>' };
+    return { status: 200, text: async () => JSON.stringify({ ok: true, liste: [] }) };
+  };
+  const r = await post({ action: 'we_liste', session: 'tok' });
+  return { n: n, ok: r.ok };
+});
+ok('ein einzelnes 404 wird ueberstanden',
+   einmal404.n === 2 && einmal404.ok === true, JSON.stringify(einmal404));
+
+// Auch beim Quittieren: bei 404 ist nachweislich nichts geschehen, also kann
+// der zweite Versuch nichts doppelt tun.
+const schritt404 = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    if (n === 1) return { status: 503, text: async () => 'Service Unavailable' };
+    return { status: 200, text: async () => JSON.stringify({ ok: true }) };
+  };
+  const r = await post({ action: 'we_schritt', session: 'tok' });
+  return { n: n, ok: r.ok };
+});
+ok('auch Quittieren ueberlebt ein 503', schritt404.n === 2 && schritt404.ok === true,
+   JSON.stringify(schritt404));
+
+// 200 mit HTML ist etwas anderes: da hat das Skript geantwortet, nur falsch.
+// Ein zweiter Versuch aendert daran nichts und unterbleibt.
+const zweihundert = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 200, text: async () => '<html>' }; };
+  try { await post({ action: 'we_liste', session: 'tok' }); } catch (e) {}
+  return n;
+});
+ok('200 mit HTML wird nicht wiederholt', zweihundert === 1, String(zweihundert));
+
+// 403 ist ein Rechteproblem — Wiederholen hilft nie
+const dreiNull3 = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 403, text: async () => '<html>' }; };
+  try { await post({ action: 'we_liste', session: 'tok' }); } catch (e) {}
+  return n;
+});
+ok('403 wird nicht wiederholt', dreiNull3 === 1, String(dreiNull3));
+
+// Bleibt es auch beim zweiten Mal bei 404, sagt die Meldung, was zu tun ist
+const zweimal404 = await page.evaluate(async () => {
+  window.fetch = async () => ({ status: 404, text: async () => '<!DOCTYPE html>' });
+  try { await post({ action: 'we_liste', session: 'tok' }); }
+  catch (e) { return verbindungText(e); }
+  return '';
+});
+ok('anhaltendes 404 nennt CONFIG.url',
+   zweimal404.includes('404') && zweimal404.includes('CONFIG.url'), zweimal404);
+ok('und sagt, dass auch der zweite Versuch scheiterte',
+   zweimal404.includes('zweite Versuch'), zweimal404);
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
 
 await browser.close();

@@ -42,7 +42,11 @@ Mindestens 8 Zeichen. Bitte verwenden Sie es nirgends sonst.
 
 Damit Sie die App künftig mit einem Tippen öffnen:
 
-**iPad und iPhone (Safari)**
+**iPad und iPhone — nur mit Safari**
+
+Tippen Sie den Link nicht in der Mail an: viele Mailprogramme öffnen ihn in
+einem eigenen Fenster, und dort gibt es «Zum Home-Bildschirm» nicht. Adresse
+kopieren, Safari öffnen, oben einfügen.
 
 1. Oben rechts auf **Teilen** tippen
 2. **Zum Home-Bildschirm** wählen

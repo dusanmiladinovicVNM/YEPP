@@ -175,9 +175,18 @@ Mora vratiti CSV sa zaglavljem. Ako vidiš Google login stranicu,
 `Zugriff` nije postavljen na *Jeder*.
 
 **Svaka kasnija izmena koda traži novu verziju** —
-*Bereitstellungen verwalten → Bearbeiten → Neue Version*.
+*Bereitstellungen verwalten → Bearbeiten → **Neue Version***.
 Bez toga URL i dalje servira stari kod. Ovo je najčešći uzrok
 „izmenio sam, a ništa se nije promenilo".
+
+⚠️ **Nikad „Neue Bereitstellung" za izmenu koda.** To pravi **novu adresu**,
+a `CONFIG.url` u `index.html` i dalje pokazuje na staru. Ako se stara pri
+tom arhivira, aplikacija dobija **HTTP 404** i ništa više ne radi. Aplikacija
+taj slučaj prepoznaje i kaže baš to, umesto da traži proveru prava:
+
+> *Diese Web-App-Adresse gibt es nicht (404). In Apps Script unter
+> «Bereitstellungen verwalten» die aktuelle URL holen und in CONFIG.url
+> eintragen.*
 
 Ažuriranje je time svedeno na tri koraka bez ijednog polja za popunjavanje:
 **zalepi `Code.gs` → Neue Version → `setupAnlegen`.** Skripteigenschaften
@@ -380,6 +389,14 @@ Prvom adminu tu vrednost upisuješ ručno; on dalje može postavljati druge.
 Admin može dodati korisnika, deaktivirati ga i ponovo aktivirati, poslati
 novu lozinku, dodeliti ili oduzeti admin prava.
 
+**Pristupni mejl insistira na Safariju.** Ne zato što drugi browseri ne
+rade, nego zato što mnogi mejl programi otvaraju link u **sopstvenom
+prozoru** — a tamo opcije „Zum Home-Bildschirm" nema. Radnik stigne do
+prijave i dalje ne zna zašto ne ide. Zato mejl kaže: adresu kopirati,
+otvoriti Safari, zalepiti. Uz to i da svaki browser pamti prijavu za sebe.
+Tri provere u `backend.mjs` čuvaju te rečenice od tihog ispadanja pri
+sledećoj izmeni teksta.
+
 **Novi korisnik dobija mejl sa lozinkom** — upiši ime i adresu, čekiraj
 *Zugangsmail verschicken* i pritisni **Benutzer anlegen**. Lozinka se posle
 toga prikazuje **samo jednom**, za slučaj da mejl ne prođe; tekst poruke se
@@ -413,7 +430,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **432 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **444 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -506,6 +523,17 @@ bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
 jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
 da nikad nije više od jednog.
 
+**Google povremeno vrati `404` na ispravnu adresu.** Viđeno u pogonu: jednom
+padne, posle osvežavanja radi. Takav odgovor dolazi sa Google-ovog frontenda
+**pre nego što se skript uopšte pokrene** — ništa nije pročitano, ništa
+upisano, nijedan mejl poslat. Zato se `404`, `429`, `502`, `503` i `504`
+ponavljaju **i kod poziva koji se inače ne smeju ponavljati**: nema šta da se
+udvostruči. `500` nije na spisku — greška u samom skriptu može nastupiti
+pošto je već nešto uradio.
+
+`200` sa HTML-om i `403` se ne ponavljaju: tu je skript odgovorio, samo
+pogrešno, ili nema prava. Drugi pokušaj tu ne menja ništa.
+
 **Prekinut poziv se ponavlja jednom — ali samo tamo gde drugi pokušaj ništa
 ne kvari:** čitanje (`stammdaten`, `we_liste`, `we_detail`, `admin_*`) i
 `we_speichern`, koje ionako spaja ključ vorganga. **Kvitiranje i slanje se ne
@@ -517,6 +545,11 @@ dešava se. Tada poruka i kaže šta je: „Der Server hat kein JSON geliefert.
 Bereitstellung prüfen." Ista poruka stoji na **svim** ekranima — ranije su je
 imali samo prijava i čuvanje, pa je pogrešan deployment na listi izgledao kao
 nestala mreža.
+
+Kad odgovor **nije JSON**, poruka nosi i **HTTP status i prvih 90 znakova
+odgovora** — `[HTTP 200: <!DOCTYPE html>…]`. Bez toga „nije JSON" ostaje
+dijagnoza bez nalaza: `200` sa HTML-om, `401` i `429` traže tri različita
+poteza, a niko neće otvarati konzolu na iPadu da bi ih razlikovao.
 
 Pravi razlog prekida uvek ide u konzolu (`Aufruf «we_liste» Versuch 1 von 2
 gescheitert: TypeError / Failed to fetch`), jer na ekranu radniku ne znači
