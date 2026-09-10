@@ -546,6 +546,19 @@ ok('Liste nennt die Bereitstellung', flaechen.liste.includes('Bereitstellung'), 
 ok('Liste nennt die Statuszahl', flaechen.liste.includes('HTTP 200'), flaechen.liste);
 ok('Liste zeigt den Anfang der Antwort',
    flaechen.liste.includes('<html>Anmelden</html>'), flaechen.liste);
+
+// 404 ist kein Zugriffsproblem, sondern eine Adresse, die ins Leere zeigt —
+// und die allgemeine Bitte, den Zugriff zu pruefen, fuehrt dort in die Irre.
+const vierNullVier = await page.evaluate(async () => {
+  window.fetch = async () => ({ status: 404, text: async () => '<!DOCTYPE html>' });
+  try { await post({ action: 'we_liste', session: 'tok' }); }
+  catch (e) { return verbindungText(e); }
+  return '';
+});
+ok('404 nennt die Adresse als Ursache',
+   vierNullVier.includes('404') && vierNullVier.includes('CONFIG.url'), vierNullVier);
+ok('404 erklaert Neue Version gegen Neue Bereitstellung',
+   vierNullVier.includes('Neue Version'), vierNullVier);
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
 
 await browser.close();

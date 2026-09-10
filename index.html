@@ -772,6 +772,16 @@ function verbindungText(e) {
            'CONFIG.url in index.html ist leer.';
   }
   if (art === 'keine_antwort') {
+    // 404 heisst nicht «kaputt», sondern «diese Bereitstellung gibt es
+    // nicht». Das passiert, sobald jemand «Neue Bereitstellung» waehlt
+    // statt «Neue Version»: die alte Adresse zeigt dann ins Leere, und die
+    // allgemeine Bitte, den Zugriff zu pruefen, fuehrt in die Irre.
+    if (e.status === 404) {
+      return 'Diese Web-App-Adresse gibt es nicht (404). In Apps Script ' +
+             'unter «Bereitstellungen verwalten» die aktuelle URL holen und ' +
+             'in CONFIG.url eintragen — «Neue Bereitstellung» vergibt jedes ' +
+             'Mal eine neue Adresse, «Neue Version» behält die alte.';
+    }
     return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
            'Zugriff «Jeder», Adresse endet auf /exec.' +
            (e.status ? ' [HTTP ' + e.status + ': ' + e.anfang + ']' : '');

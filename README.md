@@ -175,9 +175,18 @@ Mora vratiti CSV sa zaglavljem. Ako vidiš Google login stranicu,
 `Zugriff` nije postavljen na *Jeder*.
 
 **Svaka kasnija izmena koda traži novu verziju** —
-*Bereitstellungen verwalten → Bearbeiten → Neue Version*.
+*Bereitstellungen verwalten → Bearbeiten → **Neue Version***.
 Bez toga URL i dalje servira stari kod. Ovo je najčešći uzrok
 „izmenio sam, a ništa se nije promenilo".
+
+⚠️ **Nikad „Neue Bereitstellung" za izmenu koda.** To pravi **novu adresu**,
+a `CONFIG.url` u `index.html` i dalje pokazuje na staru. Ako se stara pri
+tom arhivira, aplikacija dobija **HTTP 404** i ništa više ne radi. Aplikacija
+taj slučaj prepoznaje i kaže baš to, umesto da traži proveru prava:
+
+> *Diese Web-App-Adresse gibt es nicht (404). In Apps Script unter
+> «Bereitstellungen verwalten» die aktuelle URL holen und in CONFIG.url
+> eintragen.*
 
 Ažuriranje je time svedeno na tri koraka bez ijednog polja za popunjavanje:
 **zalepi `Code.gs` → Neue Version → `setupAnlegen`.** Skripteigenschaften
@@ -421,7 +430,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **438 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **440 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
