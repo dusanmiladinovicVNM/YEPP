@@ -428,6 +428,56 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ---
 
+## Brzina
+
+**Vreme ne odlazi na server nego na put do njega.** Apps Script na POST
+odgovara preusmerenjem, odgovor stiže sa drugog hosta, a skripta može biti
+hladna. Merenja na istovetno građenom projektu (`handoverApp`) daju red
+veličine:
+
+| | |
+|---|---|
+| put — preusmerenje, drugi host, hladan start | **~2 400–2 900 ms po pozivu** |
+| otvaranje tabele (`openById`) | 266–1 023 ms, **jednom po izvršavanju** |
+| čitanje četiri lista preko `SpreadsheetApp` | 214–934 ms |
+
+Zato je prvo pravilo: **manje poziva**, ne brži poziv. Otvaranje aplikacije
+je bilo dva poziva jedan za drugim (`we_liste`, pa `stammdaten`), a prijava
+tri. Sada je i jedno i drugo **jedan poziv**:
+
+- akcija `start` vraća listu i stammdaten zajedno — i pritom proverava
+  sesiju jednom umesto dvaput (svaka provera čita `Sessions` i `Benutzer`)
+- `login` nosi iste podatke u istom odgovoru, pa se posle prijave ne ide
+  ponovo na mrežu
+
+`we_liste` i `stammdaten` ostaju: pretraga traži samo listu, a starija
+verzija aplikacije mora i dalje moći da se prijavi. Ako Apps Script još ne
+zna za `start`, aplikacija to prepozna po `unbekannte Aktion` i pređe na
+stari put — sporije, ali radi, pa redosled ažuriranja (Pages / `Code.gs`)
+više ništa ne lomi. Da se uzaludan poziv ne ponavlja, pamti se do
+osvežavanja stranice.
+
+**Merenje je ugrađeno, da se ne bi nagađalo.** Svaki odgovor nosi `ms`
+(vreme na serveru) i `teile` (po fazama: `auth`, pa akcija). Aplikacija od
+svoje wall-clock vrednosti oduzme `ms` i u konzolu ispiše i put:
+
+```
+«start» 3120 ms — Server 640, Weg 2480 (auth 210 start 430)
+```
+
+Bez te razlike svaki spor poziv izgleda kao spor server, i prepravlja se
+pogrešna strana. Ista zamka je u ovom projektu već jednom odradila svoje:
+pretpostavka da `openById` u jednom izvršavanju košta svaki put bila je
+netačna — platforma ga posle prvog puta servira iz sopstvenog keša.
+
+Ono što **nije** dirano: `SpreadsheetApp` kao put do podataka. Sledeći
+korak je `Sheets.Spreadsheets.Values.batchGet` — jedan zahtev za sve
+opsege, bez otvaranja tabele — ali tek pošto se izmeri na živim podacima.
+Dijagnostika za to je pripremljena (`geschwindigkeitMessen`,
+`treueVergleichen`); rewrite ide samo ako brojevi to opravdaju.
+
+---
+
 ## Testovi
 
 Tri suite, sve bez mreže i bez Google naloga — **453 provere**:

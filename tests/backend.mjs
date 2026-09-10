@@ -873,6 +873,89 @@ console.log('\n20) Ablage und woechentliche Sicherung');
   ok('Bericht meldet fehlende Mailadresse', pruef.indexOf('MailAn: FEHLT') >= 0);
 }
 
+console.log('\n17) Ein Aufruf statt zwei beim Oeffnen');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  ss.blaetter.Kunden.appendRow(['Kunde AG', true, 10]);
+  ss.blaetter.Lieferanten.appendRow(['Lieferant GmbH', true, 10]);
+  ctx.weSpeichern({ kunde: 'Kunde AG', lieferant: 'Lieferant GmbH', positionen: POS },
+                  ctx.sitzungPruefen('tokA'));
+
+  const r = ctx.verteilen({ action: 'start', session: 'tokA' });
+  ok('start liefert die Liste', r.ok === true && r.liste.length === 1,
+     JSON.stringify(r.liste && r.liste.length));
+  ok('und die Kunden', JSON.stringify(r.kunden) === '["Kunde AG"]',
+     JSON.stringify(r.kunden));
+  ok('und die Lieferanten', JSON.stringify(r.lieferanten) === '["Lieferant GmbH"]',
+     JSON.stringify(r.lieferanten));
+  ok('start gibt dasselbe wie we_liste',
+     JSON.stringify(r.liste) ===
+     JSON.stringify(ctx.verteilen({ action: 'we_liste', session: 'tokA' }).liste));
+  ok('Suche wirkt auch ueber start',
+     ctx.verteilen({ action: 'start', session: 'tokA', suche: 'gibtsnicht' })
+        .liste.length === 0);
+
+  // Der eigentliche Gewinn: die Sitzung wird einmal geprueft, nicht zweimal.
+  // Jede Pruefung liest Sessions UND Benutzer — auf zwei Aufrufe verteilt
+  // sind das vier Gaenge zum Dienst statt zweien.
+  const zaehlen = () => [ss.blaetter.Sessions.gelesen, ss.blaetter.Benutzer.gelesen];
+  ss.blaetter.Sessions.gelesen = 0; ss.blaetter.Benutzer.gelesen = 0;
+  ctx.verteilen({ action: 'start', session: 'tokA' });
+  const einmal = zaehlen();
+  ss.blaetter.Sessions.gelesen = 0; ss.blaetter.Benutzer.gelesen = 0;
+  ctx.verteilen({ action: 'we_liste', session: 'tokA' });
+  ctx.verteilen({ action: 'stammdaten', session: 'tokA' });
+  const zweimal = zaehlen();
+  ok('ein Aufruf prueft die Sitzung einmal',
+     einmal[0] === 1 && einmal[1] === 1, einmal.join('/'));
+  ok('zwei Aufrufe pruefen sie zweimal',
+     zweimal[0] === 2 && zweimal[1] === 2, zweimal.join('/'));
+
+  // Das Anmelden bringt sie gleich mit
+  ss.blaetter.Benutzer.getRange(2, 3).setValue(ctx.hash('geheim123', 'salz'));
+  ss.blaetter.Benutzer.getRange(2, 4).setValue('salz');
+  const an = ctx.verteilen({ action: 'login', email: 'anna@firma.ch',
+                             passwort: 'geheim123' });
+  ok('login bringt die Startdaten mit',
+     an.ok === true && !!an.start && an.start.ok === true &&
+     JSON.stringify(an.start.kunden) === '["Kunde AG"]',
+     JSON.stringify(an.start && an.start.kunden));
+  ok('und die Liste steht darin',
+     an.start.liste.length === 1, JSON.stringify(an.start.liste.length));
+
+  // Wer sein Passwort noch wechseln muss, bekommt sie nicht: er sieht die
+  // Liste ohnehin nicht, und verteilen() laesst ihn an keine andere Aktion.
+  ss.blaetter.Benutzer.getRange(2, 9).setValue(false);
+  const roh = ctx.verteilen({ action: 'login', email: 'anna@firma.ch',
+                              passwort: 'geheim123' });
+  ok('vor dem Passwortwechsel keine Startdaten',
+     roh.ok === true && roh.pwGeaendert === false && roh.start === undefined,
+     JSON.stringify(roh.start));
+}
+
+console.log('\n18) Die Uhr in der Antwort');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  const antwort = JSON.parse(ctx.doPost(
+    { postData: { contents: JSON.stringify({ action: 'start', session: 'tokA' }) } }));
+  ok('die Antwort nennt die Serverzeit',
+     typeof antwort.ms === 'number' && antwort.ms >= 0, JSON.stringify(antwort.ms));
+  ok('und zerlegt sie nach Abschnitten',
+     typeof antwort.teile === 'string' && antwort.teile.indexOf('auth ') === 0 &&
+     antwort.teile.indexOf('start ') > 0, JSON.stringify(antwort.teile));
+  ok('die Zeit ueberschreibt keine Nutzdaten',
+     antwort.ok === true && Array.isArray(antwort.liste));
+
+  // Auch wenn die Aktion scheitert, sonst waere gerade der langsame Fall
+  // der ungemessene.
+  const weg = JSON.parse(ctx.doPost(
+    { postData: { contents: JSON.stringify({ action: 'start', session: 'nix' }) } }));
+  ok('abgelehnte Aufrufe werden auch gemessen',
+     weg.error === 'session' && typeof weg.ms === 'number', JSON.stringify(weg));
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

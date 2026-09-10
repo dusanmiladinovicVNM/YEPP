@@ -17,7 +17,9 @@ const page = await browser.newPage();
 page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
 
 // --- Apps Script nachbilden -------------------------------------------------
-await page.addInitScript(() => {
+// Benannt, nicht inline: eine zweite Seite braucht dieselbe Attrappe, und
+// zwei Abschriften laufen frueher oder spaeter auseinander.
+const attrappe = () => {
   window.__gesendet = [];
   window.__methoden = [];
   window.__gleichzeitig = 0;      // gerade unterwegs
@@ -40,30 +42,48 @@ await page.addInitScript(() => {
 
     const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
 
+    // Wie im Code.gs: die Liste steht an einer Stelle, und «start» und
+    // «we_liste» geben dieselbe zurueck. Eine Attrappe, in der die beiden
+    // auseinanderlaufen koennen, prueft nichts mehr.
+    const liste = () => {
+      const eigen = DB.kopf ? [{
+        weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
+        kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
+        status: DB.status || 'angenommen', erfasser: 'Anna Muster',
+        gesendet: '' }] : [];
+      // Ein alter, abgeschlossener Eintrag eines Kollegen: ohne Suche
+      // taucht er nicht auf, mit Suche schon.
+      const fremd = { weNr: 'WE-2026-0009', datum: '2026-09-01', zeit: '07:15',
+        kunde: 'Alte Kunde AG', lieferant: 'Nordwind Logistik',
+        status: 'eingelagert', erfasser: 'Bob Meier',
+        gesendet: '2026-09-01 08:00' };
+      const s = String(d.suche || '').toLowerCase();
+      if (!s) return eigen;
+      const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
+                          x.erfasser).toLowerCase().includes(s);
+      return eigen.concat([fremd]).filter(passt);
+    };
+    const stamm = { kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] };
+    const startDaten = () => ({ ok: true, liste: liste(),
+                                kunden: stamm.kunden, lieferanten: stamm.lieferanten });
+
     switch (d.action) {
       case 'login':
-        return A({ ok: true, session: 'tok', name: 'Anna Muster',
-                   rolle: 'admin', pwGeaendert: true });
+        // Der Server gibt die Startdaten mit — sonst folgte auf das
+        // Anmelden sofort ein zweiter Weg fuer genau diese Zeilen.
+        return A(window.__ohneStart
+          ? { ok: true, session: 'tok', name: 'Anna Muster',
+              rolle: 'admin', pwGeaendert: true }
+          : { ok: true, session: 'tok', name: 'Anna Muster',
+              rolle: 'admin', pwGeaendert: true, start: startDaten() });
+      case 'start':
+        // Eine aeltere Bereitstellung kennt die Aktion nicht.
+        if (window.__ohneStart) return A({ ok: false, error: 'unbekannte Aktion' });
+        return A(startDaten());
       case 'stammdaten':
-        return A({ ok: true, kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] });
-      case 'we_liste': {
-        const eigen = DB.kopf ? [{
-          weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
-          kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
-          status: DB.status || 'angenommen', erfasser: 'Anna Muster',
-          gesendet: '' }] : [];
-        // Ein alter, abgeschlossener Eintrag eines Kollegen: ohne Suche
-        // taucht er nicht auf, mit Suche schon.
-        const fremd = { weNr: 'WE-2026-0009', datum: '2026-09-01', zeit: '07:15',
-          kunde: 'Alte Kunde AG', lieferant: 'Nordwind Logistik',
-          status: 'eingelagert', erfasser: 'Bob Meier',
-          gesendet: '2026-09-01 08:00' };
-        const s = String(d.suche || '').toLowerCase();
-        if (!s) return A({ ok: true, liste: eigen });
-        const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
-                            x.erfasser).toLowerCase().includes(s);
-        return A({ ok: true, liste: eigen.concat([fremd]).filter(passt) });
-      }
+        return A({ ok: true, kunden: stamm.kunden, lieferanten: stamm.lieferanten });
+      case 'we_liste':
+        return A({ ok: true, liste: liste() });
       case 'we_speichern': {
         DB.vorgaenge = DB.vorgaenge || {};
         if (d.vorgang && DB.vorgaenge[d.vorgang]) {
@@ -114,7 +134,8 @@ await page.addInitScript(() => {
         return A({ ok: true });
     }
   };
-});
+};
+await page.addInitScript(attrappe);
 
 const sichtbar = id => page.$eval(id, e => e.classList.contains('aktiv'));
 const feld = async (i, f, wert) =>
@@ -136,6 +157,20 @@ ok('Aufrufe gehen nacheinander',
    (await page.evaluate(() => window.__hoechstens)) === 1,
    'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Adminknopf sichtbar fuer Admin', !(await page.$eval('#st-admin', e => e.hidden)));
+
+// Anmelden ist EIN Weg zum Server. Vorher waren es drei — login, we_liste,
+// stammdaten — und jeder einzelne schleppt die Weiterleitung von /exec, die
+// Antwort von einem zweiten Host und moeglicherweise einen kalten
+// Skriptstart mit sich. Das war der groesste Teil der Wartezeit.
+const nachLogin = await page.evaluate(() => window.__gesendet.map(x => x.action));
+ok('Anmelden braucht einen einzigen Aufruf',
+   nachLogin.length === 1 && nachLogin[0] === 'login', nachLogin.join(','));
+ok('und bringt die Stammdaten gleich mit',
+   (await page.$$('#dl-kunden option')).length === 1 &&
+   (await page.$$('#dl-lieferanten option')).length === 1);
+ok('und die Uebersicht wartet nicht mehr',
+   !(await page.textContent('#st-liste')).includes('Wird geladen'),
+   await page.textContent('#st-liste'));
 
 // --- 2) Formular ------------------------------------------------------------
 console.log('\n2) Formular');
@@ -415,9 +450,14 @@ await page.waitForFunction(() =>
 ok('leere Suche sagt es', (await page.textContent('#st-liste')).includes('Nichts gefunden'));
 
 await page.fill('#st-suche', '');
+// Auf die Liste warten, nicht auf den Titel: den setzt ladeListe() sofort,
+// noch bevor der Aufruf hinausgeht — danach steht in der Liste «Wird
+// geladen …» und noch nicht der Eintrag. Der Titel als Signal liess diese
+// Pruefung etwa jedes fuenfte Mal zu frueh laufen.
 await page.waitForFunction(() =>
-  document.getElementById('st-titel').textContent === 'Offene und letzte');
+  document.getElementById('st-liste').textContent.includes('WE-2026-0001'));
 ok('leeres Feld zeigt wieder die Uebersicht',
+   (await page.textContent('#st-titel')) === 'Offene und letzte' &&
    (await page.textContent('#st-liste')).includes('WE-2026-0001'));
 
 await page.click('#st-admin');
@@ -670,6 +710,42 @@ ok('anhaltendes 404 nennt CONFIG.url',
 ok('und sagt, dass auch der zweite Versuch scheiterte',
    zweimal404.includes('zweite Versuch'), zweimal404);
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
+
+// --- 15) Aeltere Bereitstellung ---------------------------------------------
+// Front und Backend werden nicht im selben Augenblick aktualisiert. Kennt
+// das Skript «start» noch nicht, muss die App trotzdem starten — auf dem
+// alten Weg, langsamer, aber sie startet.
+console.log('\n15) Aeltere Bereitstellung ohne «start»');
+const alt = await browser.newPage();
+alt.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await alt.addInitScript(attrappe);
+await alt.addInitScript(() => { window.__ohneStart = true; });
+await alt.goto(APP);
+await alt.fill('#lg-email', 'anna@firma.ch');
+await alt.fill('#lg-pass', 'geheim123');
+await alt.click('#lg-senden');
+await alt.waitForSelector('#scr-start.aktiv');
+await alt.waitForFunction(() => document.querySelectorAll('#dl-kunden option').length > 0);
+ok('App startet auch ohne die neue Aktion',
+   await alt.$eval('#scr-start', e => e.classList.contains('aktiv')));
+ok('faellt auf die beiden alten Aufrufe zurueck',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(',') ===
+     'login,start,we_liste,stammdaten',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
+ok('Stammdaten stehen trotzdem',
+   (await alt.$$('#dl-kunden option')).length === 1);
+ok('auch dabei geht nur ein Aufruf zur Zeit',
+   (await alt.evaluate(() => window.__hoechstens)) === 1);
+
+// Das zweite Mal wird der vergebliche Weg nicht wiederholt.
+await alt.evaluate(() => { window.__gesendet.length = 0; });
+await alt.evaluate(() => start());
+await alt.waitForFunction(() => window.__gesendet.length >= 2);
+ok('der vergebliche Aufruf wird nicht wiederholt',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(',') ===
+     'we_liste,stammdaten',
+   (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
+await alt.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));

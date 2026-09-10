@@ -68,12 +68,43 @@ const MIN_ZEILEN     = 5;    // Positionszeilen im Formular, wie auf dem Papier
    2) Einstiegspunkte
    ============================================================ */
 
+/**
+ * Zeitmessung. Nicht Zierde, sondern die Voraussetzung dafuer, ueberhaupt
+ * das Richtige zu optimieren.
+ *
+ * In Apps Script kostet der Weg zum Server ein Vielfaches der Arbeit dort:
+ * der POST auf /exec wird weitergeleitet, die Antwort kommt von einem
+ * zweiten Host, und der Skriptstart kann kalt sein. Ohne diese Zahl sieht
+ * ein langsamer Aufruf immer nach einem langsamen Server aus, und man baut
+ * an der falschen Stelle um. Die App zieht «Server» von ihrer eigenen
+ * Wanduhr ab; was bleibt, ist der Weg.
+ *
+ * Jede Ausfuehrung hat ihre eigenen Globals — hier kann sich nichts
+ * zwischen zwei Aufrufen vermischen.
+ */
+const UHR = { t0: 0, teile: [] };
+
+function uhrStart() { UHR.t0 = Date.now(); UHR.teile = []; }
+
+function uhrPunkt(name, seit) {
+  UHR.teile.push(name + ' ' + (Date.now() - seit));
+}
+
+/** Haengt die Messung an die Antwort, ohne je ein Feld zu ueberschreiben. */
+function uhrAnhaengen(r) {
+  if (!r || typeof r !== 'object') return r;
+  r.ms = Date.now() - UHR.t0;
+  if (UHR.teile.length) r.teile = UHR.teile.join(' ');
+  return r;
+}
+
 function doPost(e) {
+  uhrStart();
   try {
     const d = JSON.parse(e.postData.contents);
-    return json(verteilen(d));
+    return json(uhrAnhaengen(verteilen(d)));
   } catch (err) {
-    return json({ ok: false, error: String(err) });
+    return json(uhrAnhaengen({ ok: false, error: String(err) }));
   }
 }
 
@@ -111,7 +142,9 @@ function verteilen(d) {
   // ohne Sitzung erreichbar
   if (aktion === 'login') return login(d);
 
+  const tAuth = Date.now();
   const u = sitzungPruefen(d.session);
+  uhrPunkt('auth', tAuth);
   if (!u) return { ok: false, error: 'session' };
 
   // Solange das zugestellte Passwort nicht ersetzt ist, geht nur der Wechsel
@@ -120,7 +153,17 @@ function verteilen(d) {
     return { ok: false, error: 'passwort_noetig' };
   }
 
+  const tAktion = Date.now();
+  try {
+    return ausfuehren(aktion, d, u);
+  } finally {
+    uhrPunkt(aktion, tAktion);
+  }
+}
+
+function ausfuehren(aktion, d, u) {
   switch (aktion) {
+    case 'start':         return startDaten(d, u);
     case 'passwort':      return passwortSetzen(d, u);
     case 'abmelden':      return abmelden(d, u);
     case 'stammdaten':    return stammdaten();
@@ -208,13 +251,25 @@ function login(d) {
     bl.getRange(zeile, k.LetzterLogin + 1).setValue(new Date());
 
     const pwGeaendert = String(dat[i][k.PwGeaendert]).toLowerCase() === 'true';
-    return {
+    const antwort = {
       ok: true,
       session: sitzungAnlegen(email),
       name: String(dat[i][k.Name] || ''),
       rolle: String(dat[i][k.Rolle] || ''),
       pwGeaendert: pwGeaendert
     };
+
+    // Die Startdaten gleich mitgeben: sonst folgt auf das Anmelden sofort
+    // ein zweiter Aufruf fuer genau diese Zeilen, und der Weg dorthin
+    // kostet mehr als das Lesen selbst. Wer sein Passwort noch wechseln
+    // muss, bekommt sie nicht — er sieht die Liste ohnehin nicht, und
+    // verteilen() laesst ihn bis dahin an keine andere Aktion.
+    if (pwGeaendert) {
+      const u = { email: email, name: antwort.name, rolle: antwort.rolle,
+                  pwGeaendert: true, zeile: zeile };
+      antwort.start = startDaten(d, u);
+    }
+    return antwort;
   }
   return { ok: false, error: 'login' };
 }
@@ -323,6 +378,36 @@ function sitzungenLoeschen(email) {
 function stammdaten() {
   return {
     ok: true,
+    kunden: listeAktiv(T.kunden),
+    lieferanten: listeAktiv(T.lieferanten)
+  };
+}
+
+/**
+ * Alles, was die App beim Oeffnen braucht, in EINER Antwort.
+ *
+ * Bisher waren das zwei Aufrufe nacheinander — `we_liste`, dann
+ * `stammdaten`. Nacheinander, weil zwei gleichzeitige Aufrufe fuer Apps
+ * Script zwei Ausfuehrungen sind und die zweite mit einer Fehlerseite
+ * zurueckkommen kann. Damit zahlte das Oeffnen den Weg zum Server zweimal,
+ * und der Weg ist hier das Teure: Weiterleitung von /exec, Antwort von
+ * einem zweiten Host, moeglicherweise kalter Skriptstart. Gemessen an
+ * einem gleich gebauten Projekt sind das rund drei Sekunden je Aufruf,
+ * waehrend die Arbeit im Skript in Millisekunden zaehlt.
+ *
+ * Ein Aufruf spart damit nicht nur den zweiten Weg, sondern auch die
+ * zweite Sitzungspruefung — die liest sonst `Sessions` und `Benutzer`
+ * ein zweites Mal.
+ *
+ * `we_liste` und `stammdaten` bleiben. Die Suche braucht die Liste allein,
+ * und eine aeltere App muss sich weiter anmelden koennen.
+ */
+function startDaten(d, u) {
+  const liste = weListe(d, u);
+  if (!liste.ok) return liste;
+  return {
+    ok: true,
+    liste: liste.liste,
     kunden: listeAktiv(T.kunden),
     lieferanten: listeAktiv(T.lieferanten)
   };

@@ -737,6 +737,7 @@ async function post(payload) {
     if (i) await warten(700);
 
     let res, text;
+    const begonnen = Date.now();
     try {
       // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht
       // beantwortet.
@@ -785,6 +786,17 @@ async function post(payload) {
                    'Rumpf verloren. Versuch ' + (i + 1) + '.');
       if (i === 0) continue;
       throw new Error('nur_post');
+    }
+
+    // Wanduhr minus Serverzeit ist der Weg: Weiterleitung von /exec,
+    // Antwort von einem zweiten Host, kalter Skriptstart. Ohne diese
+    // Trennung sieht jeder langsame Aufruf nach einem langsamen Server
+    // aus, und man baut an der falschen Stelle um.
+    if (antwort && antwort.ms != null) {
+      const gesamt = Date.now() - begonnen;
+      console.info('«' + payload.action + '» ' + gesamt + ' ms — Server ' +
+                   antwort.ms + ', Weg ' + (gesamt - antwort.ms) +
+                   (antwort.teile ? ' (' + antwort.teile + ')' : ''));
     }
     return antwort;
   }
@@ -890,7 +902,9 @@ async function anmelden() {
       localStorage.setItem('rolle', S.rolle);
       $('lg-pass').value = '';
       if (r.pwGeaendert === false) { zeigePasswort(true); return; }
-      await start();
+      // r.start kommt aus derselben Antwort — das Anmelden ist damit EIN
+      // Weg zum Server statt dreien.
+      await start(r.start);
     } else {
       m.textContent = {
         login:    'E-Mail oder Passwort ist falsch.',
@@ -977,34 +991,95 @@ async function passwortSpeichern() {
 
 /* ---------- Start ---------- */
 
-async function start() {
+/**
+ * @param vorab  Startdaten, die das Anmelden schon mitgebracht hat. Dann
+ *               geht dieser Aufruf gar nicht erst hinaus.
+ */
+async function start(vorab) {
   $('st-name').textContent = S.name;
   $('st-admin').hidden = S.rolle !== 'admin';
   zeigeScreen('scr-start');
 
   // Zwischenspeicher zuerst, damit die Listen sofort stehen
-  const cache = localStorage.getItem('stammdaten');
-  if (cache) {
-    try {
-      const c = JSON.parse(cache);
-      S.kunden = c.kunden || []; S.lieferanten = c.lieferanten || [];
-      fuelleStammdaten();
-    } catch (e) { /* beschaedigter Zwischenspeicher — wird gleich ersetzt */ }
-  }
+  const cache = stammdatenAusSpeicher();
 
-  // Nacheinander, nicht gleichzeitig. Zwei Aufrufe im selben Augenblick sind
-  // fuer Apps Script zwei Ausfuehrungen desselben Skripts; die zweite kann
-  // mit einer Fehlerseite statt mit JSON zurueckkommen. Beim Anmelden war das
-  // bisher jedes Mal so, und es sah aus wie ein Netzproblem.
-  await ladeListe();
+  if (vorab && vorab.ok) { startUebernehmen(vorab); return; }
+
+  // Eine Bereitstellung, die «start» einmal nicht kannte, kennt es auch
+  // beim naechsten Anmelden nicht. Ohne dieses Merken kostete jeder Start
+  // einen Weg zum Server, der sicher mit «unbekannte Aktion» endet.
+  if (!start._kennt) { await startEinzeln(cache); return; }
+
+  $('st-titel').textContent = 'Offene und letzte';
+  $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
 
   try {
+    // EIN Aufruf fuer Liste und Stammdaten. Zwei kosten den Weg zum Server
+    // zweimal, und der Weg ist hier das Teure — nicht das Lesen.
     // Alles ueber POST: in einer Adresse stuende der Sitzungstoken im
     // Ausfuehrungsprotokoll und im Verlauf des Browsers.
+    const r = await post({ action: 'start', session: S.session });
+
+    // Eine aeltere Bereitstellung kennt «start» nicht. Dann eben auf dem
+    // alten Weg: langsamer, aber die App startet. Sonst haenge das
+    // Anmelden davon ab, in welcher Reihenfolge Pages und Apps Script
+    // aktualisiert wurden.
+    if (r && r.error === 'unbekannte Aktion') {
+      start._kennt = false;
+      await startEinzeln(cache);
+      return;
+    }
+
+    if (!antwortOk(r)) {
+      $('st-zahl').textContent = '';
+      $('st-liste').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
+      return;
+    }
+    startUebernehmen(r);
+  } catch (e) {
+    $('st-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
+    if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
+  }
+}
+
+start._kennt = true;
+
+function stammdatenAusSpeicher() {
+  const roh = localStorage.getItem('stammdaten');
+  if (!roh) return null;
+  try {
+    const c = JSON.parse(roh);
+    S.kunden = c.kunden || []; S.lieferanten = c.lieferanten || [];
+    fuelleStammdaten();
+    return c;
+  } catch (e) { return null; }  // beschaedigt — wird gleich ersetzt
+}
+
+/** Antwort von «start»: Liste und Stammdaten in einem. */
+function startUebernehmen(r) {
+  if (r.kunden || r.lieferanten) {
+    S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
+    localStorage.setItem('stammdaten',
+      JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
+    fuelleStammdaten();
+  }
+  zeichneListe(r.liste || []);
+}
+
+/**
+ * Der alte Weg: zwei Aufrufe, nacheinander. Nacheinander und nicht
+ * gleichzeitig, weil zwei Aufrufe im selben Augenblick fuer Apps Script
+ * zwei Ausfuehrungen desselben Skripts sind und die zweite mit einer
+ * Fehlerseite statt mit JSON zurueckkommen kann.
+ */
+async function startEinzeln(cache) {
+  await ladeListe();
+  try {
     const r = await post({ action: 'stammdaten', session: S.session });
     if (!antwortOk(r)) return;
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
-    localStorage.setItem('stammdaten', JSON.stringify(r));
+    localStorage.setItem('stammdaten',
+      JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
     fuelleStammdaten();
   } catch (e) {
     if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
