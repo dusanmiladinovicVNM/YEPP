@@ -1102,6 +1102,15 @@ function ordnerName(id) {
   }
 }
 
+/**
+ * Der Text des Zugangsmails.
+ *
+ * Der Hinweis auf Safari steht bewusst weit oben und ausfuehrlich: die
+ * haeufigste Stolperfalle ist nicht der falsche Browser, sondern der Link
+ * im Mail selbst. Viele Mailprogramme oeffnen ihn in einem eigenen Fenster,
+ * und dort gibt es «Zum Home-Bildschirm» gar nicht — der Empfaenger kommt
+ * bis zur Anmeldung und danach nicht weiter, ohne zu wissen warum.
+ */
 function zugangText(name, pass) {
   return [
     'Guten Tag ' + name,
@@ -1111,11 +1120,25 @@ function zugangText(name, pass) {
     'Adresse:  ' + eigenschaft('PWA_URL'),
     'Passwort: ' + pass,
     '',
-    'Bitte auf dem iPad in Safari öffnen und anmelden. Beim ersten Mal',
-    'wählen Sie ein eigenes Passwort — das zugestellte gilt nur bis dahin.',
+    'WICHTIG: Die Adresse bitte ausschliesslich mit Safari öffnen.',
     '',
-    'Für das Symbol auf dem Home-Bildschirm: unten auf «Teilen» tippen,',
-    'dann «Zum Home-Bildschirm».',
+    'Tippen Sie den Link nicht hier in der Mail an. Viele Mailprogramme',
+    'öffnen ihn in einem eigenen Fenster, und dort lässt sich das Symbol',
+    'nicht auf den Home-Bildschirm legen. Stattdessen:',
+    '',
+    '  1. Die Adresse oben markieren und kopieren',
+    '  2. Safari öffnen',
+    '  3. Adresse in die Leiste oben einfügen und öffnen',
+    '',
+    'Jeder Browser merkt sich die Anmeldung für sich. Melden Sie sich in',
+    'einem anderen Browser an, müssen Sie es in Safari noch einmal tun.',
+    '',
+    'Beim ersten Mal wählen Sie ein eigenes Passwort — das zugestellte gilt',
+    'nur bis dahin.',
+    '',
+    'Symbol auf den Home-Bildschirm: in Safari unten auf «Teilen» tippen,',
+    'dann «Zum Home-Bildschirm». Danach öffnen Sie den Wareneingang immer',
+    'über dieses Symbol, nicht mehr über den Browser.',
     '',
     'Freundliche Grüsse'
   ].join('\n');

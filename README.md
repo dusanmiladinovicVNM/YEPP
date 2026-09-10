@@ -380,6 +380,14 @@ Prvom adminu tu vrednost upisuješ ručno; on dalje može postavljati druge.
 Admin može dodati korisnika, deaktivirati ga i ponovo aktivirati, poslati
 novu lozinku, dodeliti ili oduzeti admin prava.
 
+**Pristupni mejl insistira na Safariju.** Ne zato što drugi browseri ne
+rade, nego zato što mnogi mejl programi otvaraju link u **sopstvenom
+prozoru** — a tamo opcije „Zum Home-Bildschirm" nema. Radnik stigne do
+prijave i dalje ne zna zašto ne ide. Zato mejl kaže: adresu kopirati,
+otvoriti Safari, zalepiti. Uz to i da svaki browser pamti prijavu za sebe.
+Tri provere u `backend.mjs` čuvaju te rečenice od tihog ispadanja pri
+sledećoj izmeni teksta.
+
 **Novi korisnik dobija mejl sa lozinkom** — upiši ime i adresu, čekiraj
 *Zugangsmail verschicken* i pritisni **Benutzer anlegen**. Lozinka se posle
 toga prikazuje **samo jednom**, za slučaj da mejl ne prođe; tekst poruke se
@@ -413,7 +421,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **432 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **436 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji

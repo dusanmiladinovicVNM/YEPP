@@ -603,8 +603,16 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
 
   const ID = '1TabelleTabelleTabelleTabelleTabelle';
   ok('Wert kommt aus den Eigenschaften', ctx.eigenschaft('SHEET_ID') === ID);
-  ok('PWA-Adresse steht im Zugangsmail',
-     ctx.zugangText('Eva', 'Pass1234').includes('https://wareneingang.example/'));
+  const mail = ctx.zugangText('Eva', 'Pass1234');
+  ok('PWA-Adresse steht im Zugangsmail', mail.includes('https://wareneingang.example/'));
+  ok('Passwort steht drin', mail.includes('Pass1234'));
+  // Ohne diesen Hinweis kommt der Empfaenger bis zur Anmeldung und danach
+  // nicht weiter: im Fenster des Mailprogramms gibt es kein «Zum
+  // Home-Bildschirm». Der Satz darf bei einer Textaenderung nicht wegfallen.
+  ok('Safari wird verlangt', /ausschliesslich mit Safari/.test(mail));
+  ok('vor dem Antippen des Links wird gewarnt',
+     /nicht hier in der Mail an/.test(mail));
+  ok('der Weg ueber Kopieren steht drin', /kopieren/.test(mail));
 
   // Fehlt ein Wert, muss die Meldung sagen, wo er hingehoert — sonst sucht
   // man ihn im Code, wo er seit dieser Version nicht mehr steht.
