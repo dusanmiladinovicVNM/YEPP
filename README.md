@@ -30,9 +30,9 @@ Aplikacija to preslikava: ko kvitira, njegovo ime i serversko vreme se upisuju.
 ```
 index.html                 CIJELA aplikacija: CSS, HTML, logika, konfiguracija, logo
 manifest.webmanifest       ime i ikone za dodavanje na home screen
-icons/icon-192.png         ← zamijeni
-icons/icon-512.png         ← zamijeni
-icons/icon-maskable-512.png ← zamijeni
+icons/icon-192.png         ikone za home screen, iste kao u Spesenu
+icons/icon-512.png
+icons/icon-maskable-512.png
 
 apps-script/Code.gs        ceo backend — prijava, unos, kvitiranje, xlsx, CSV
 
@@ -54,9 +54,20 @@ Sve što se menja nalazi se u `index.html`, u tri označena bloka:
 
 | Blok | Šta je unutra |
 |---|---|
-| `:root` u `<style>` | boje; akcentna žuta je `#E0A32E` |
-| `<symbol id="logo">` | logotip — zameni sadržaj svojim SVG-om |
+| `:root` u `<style>` | boje; akcentna je maslinasta `#8FA426`, kao u Spesenu |
+| `<symbol id="logo">` | wordmark; `#logo-zeichen` je isti crtež, samo isečen |
 | `const CONFIG` | Web-App-URL iz Apps Scripta |
+
+**Izgled je isti kao u Spesenu** — ista maslinasta `#8FA426`, isti wordmark,
+iste ikone, isti razmaci. Jedina namerna razlika je žuta `--gelb`: ona nije
+kućna boja nego žuta kolona `Bestehend` sa papira, i u izvezenom Excelu stoji
+isto tako. Zato je nose samo ta kućica i njena oznaka.
+
+Jedna sitnica je usput ispravljena, ne prepisana: u Spesenu `.sekundaer`
+gubi od `button.gross` po specifičnosti, pa sporedna dugmad tamo nemaju
+okvir i izgledaju kao goli tekst. Ovde pravilo stoji kao `.gross`, pa okvir
+zaista i postoji. Ako hoćeš da budu identična do piksela, isto se popravlja
+i u Spesenu — jedna reč.
 
 **Bez ijednog spoljnog zahteva.** Stranica ne povlači font sa
 `fonts.googleapis.com` — taj zahtev je blokirao prvi prikaz baš tamo gde je
@@ -194,11 +205,8 @@ nijedan od njih — on povlači CSV i ne zna ni za mejl ni za Drive.
 ## Faza 4 — PWA (~15 min)
 
 1. `index.html` → u bloku `const CONFIG` upiši Web-App-URL
-2. `index.html` → u `<symbol id="logo">` zalepi svoj SVG logotip;
-   svetla verzija, jer taman logo na crnoj podlozi nestaje
-3. `icons/` → kvadratne PNG ikone, **samo znak bez teksta**, oko 10%
-   praznog ruba. Priložene su privremene — zameni ih.
-4. Objavi sadržaj repoa na statični host sa HTTPS —
+2. Logo i ikone su već unutra — isti kao u Spesenu, ništa se ne dira
+3. Objavi sadržaj repoa na statični host sa HTTPS —
    Cloudflare Pages, Netlify, GitHub Pages
 
 Kasnije izmene: `index.html` uredi direktno u GitHub browseru, ikonica
