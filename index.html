@@ -829,6 +829,22 @@ function verbindungText(e) {
   return 'Keine Verbindung. Bitte Internetverbindung prüfen.';
 }
 
+/**
+ * Der Server hat geantwortet und abgelehnt. Bekannte Gruende bekommen einen
+ * Satz, alle anderen den rohen Grund dahinter — «Nicht geladen» allein
+ * verschweigt genau das, was man wissen muss, und schickt einen auf die
+ * Suche nach einem Netzproblem, das es nicht gibt.
+ */
+function abgelehntText(r) {
+  return {
+    nur_post: 'Der Aufruf kam beim Server ohne Inhalt an. Bitte noch einmal ' +
+              'versuchen.',
+    nicht_gefunden: 'Dieser Wareneingang wurde nicht gefunden.',
+    'keine Berechtigung': 'Dafür fehlen die Rechte.',
+    passwort_noetig: 'Bitte zuerst ein eigenes Passwort setzen.'
+  }[r.error] || ('Nicht geladen. Der Server meldet: ' + r.error);
+}
+
 function sessionWeg() {
   localStorage.clear();
   S.session = '';
@@ -1019,7 +1035,10 @@ async function ladeListe() {
   try {
     const r = await post({ action: 'we_liste', session: S.session, suche: suche });
     if (!antwortOk(r)) {
-      $('st-liste').innerHTML = '<div class="leer">Nicht geladen.</div>';
+      // Der Zaehler stammt sonst noch vom letzten geglueckten Aufruf und
+      // behauptet Eintraege, die gerade niemand sehen kann.
+      $('st-zahl').textContent = '';
+      $('st-liste').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
       return;
     }
     zeichneListe(r.liste || []);
@@ -1307,7 +1326,7 @@ async function detailOeffnen(weNr) {
   try {
     const r = await post({ action: 'we_detail', session: S.session, weNr: weNr });
     if (!antwortOk(r)) {
-      $('dt-schritte').innerHTML = '<div class="leer">Nicht gefunden.</div>';
+      $('dt-schritte').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
       return;
     }
     S.detail = r;

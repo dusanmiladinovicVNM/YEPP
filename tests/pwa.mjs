@@ -633,6 +633,31 @@ ok('und die Meldung bittet um einen neuen Versuch',
 ok('ohne die Bereitstellung zu verdaechtigen',
    !immerGet.text.includes('Bereitstellung'), immerGet.text);
 
+// Lehnt der Server ab, muss der Grund sichtbar sein. «Nicht geladen»
+// allein schickt einen auf die Suche nach einem Netzproblem, das es nicht
+// gibt — und der Zaehler darf nicht weiter Eintraege behaupten.
+const abgelehnt = await page.evaluate(async () => {
+  document.getElementById('st-zahl').textContent = '2 Einträge';
+  window.fetch = async () => ({ status: 200, text: async () =>
+    JSON.stringify({ ok: false, error: 'Exception: Blatt fehlt: Positionen' }) });
+  localStorage.setItem('session', 'tok');
+  await ladeListe();
+  return { liste: document.getElementById('st-liste').textContent,
+           zahl: document.getElementById('st-zahl').textContent };
+});
+ok('abgelehnter Aufruf nennt den Grund',
+   abgelehnt.liste.includes('Blatt fehlt: Positionen'), abgelehnt.liste);
+ok('der Zaehler behauptet nichts mehr', abgelehnt.zahl === '', abgelehnt.zahl);
+
+const bekannt = await page.evaluate(async () => {
+  window.fetch = async () => ({ status: 200, text: async () =>
+    JSON.stringify({ ok: false, error: 'nur_post' }) });
+  await ladeListe();
+  return document.getElementById('st-liste').textContent;
+});
+ok('bekannter Grund bekommt einen Satz statt eines Codes',
+   bekannt.includes('ohne Inhalt') && !bekannt.includes('nur_post'), bekannt);
+
 // Bleibt es auch beim zweiten Mal bei 404, sagt die Meldung, was zu tun ist
 const zweimal404 = await page.evaluate(async () => {
   window.fetch = async () => ({ status: 404, text: async () => '<!DOCTYPE html>' });
