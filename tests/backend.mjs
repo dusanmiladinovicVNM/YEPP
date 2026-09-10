@@ -674,6 +674,134 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
      ctx.einrichtungPruefen().includes('Blaetter FEHLEN: Sessions'));
 }
 
+console.log('\n17) Anmeldung verraet nichts, Sperre gibt neue Versuche');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const bl = ss.blaetter.Benutzer, k = ctx.spalten(bl.daten[0]);
+  const salt = ctx.zufall(16);
+  const neu = (email, aktiv) => bl.appendRow(
+    [email, 'Eva Weber', ctx.hash('geheim123', salt), salt, aktiv, 0, '', '', true, '']);
+  neu('eva@firma.ch', true);
+  neu('aus@firma.ch', false);
+
+  // Wer das Passwort nicht kennt, darf nicht erfahren, ob es das Konto gibt
+  ok('unbekanntes Konto: login',
+     ctx.login({ email: 'niemand@firma.ch', passwort: 'egal12345' }).error === 'login');
+  ok('deaktiviertes Konto ohne Passwort: login',
+     ctx.login({ email: 'aus@firma.ch', passwort: 'falsch' }).error === 'login');
+  ok('deaktiviertes Konto mit Passwort: inaktiv',
+     ctx.login({ email: 'aus@firma.ch', passwort: 'geheim123' }).error === 'inaktiv');
+
+  // Fuenf Fehlversuche sperren, auch das richtige Passwort kommt nicht durch
+  for (let i = 0; i < 5; i++) ctx.login({ email: 'eva@firma.ch', passwort: 'falsch' });
+  const zeile = bl.daten.findIndex(z => z[k.Email] === 'eva@firma.ch');
+  ok('nach fuenf Fehlversuchen gesperrt', !!bl.daten[zeile][k.GesperrtBis]);
+  ok('richtiges Passwort meldet die Sperre',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' }).error === 'gesperrt');
+  ok('falsches Passwort verraet die Sperre nicht',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'falsch' }).error === 'login');
+
+  // Abgelaufene Sperre: der Zaehler faengt von vorn an, sonst sperrt der
+  // erste Tippfehler nach der Wartezeit sofort erneut
+  bl.daten[zeile][k.GesperrtBis] = new Date(Date.now() - 60000);
+  ok('nach Ablauf zaehlt es neu',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'falsch' }).error === 'login');
+  ok('Zaehler steht wieder bei eins', Number(bl.daten[zeile][k.Fehler]) === 1,
+     String(bl.daten[zeile][k.Fehler]));
+  ok('und die Sperre ist weg', !bl.daten[zeile][k.GesperrtBis]);
+  ok('anmelden geht wieder',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' }).ok === true);
+}
+
+console.log('\n18) Passwort-Hash mit Runden');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const bl = ss.blaetter.Benutzer, k = ctx.spalten(bl.daten[0]);
+  const salt = ctx.zufall(16);
+
+  ok('neuer Hash traegt die Marke', ctx.hash('geheim123', salt).indexOf('v2$') === 0);
+  ok('gleiches Passwort, gleicher Hash',
+     ctx.hash('geheim123', salt) === ctx.hash('geheim123', salt));
+  ok('anderes Salz, anderer Hash', ctx.hash('geheim123', ctx.zufall(16))
+     !== ctx.hash('geheim123', salt));
+
+  // Die alte Fassung — ein einziger Durchgang, ohne Marke — muss weiter
+  // gelten, sonst sperrt diese Aenderung alle aus.
+  const alt = ctx.digest(salt + 'geheim123');
+  ok('alte Fassung wird angenommen', ctx.hashPasst('geheim123', salt, alt) === true);
+  ok('alte Fassung, falsches Passwort', ctx.hashPasst('falsch', salt, alt) === false);
+
+  bl.appendRow(['eva@firma.ch', 'Eva', alt, salt, true, 0, '', '', true, '']);
+  ok('anmelden mit altem Hash',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' }).ok === true);
+  const zeile = bl.daten.findIndex(z => z[k.Email] === 'eva@firma.ch');
+  ok('Hash im Vorbeigehen ersetzt',
+     String(bl.daten[zeile][k.PassHash]).indexOf('v2$') === 0,
+     String(bl.daten[zeile][k.PassHash]).slice(0, 12));
+  ok('danach gilt die neue Fassung',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' }).ok === true);
+}
+
+console.log('\n19) Suche, GET, Foto, Versandvermerk');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const bob = ctx.sitzungPruefen('tokB');
+
+  const meins = ctx.weSpeichern({ kunde: 'Meier AG', lieferant: 'Wenger',
+                                  positionen: POS }, u).weNr;
+  const bobs = ctx.weSpeichern({ kunde: 'Alpina Food', lieferant: 'Nordwind',
+                                 positionen: POS, schritte: ['angenommen'] }, bob).weNr;
+  ctx.weSchritt({ weNr: bobs, schritt: 'gezaehlt' }, bob);
+  ctx.weSchritt({ weNr: bobs, schritt: 'eingelagert' }, bob);
+  const weg = ctx.weSpeichern({ kunde: 'Storniert AG', positionen: POS }, u).weNr;
+  ctx.weStorno({ weNr: weg }, u);
+
+  // Ohne Suche bleibt der abgeschlossene Eintrag des Kollegen aussen vor
+  const offen = ctx.weListe({}, u).liste.map(x => x.weNr);
+  ok('eigener Eintrag in der Liste', offen.indexOf(meins) >= 0);
+  ok('fremder abgeschlossener nicht', offen.indexOf(bobs) < 0, JSON.stringify(offen));
+
+  // Mit Suche schon — sonst waere ein alter Beleg aus der App unerreichbar
+  const treffer = s => ctx.weListe({ suche: s }, u).liste.map(x => x.weNr);
+  ok('Suche findet den fremden Eintrag', treffer('alpina').indexOf(bobs) >= 0);
+  ok('Suche ist unabhaengig von Gross- und Kleinschreibung',
+     treffer('ALPINA').indexOf(bobs) >= 0);
+  ok('Suche ueber die Nummer', treffer(meins).indexOf(meins) >= 0);
+  ok('Suche ueber den Lieferanten', treffer('nordwind').indexOf(bobs) >= 0);
+  ok('Suche ueber den Erfasser', treffer('bob meier').indexOf(bobs) >= 0);
+  ok('Storniertes bleibt auch in der Suche weg', treffer('storniert').length === 0);
+  ok('nichts gefunden gibt eine leere Liste', treffer('gibtsnicht').length === 0);
+
+  // GET fuehrt keine Aktionen mehr aus — kein Token in einer Adresse
+  const antwort = ctx.doGet({ parameter: { action: 'we_liste', session: 'tokA' } });
+  const text = typeof antwort === 'string' ? antwort : antwort.t;
+  ok('GET ohne format=csv fuehrt nichts aus', text.indexOf('nur den CSV-Export') >= 0, text);
+
+  // Endung nach Bildtyp
+  ctx.parameterSetzen('FotoOrdner', '1FotoFotoFotoFotoFotoFotoFo');
+  ctx.__dateien.length = 0;
+  ctx.weSpeichern({ kunde: 'Mit Bild', positionen: POS,
+                    foto: 'data:image/png;base64,QUJD' }, u);
+  ok('PNG bekommt die Endung png',
+     String(ctx.__dateien[0]).endsWith('_Lieferschein.png'), String(ctx.__dateien[0]));
+  ctx.__dateien.length = 0;
+  ctx.weSpeichern({ kunde: 'Mit Bild', positionen: POS,
+                    foto: 'data:image/jpeg;base64,QUJD' }, u);
+  ok('JPEG bleibt jpg',
+     String(ctx.__dateien[0]).endsWith('_Lieferschein.jpg'), String(ctx.__dateien[0]));
+
+  // Versandvermerk landet in der richtigen Zeile
+  ctx.parameterSetzen('MailAn', 'lager@firma.ch');
+  ok('Versand bestaetigt', ctx.weSenden({ weNr: meins }, u).ok === true);
+  const w = ss.blaetter.Wareneingang, k = ctx.spalten(w.daten[0]);
+  const zeile = w.daten.find(z => z[k.WeNr] === meins);
+  ok('Gesendet vermerkt', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(String(zeile[k.Gesendet])),
+     String(zeile[k.Gesendet]));
+  ok('Vermerk steht in der Liste',
+     ctx.weListe({ suche: meins }, u).liste[0].gesendet === String(zeile[k.Gesendet]));
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

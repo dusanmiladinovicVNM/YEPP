@@ -170,6 +170,18 @@ melden Sie sich bitte — das lässt sich korrigieren.
 
 ---
 
+## Einen älteren Wareneingang finden
+
+Die Übersicht zeigt Ihre eigenen Erfassungen und alles, was im Team noch
+offen ist. Ältere oder bereits abgeschlossene Lieferungen finden Sie über
+das **Suchfeld** darüber — es sucht in Nummer, Kunde, Lieferant und im Namen
+dessen, der erfasst hat. Feld leeren, und die gewohnte Übersicht steht
+wieder da.
+
+Ein Eintrag mit der Marke **gesendet** wurde schon als Excel verschickt.
+
+---
+
 ## Das Formular verschicken
 
 **Als Excel senden** schickt das ausgefüllte Formular als Excel-Datei an die

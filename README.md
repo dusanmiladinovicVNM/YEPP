@@ -58,6 +58,11 @@ Sve što se menja nalazi se u `index.html`, u tri označena bloka:
 | `<symbol id="logo">` | logotip — zameni sadržaj svojim SVG-om |
 | `const CONFIG` | Web-App-URL iz Apps Scripta |
 
+**Bez ijednog spoljnog zahteva.** Stranica ne povlači font sa
+`fonts.googleapis.com` — taj zahtev je blokirao prvi prikaz baš tamo gde je
+mreža slaba. Ako je Open Sans na uređaju, koristi se; inače sistemski font,
+što je na iPadu ionako prirodniji izgled.
+
 **Bez service workera.** Aplikacija ionako traži mrežu za svaku radnju,
 pa keš donosi samo problem zastarele verzije. Bez njega je izmena vidljiva
 odmah po otpremanju, bez podizanja verzije keša i bez tvrdog osvežavanja
@@ -237,6 +242,16 @@ Prazna polja ostaju prazna, kvitiranje ide svejedno.
 naknadno kvitiranje `Angenommen` ne vraća eingelagert dokument na početak.
 Dokument bez ijednog potpisa ima status `erfasst`.
 
+**Pretraga** iznad liste traži po broju, kupcu, dobavljaču i imenu onoga ko
+je uneo. Bez nje lista pokazuje tvoje unose i sve što je timu još otvoreno —
+najnovijih sto. Sa pretragom se gleda ceo bestand, uključujući tuđe završene
+dokumente: inače beleg od prošlog meseca iz aplikacije više ne bi bio
+dostupan. Stornirani ne izlaze ni tako.
+
+U listi se ime onoga ko je uneo prikazuje **samo kad to nisi ti**, a već
+poslati dokument nosi oznaku `gesendet` — da se isti obrazac ne pošalje
+dvaput bez namere.
+
 **Als Excel senden** može se pozvati u bilo kom trenutku i više puta.
 Šalje trenutno stanje; ako se pošalje pre nego što je sve kvitirano,
 ta polja u tabeli su prazna, isto kao na papiru.
@@ -348,6 +363,19 @@ prijavi — odjavi se i prijavi ponovo.
 **Sopstveni nalog ne može da se deaktivira ni da sebi oduzme prava.**
 Bez toga bi jedan pogrešan klik ostavio firmu bez ijednog admina.
 
+**Prijava ne odaje da li nalog postoji.** Dok lozinka nije tačna, odgovor je
+uvek `login` — i za nepoznatu adresu, i za deaktiviran nalog, i za zaključan.
+Tek kad lozinka prođe, poruka sme reći više (`inaktiv`, `gesperrt`); ko je ne
+zna, ne dobija potvrdu da je pogodio adresu.
+
+**Posle isteka blokade brojač kreće od nule.** Inače bi prvi tipfeler posle
+petnaest minuta čekanja odmah vratio blokadu.
+
+**Lozinke se hešuju u 1000 prolaza** (`HASH_RUNDEN`), sa oznakom `v2$` na
+početku. Jedan prolaz SHA-256 je toliko brz da je ukradena tabela praktično
+jednaka lozinkama. Stari zapisi bez oznake i dalje važe i **zamenjuju se sami
+pri prvoj sledećoj prijavi** — niko nije zaključan zbog ove izmene.
+
 **Provera prava je na serveru, ne u aplikaciji.** Svaka `admin_*` akcija
 prolazi kroz istu proveru role iz sesije. To što dugme kod običnog
 korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
@@ -356,7 +384,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **362 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **405 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -419,6 +447,11 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |
 | 27 | Zameniti ceo `Code.gs` novom verzijom | radi bez unošenja ijedne vrednosti |
 | 28 | Obrisati `TOKEN_READ` iz skripteigenschaften | CSV izlaz vraća `kein Zugriff` |
+| 29 | Prijava na nepostojeću adresu i na deaktiviran nalog | ista poruka u oba slučaja |
+| 30 | Sačekati da blokada istekne, pa jednom pogrešiti | ne zaključava odmah |
+| 31 | Prijava naloga napravljenog pre ove verzije | prolazi; heš u tabeli dobija `v2$` |
+| 32 | Pretraga po imenu dobavljača od pre dva meseca | nađe i tuđ završen dokument |
+| 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |

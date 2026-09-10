@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 /* ---------- Tabellen-Gerippe ---------- */
 
@@ -166,10 +166,14 @@ function laden(ss) {
     MailApp: { sendEmail: (...a) => ctx.__mails.push(a) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'S' },
-      computeDigest: (_, s) => Array.from(s).map(c => c.charCodeAt(0)),
+      // Echtes SHA-256: die Spielzeugfassung von frueher lieferte pro Runde
+      // ein laengeres Ergebnis, was beim wiederholten Hashen ausufert.
+      computeDigest: (_, s) =>
+        Array.from(createHash('sha256').update(String(s), 'utf8').digest()),
       base64Encode: b => Buffer.from(b).toString('base64'),
       base64Decode: s => Buffer.from(s, 'base64'),
-      newBlob: () => ({}),
+      // Name und Typ merken: daran haengt, ob die Endung zum Bild passt.
+      newBlob: (bytes, typ, name) => ({ typ: typ, name: name }),
       getUuid: () => randomUUID(),
       formatDate: (d, _z, m) => {
         const p = x => String(x).padStart(2, '0');
@@ -187,12 +191,15 @@ function laden(ss) {
     },
     __mails: [],
     __sperren: [],
-    __eigenschaften: eigenschaften
+    __eigenschaften: eigenschaften,
+    __dateien: []
   };
   function ordner(id) {
     return { getName: () => 'Ordner ' + String(id || 'X'),
              getFoldersByName: () => ({ hasNext: () => false }),
-             createFolder: () => ordner(id), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
+             createFolder: () => ordner(id),
+             createFile: b => { ctx.__dateien.push(b && b.name); 
+                                return { getUrl: () => 'https://drive/x' }; } };
   }
   vm.createContext(ctx);
   vm.runInContext(quelle, ctx);

@@ -10,7 +10,6 @@
 <title>Wareneingang</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    Farben — hier anpassen
@@ -31,7 +30,10 @@ html,body{margin:0;height:100%}
 body{
   background:var(--bg);
   color:var(--text);
-  font-family:"Open Sans",-apple-system,BlinkMacSystemFont,sans-serif;
+  /* Systemschrift statt einer Anfrage an fonts.googleapis.com: die haette
+     das erste Bild blockiert, gerade dort, wo das Netz schwach ist. Ist
+     Open Sans auf dem Geraet, wird es genommen. */
+  font-family:"Open Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   font-size:15px;
   line-height:1.35;
   overscroll-behavior-y:none;
@@ -187,6 +189,7 @@ button.sekundaer:active{background:#1d1d1d}
 .eintrag .unten{font-size:11px;color:var(--grau);margin-top:3px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .eintrag .zellen{min-width:0}
+.eintrag .marken{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .trenn{color:var(--rand);font-weight:400;padding:0 2px}
 .leer{color:var(--grau);text-align:center;padding:48px 0;font-size:14px}
 .marke{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
@@ -195,6 +198,8 @@ button.sekundaer:active{background:#1d1d1d}
 .marke.aus{background:rgba(200,64,64,.18);color:#E88}
 .marke.adm{background:rgba(224,163,46,.18);color:var(--akzent)}
 .marke.neu{background:rgba(255,255,255,.08);color:var(--grau)}
+.marke.versandt{background:rgba(255,255,255,.08);color:var(--grau)}
+#st-suche{margin-bottom:10px}
 
 /* ---------- Detail ---------- */
 .schritt{
@@ -369,9 +374,12 @@ button.sekundaer:active{background:#1d1d1d}
     </div>
 
     <div class="pos-kopf">
-      <h2>Offene und letzte</h2>
+      <h2 id="st-titel">Offene und letzte</h2>
       <span class="zahl" id="st-zahl"></span>
     </div>
+
+    <input id="st-suche" type="search" autocapitalize="off" autocorrect="off"
+           placeholder="Suchen: Nummer, Kunde, Lieferant, Erfasser">
 
     <div class="liste" id="st-liste"></div>
 
@@ -706,13 +714,6 @@ async function post(payload) {
   }
 }
 
-async function get(params) {
-  if (!CONFIG.url) throw new Error('nicht_verbunden');
-  const q = new URLSearchParams(Object.assign({ session: S.session }, params));
-  const res = await fetch(CONFIG.url + '?' + q.toString());
-  return res.json();
-}
-
 /**
  * «Keine Verbindung» ist die haeufigste Luege einer solchen App: meist ist
  * nicht das Netz weg, sondern die Adresse fehlt oder die Bereitstellung ist
@@ -881,7 +882,9 @@ async function start() {
   ladeListe();
 
   try {
-    const r = await get({ action: 'stammdaten' });
+    // Alles ueber POST: in einer Adresse stuende der Sitzungstoken im
+    // Ausfuehrungsprotokoll und im Verlauf des Browsers.
+    const r = await post({ action: 'stammdaten', session: S.session });
     if (!antwortOk(r)) return;
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     localStorage.setItem('stammdaten', JSON.stringify(r));
@@ -909,9 +912,11 @@ const STATUS_TEXT = {
 };
 
 async function ladeListe() {
+  const suche = $('st-suche').value.trim();
+  $('st-titel').textContent = suche ? 'Suche' : 'Offene und letzte';
   $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   try {
-    const r = await post({ action: 'we_liste', session: S.session });
+    const r = await post({ action: 'we_liste', session: S.session, suche: suche });
     if (!antwortOk(r)) {
       $('st-liste').innerHTML = '<div class="leer">Nicht geladen.</div>';
       return;
@@ -925,7 +930,9 @@ async function ladeListe() {
 function zeichneListe(liste) {
   $('st-zahl').textContent = liste.length ? liste.length + ' Einträge' : '';
   if (!liste.length) {
-    $('st-liste').innerHTML = '<div class="leer">Noch nichts erfasst.</div>';
+    $('st-liste').innerHTML = '<div class="leer">' +
+      ($('st-suche').value.trim() ? 'Nichts gefunden.' : 'Noch nichts erfasst.') +
+      '</div>';
     return;
   }
 
@@ -936,15 +943,23 @@ function zeichneListe(liste) {
     const rest  = [
       esc(datumText(w.datum)) + ' ' + esc(w.zeit),
       esc(w.weNr),
-      w.lieferant && w.kunde ? esc(w.kunde) : ''
+      w.lieferant && w.kunde ? esc(w.kunde) : '',
+      // Der Name nur bei fremden Erfassungen — beim eigenen Eintrag waere
+      // er nur Fuellung, und in der Suche steht sonst alles voll davon.
+      w.erfasser && w.erfasser !== S.name ? esc(w.erfasser) : ''
     ].filter(Boolean).join(' <span class="trenn">|</span> ');
     return '<div class="eintrag" data-nr="' + esc(w.weNr) + '">' +
       '<div class="zellen">' +
         '<div class="oben"><span>' + esc(titel) + '</span></div>' +
         '<div class="unten">' + rest + '</div>' +
       '</div>' +
-      '<span class="marke ' + (fertig ? 'fertig' : 'offen') + '">' +
-        esc(STATUS_TEXT[w.status] || w.status) + '</span>' +
+      // «gesendet» sichtbar, damit niemand dasselbe Formular zweimal
+      // verschickt, ohne es zu wollen.
+      '<div class="marken">' +
+        '<span class="marke ' + (fertig ? 'fertig' : 'offen') + '">' +
+          esc(STATUS_TEXT[w.status] || w.status) + '</span>' +
+        (w.gesendet ? '<span class="marke versandt">gesendet</span>' : '') +
+      '</div>' +
     '</div>';
   }).join('');
 
@@ -1560,6 +1575,11 @@ $('pw-neu2').addEventListener('keydown', e => {
   if (e.key === 'Enter') passwortSpeichern();
 });
 
+$('st-suche').addEventListener('input', () => {
+  // Kurz warten, sonst laeuft je Tastendruck eine Abfrage.
+  clearTimeout(ladeListe._t);
+  ladeListe._t = setTimeout(ladeListe, 300);
+});
 $('st-neu').addEventListener('click', formularNeu);
 $('st-admin').addEventListener('click', adminOeffnen);
 $('st-passwort').addEventListener('click', () => zeigePasswort(false));

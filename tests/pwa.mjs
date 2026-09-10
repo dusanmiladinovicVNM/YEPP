@@ -19,6 +19,7 @@ page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.messag
 // --- Apps Script nachbilden -------------------------------------------------
 await page.addInitScript(() => {
   window.__gesendet = [];
+  window.__methoden = [];
   const DB = { kopf: null, positionen: [] };
   // Der weiteste quittierte Schritt, wie statusAus() im Backend.
   const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
@@ -29,6 +30,7 @@ await page.addInitScript(() => {
     if (opt && opt.body) d = JSON.parse(opt.body);
     else d = Object.fromEntries(new URL('http://x/' + url.replace(/^[^?]*/, '')).searchParams);
     window.__gesendet.push(d);
+    window.__methoden.push(opt && opt.method ? opt.method : 'GET');
 
     const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
 
@@ -38,11 +40,24 @@ await page.addInitScript(() => {
                    rolle: 'admin', pwGeaendert: true });
       case 'stammdaten':
         return A({ ok: true, kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] });
-      case 'we_liste':
-        return A({ ok: true, liste: DB.kopf ? [{
+      case 'we_liste': {
+        const eigen = DB.kopf ? [{
           weNr: 'WE-2026-0001', datum: '2026-09-09', zeit: '08:30',
           kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
-          status: DB.status || 'angenommen', erfasser: 'Anna Muster', gesendet: '' }] : [] });
+          status: DB.status || 'angenommen', erfasser: 'Anna Muster',
+          gesendet: '' }] : [];
+        // Ein alter, abgeschlossener Eintrag eines Kollegen: ohne Suche
+        // taucht er nicht auf, mit Suche schon.
+        const fremd = { weNr: 'WE-2026-0009', datum: '2026-09-01', zeit: '07:15',
+          kunde: 'Alte Kunde AG', lieferant: 'Nordwind Logistik',
+          status: 'eingelagert', erfasser: 'Bob Meier',
+          gesendet: '2026-09-01 08:00' };
+        const s = String(d.suche || '').toLowerCase();
+        if (!s) return A({ ok: true, liste: eigen });
+        const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
+                            x.erfasser).toLowerCase().includes(s);
+        return A({ ok: true, liste: eigen.concat([fremd]).filter(passt) });
+      }
       case 'we_speichern': {
         DB.vorgaenge = DB.vorgaenge || {};
         if (d.vorgang && DB.vorgaenge[d.vorgang]) {
@@ -360,6 +375,37 @@ ok('neues Formular, neuer Schluessel', neuerSchluessel !== zwei[0].vorgang,
    neuerSchluessel);
 await page.click('#fm-zurueck');
 await page.waitForSelector('#scr-start.aktiv');
+
+// --- Suche: ohne sie ist ein alter Beleg aus der App nicht erreichbar -----
+console.log('\n10b) Suche in der Uebersicht');
+ok('ohne Suche steht «Offene und letzte»',
+   (await page.textContent('#st-titel')) === 'Offene und letzte');
+
+await page.fill('#st-suche', 'nordwind');
+await page.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('Nordwind'));
+ok('Titel wechselt auf Suche', (await page.textContent('#st-titel')) === 'Suche');
+const gesucht = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_liste').pop());
+ok('Suchbegriff mitgeschickt', gesucht.suche === 'nordwind', JSON.stringify(gesucht.suche));
+ok('fremder abgeschlossener Eintrag gefunden',
+   (await page.textContent('#st-liste')).includes('WE-2026-0009'));
+ok('fremder Erfasser wird genannt',
+   (await page.textContent('#st-liste')).includes('Bob Meier'));
+ok('bereits versandt ist markiert',
+   !!(await page.$('#st-liste .marke.versandt')));
+
+await page.fill('#st-suche', 'gibtsnicht');
+await page.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('Nichts gefunden'));
+ok('leere Suche sagt es', (await page.textContent('#st-liste')).includes('Nichts gefunden'));
+
+await page.fill('#st-suche', '');
+await page.waitForFunction(() =>
+  document.getElementById('st-titel').textContent === 'Offene und letzte');
+ok('leeres Feld zeigt wieder die Uebersicht',
+   (await page.textContent('#st-liste')).includes('WE-2026-0001'));
+
 await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
 
@@ -399,6 +445,14 @@ await page.waitForFunction(() =>
 ok('Antwort ohne JSON wird benannt',
    (await page.textContent('#lg-meldung')).includes('/exec'),
    await page.textContent('#lg-meldung'));
+
+// --- 13) Was gar nicht erst nach draussen geht -----------------------------
+console.log('\n13) Keine Adresse mit Sitzungstoken, kein fremder Host');
+const methoden = await page.evaluate(() => window.__methoden);
+ok('alle Aufrufe gehen als POST', methoden.every(m => m === 'POST'),
+   JSON.stringify([...new Set(methoden)]));
+ok('kein Stylesheet von fremdem Host',
+   (await page.$$('link[rel=stylesheet]')).length === 0);
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
