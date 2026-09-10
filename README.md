@@ -101,7 +101,7 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
 
    | Ime | Vrednost |
    |---|---|
-   | `SHEET_ID` | ID tabele, iz URL-a između `/d/` i `/edit` |
+   | `SHEET_ID` | ID tabele, iz URL-a između `/d/` i `/edit` — sme i cela adresa |
    | `PWA_URL` | adresa PWA, ide u pristupne mejlove |
    | `TOKEN_READ` | štiti CSV izlaz — ili pokreni `tokenErzeugen()` |
 
@@ -123,6 +123,11 @@ Dve pomoćne funkcije za editor:
 | `tokenErzeugen()` | napravi jak `TOKEN_READ`, upiše ga i ispiše jednom — odatle ide u `Vorlage-Aufbau.bas` |
 
 Ako nešto ne radi, prvo pokreni `einrichtungPruefen()` i pogledaj protokol.
+
+**`Invalid argument: id`** znači da `SHEET_ID` nije ispravan Drive ID.
+Cela adresa je dozvoljena — kod iz nje izvuče ID — ali ID Apps Script
+projekta ili ime foldera nisu. `einrichtungPruefen()` ispisuje šta je upisano
+i šta je iz toga izvučeno.
 
 **`setupAnlegen` sme da se pokrene i kasnije, više puta.** Zaglavlja se ne
 diraju ako već postoje; ono što svaki put iznova postavlja jeste **tekstualni
@@ -351,7 +356,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **359 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **362 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji

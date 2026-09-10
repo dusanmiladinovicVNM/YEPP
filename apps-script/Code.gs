@@ -1006,7 +1006,7 @@ function adminParameter(d, u) {
     ADMIN_PARAMETER.forEach(s => {
       if (d.werte[s] == null) return;
       const wert = s === 'MailAn' ? String(d.werte[s]).trim()
-                                  : ordnerId(d.werte[s]);
+                                  : driveId(d.werte[s]);
       parameterSetzen(s, wert);
     });
   }
@@ -1037,10 +1037,12 @@ function parameterSetzen(schluessel, wert) {
 }
 
 /**
- * Aus einer eingefuegten Drive-Adresse die blosse Ordner-ID holen. Wer den
- * Ordner offen hat, kopiert die Adresse — nicht den Teil dahinter.
+ * Aus einer eingefuegten Adresse die blosse Drive-ID holen. Wer die Tabelle
+ * oder den Ordner offen hat, kopiert die Adresse aus der Leiste — nicht den
+ * Teil zwischen /d/ und /edit. openById() antwortet darauf mit «Invalid
+ * argument: id», und das sagt niemandem, was zu tun ist.
  */
-function ordnerId(wert) {
+function driveId(wert) {
   const s = String(wert || '').trim();
   const m = s.match(/[-\w]{25,}/);
   return m ? m[0] : s;
@@ -1155,8 +1157,25 @@ function csvExport(p) {
    12) Hilfsmittel
    ============================================================ */
 
+/**
+ * Die Tabelle. Eine falsch eingetragene SHEET_ID ist der haeufigste
+ * Einrichtungsfehler, und «Invalid argument: id» sagt nicht, welche der
+ * Eigenschaften gemeint ist oder was drinsteht — hier steht beides.
+ */
+function tabelle() {
+  const id = driveId(eigenschaft('SHEET_ID'));
+  try {
+    return SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Error('Tabelle nicht erreichbar. SHEET_ID ergab «' + id + '»: ' +
+                    e.message + '. In den Skripteigenschaften gehoert der ' +
+                    'Teil der Tabellen-URL zwischen /d/ und /edit — die ganze ' +
+                    'Adresse tut es auch.');
+  }
+}
+
 function blatt(name) {
-  const bl = SpreadsheetApp.openById(eigenschaft('SHEET_ID')).getSheetByName(name);
+  const bl = tabelle().getSheetByName(name);
   if (!bl) throw new Error('Blatt fehlt: ' + name);
   return bl;
 }
@@ -1249,7 +1268,7 @@ function json(obj) {
 
 /** Legt alle Blaetter mit den richtigen Kopfzeilen an. Einmalig. */
 function setupAnlegen() {
-  const ss = SpreadsheetApp.openById(eigenschaft('SHEET_ID'));
+  const ss = tabelle();
   const plan = {};
   plan[T.we] = ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
                 'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
@@ -1338,10 +1357,15 @@ function einrichtungPruefen() {
   ['SHEET_ID', 'PWA_URL', 'TOKEN_READ'].forEach(name => {
     const wert = eigenschaft(name, true);
     zeilen.push(name + ': ' + (wert || 'FEHLT'));
+    // Steht dort die ganze Adresse, ist das in Ordnung — aber sichtbar
+    // machen, womit wirklich gearbeitet wird.
+    if (name === 'SHEET_ID' && wert && driveId(wert) !== wert) {
+      zeilen.push('  daraus die ID: ' + driveId(wert));
+    }
   });
 
   try {
-    const ss = SpreadsheetApp.openById(eigenschaft('SHEET_ID'));
+    const ss = tabelle();
     zeilen.push('Tabelle: ' + ss.getName());
     const fehlt = Object.keys(T).map(s => T[s]).filter(n => !ss.getSheetByName(n));
     zeilen.push(fehlt.length ? 'Blaetter FEHLEN: ' + fehlt.join(', ') + ' — setupAnlegen()'
@@ -1410,7 +1434,7 @@ function zugangVerschicken() {
 function sicherung() {
   const wurzel = String(parameter('SicherungOrdner') || '').trim();
   if (!wurzel) return 'kein SicherungOrdner gesetzt — nichts gesichert';
-  DriveApp.getFileById(eigenschaft('SHEET_ID')).makeCopy(
+  DriveApp.getFileById(driveId(eigenschaft('SHEET_ID'))).makeCopy(
     'Wareneingang ' + fmt(new Date(), 'yyyy-MM-dd'),
     DriveApp.getFolderById(wurzel));
   return 'gesichert';

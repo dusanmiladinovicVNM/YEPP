@@ -601,7 +601,8 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
   const frisch = () => { ctx.eigenschaft._alle = null; };
   ctx.console = { log: () => {}, error: () => {} };   // Berichte nicht mitdrucken
 
-  ok('Wert kommt aus den Eigenschaften', ctx.eigenschaft('SHEET_ID') === 'X');
+  const ID = '1TabelleTabelleTabelleTabelleTabelle';
+  ok('Wert kommt aus den Eigenschaften', ctx.eigenschaft('SHEET_ID') === ID);
   ok('PWA-Adresse steht im Zugangsmail',
      ctx.zugangText('Eva', 'Pass1234').includes('https://wareneingang.example/'));
 
@@ -615,7 +616,29 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
      meldung.includes('SHEET_ID') && meldung.includes('Skripteigenschaften'), meldung);
   ok('leerer Wert darf leer sein, wenn erlaubt',
      ctx.eigenschaft('SHEET_ID', true) === '');
-  ctx.__eigenschaften.SHEET_ID = 'X';
+  ctx.__eigenschaften.SHEET_ID = ID;
+  frisch();
+
+  // Wer die Tabelle offen hat, kopiert die Adresse aus der Leiste. Das darf
+  // kein «Invalid argument: id» geben — der haeufigste Einrichtungsfehler.
+  ctx.__eigenschaften.SHEET_ID =
+    'https://docs.google.com/spreadsheets/d/' + ID + '/edit?gid=0#gid=0';
+  frisch();
+  ok('ganze Adresse statt ID wird angenommen',
+     ctx.tabelle().getName() === 'Wareneingang (Test)');
+  ok('Bericht zeigt die daraus geholte ID',
+     ctx.einrichtungPruefen().includes('daraus die ID: ' + ID));
+
+  // Eine wirklich falsche ID muss sagen, welche Eigenschaft gemeint ist
+  ctx.__eigenschaften.SHEET_ID = 'nur-ein-wort';
+  frisch();
+  let kaputt = '';
+  try { ctx.blatt('Wareneingang'); } catch (e) { kaputt = e.message; }
+  ok('falsche ID nennt Eigenschaft und Wert',
+     kaputt.includes('SHEET_ID') && kaputt.includes('nur-ein-wort') &&
+     kaputt.includes('/d/'), kaputt);
+
+  ctx.__eigenschaften.SHEET_ID = ID;
   frisch();
 
   // CSV-Ausgang haengt am Token aus den Eigenschaften

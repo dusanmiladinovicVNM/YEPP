@@ -116,7 +116,7 @@ function laden(ss) {
   // vorher im Quelltext ersetzen musste.
   const quelle = fs.readFileSync(process.cwd() + '/apps-script/Code.gs', 'utf8');
   const eigenschaften = {
-    SHEET_ID:   'X',
+    SHEET_ID:   '1TabelleTabelleTabelleTabelleTabelle',
     PWA_URL:    'https://wareneingang.example/',
     TOKEN_READ: 'geheimwort'
   };
@@ -126,7 +126,13 @@ function laden(ss) {
     // Realm-Grenze der vm — in Apps Script gibt es nur eine Realm.
     Date,
     SpreadsheetApp: {
-      openById: () => ss,
+      // Wie das Original: eine Adresse statt einer ID gibt «Invalid argument».
+      openById: id => {
+        if (!/^[-\w]{25,}$/.test(String(id || ''))) {
+          throw new Error('Invalid argument: id');
+        }
+        return ss;
+      },
       create: () => { const t = new Spreadsheet(); t.blaetter.T = new Sheet('T'); return t; },
       flush: () => {},
       BorderStyle: { SOLID: 'SOLID' }
