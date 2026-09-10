@@ -541,6 +541,11 @@ const flaechen = await page.evaluate(async () => {
   return { liste: liste, detail: detail };
 });
 ok('Liste nennt die Bereitstellung', flaechen.liste.includes('Bereitstellung'), flaechen.liste);
+// Ohne Statuszahl und Anfang der Antwort bleibt «kein JSON» eine Diagnose
+// ohne Befund: 200 mit HTML, 401 und 429 verlangen verschiedene Schritte.
+ok('Liste nennt die Statuszahl', flaechen.liste.includes('HTTP 200'), flaechen.liste);
+ok('Liste zeigt den Anfang der Antwort',
+   flaechen.liste.includes('<html>Anmelden</html>'), flaechen.liste);
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
 
 await browser.close();

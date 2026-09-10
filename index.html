@@ -735,11 +735,17 @@ async function post(payload) {
       try {
         return JSON.parse(text);
       } catch (e) {
-        // Kein JSON heisst fast immer: die Bereitstellung ist nicht
-        // oeffentlich und Google hat eine Anmelde- oder Fehlerseite
-        // geschickt. Der Server hat geantwortet — nicht wiederholen.
+        // Kein JSON heisst: die Bereitstellung ist nicht oeffentlich, eine
+        // Quote ist erreicht, oder Google hat eine Fehlerseite geschickt.
+        // Der Server hat geantwortet — nicht wiederholen.
         console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-        throw new Error('keine_antwort');
+        const fehler = new Error('keine_antwort');
+        // Statuszahl und Anfang der Antwort mitgeben: sie unterscheiden die
+        // Faelle, und niemand soll dafuer die Entwicklerkonsole eines iPads
+        // aufmachen muessen.
+        fehler.status = res.status;
+        fehler.anfang = String(text).replace(/\s+/g, ' ').trim().slice(0, 90);
+        throw fehler;
       }
     } catch (e) {
       if (e.message === 'keine_antwort') throw e;
@@ -767,7 +773,8 @@ function verbindungText(e) {
   }
   if (art === 'keine_antwort') {
     return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
-           'Zugriff «Jeder», Adresse endet auf /exec.';
+           'Zugriff «Jeder», Adresse endet auf /exec.' +
+           (e.status ? ' [HTTP ' + e.status + ': ' + e.anfang + ']' : '');
   }
   // Der technische Grund steht in der Konsole, nicht auf dem Schirm.
   if (e && e.grund) console.warn('Verbindung endgültig gescheitert:', e.grund);

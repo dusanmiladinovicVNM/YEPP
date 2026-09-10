@@ -421,7 +421,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **436 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **438 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -525,6 +525,11 @@ dešava se. Tada poruka i kaže šta je: „Der Server hat kein JSON geliefert.
 Bereitstellung prüfen." Ista poruka stoji na **svim** ekranima — ranije su je
 imali samo prijava i čuvanje, pa je pogrešan deployment na listi izgledao kao
 nestala mreža.
+
+Kad odgovor **nije JSON**, poruka nosi i **HTTP status i prvih 90 znakova
+odgovora** — `[HTTP 200: <!DOCTYPE html>…]`. Bez toga „nije JSON" ostaje
+dijagnoza bez nalaza: `200` sa HTML-om, `401` i `429` traže tri različita
+poteza, a niko neće otvarati konzolu na iPadu da bi ih razlikovao.
 
 Pravi razlog prekida uvek ide u konzolu (`Aufruf «we_liste» Versuch 1 von 2
 gescheitert: TypeError / Failed to fetch`), jer na ekranu radniku ne znači
