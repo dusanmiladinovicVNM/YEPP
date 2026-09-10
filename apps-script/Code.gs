@@ -1584,6 +1584,214 @@ function einrichtungPruefen() {
   return text;
 }
 
+/* ------------------------------------------------------------------
+   Der naechste Schritt, und warum er noch nicht getan ist
+
+   Gemessen wird der Weg zum Server als das Teure — dagegen half, aus drei
+   Aufrufen einen zu machen. Was im Skript selbst noch liegt, sind zwei
+   Posten: das Oeffnen der Tabelle (`openById`, einmal je Ausfuehrung) und
+   das Lesen der Blaetter, eines nach dem anderen.
+
+   `Sheets.Spreadsheets.Values.batchGet` holt alle Bereiche in EINER
+   Anfrage und oeffnet dabei gar nichts. In einem gleich gebauten Projekt
+   waren das 150 ms statt 1086 — aber ob es HIER, auf diesen Daten, ebenso
+   ausgeht, ist eine Frage an Zahlen und nicht an Ueberlegung. In diesem
+   Projekt hat die Ueberlegung sich schon einmal geirrt: die Vermutung,
+   `openById` koste innerhalb einer Ausfuehrung jedes Mal, war falsch.
+
+   Darum stehen hier erst die beiden Messungen. Der Umbau kommt danach,
+   und nur wenn beide dafuer sprechen.
+
+   Beide brauchen den erweiterten Dienst: im Editor links **Dienste +**,
+   dann **Google Sheets API** hinzufuegen (Kennung `Sheets`).
+   ------------------------------------------------------------------ */
+
+/** Die Blaetter, die ein «start» liest. */
+const MESS_BLAETTER = [T.sessions, T.benutzer, T.we, T.kunden, T.lieferanten];
+
+/**
+ * Liest dieselben Blaetter auf beiden Wegen und stellt die Zeiten
+ * nebeneinander — fuenf Runden je Weg, mit min, Median, max und den rohen
+ * Werten. Die rohen Werte, weil in dieser Sache die Streuung die
+ * eigentliche Geschichte ist: ein Median sagt nichts ueber den Lauf, an
+ * den sich der Benutzer erinnert.
+ */
+function geschwindigkeitMessen() {
+  const zeilen = [];
+  const runden = 5;
+
+  if (typeof Sheets === 'undefined') {
+    return protokoll(['Der erweiterte Dienst fehlt.',
+                      'Editor → Dienste + → Google Sheets API hinzufuegen.',
+                      'Ohne ihn ist hier nichts zu messen.']);
+  }
+
+  // Das Oeffnen NUR EINMAL messen. Dieselbe Tabelle ein zweites Mal in
+  // derselben Ausfuehrung zu oeffnen bedient die Plattform aus ihrem
+  // eigenen Cache — die zweite Messung waere die des Caches, nicht die,
+  // die ein Aufruf zahlt.
+  const tOffen = Date.now();
+  const ss = tabelle();
+  zeilen.push('Tabelle oeffnen (nur eine Probe): ' + (Date.now() - tOffen) + ' ms');
+
+  // Erst warmlaufen. Eine kalte Laufzeit als Dauerzustand zu melden ist
+  // der Fehler, der in diesem Projekt schon einmal gemacht wurde.
+  MESS_BLAETTER.forEach(n => ss.getSheetByName(n).getDataRange().getValues());
+  batchLesen(MESS_BLAETTER);
+
+  const alt = [], neu = [];
+  for (let i = 0; i < runden; i++) {
+    let t = Date.now();
+    MESS_BLAETTER.forEach(n => ss.getSheetByName(n).getDataRange().getValues());
+    alt.push(Date.now() - t);
+
+    t = Date.now();
+    batchLesen(MESS_BLAETTER);
+    neu.push(Date.now() - t);
+  }
+
+  zeilen.push('');
+  zeilen.push('SpreadsheetApp, ' + MESS_BLAETTER.length + ' Lesevorgaenge');
+  zeilen.push('  ' + spanne(alt));
+  zeilen.push('Sheets batchGet, eine Anfrage');
+  zeilen.push('  ' + spanne(neu));
+  zeilen.push('');
+  zeilen.push('Dagegen zu wiegen: der Weg zum Server kostet je Aufruf ein');
+  zeilen.push('Vielfaches davon. Lohnt sich der Umbau erst ab einer halben');
+  zeilen.push('Sekunde Unterschied, sagt das hier, ob er sich lohnt.');
+  return protokoll(zeilen);
+}
+
+function spanne(werte) {
+  const s = werte.slice().sort((a, b) => a - b);
+  const med = s.length % 2 ? s[(s.length - 1) / 2]
+                           : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
+  return 'min ' + s[0] + '  Median ' + med + '  max ' + s[s.length - 1] +
+         '  — ' + werte.join(', ');
+}
+
+/**
+ * Liest mehrere Blaetter in EINER Anfrage.
+ *
+ * Drei Dinge, an denen das still falsch werden koennte:
+ *
+ * 1. `batchGet` liefert ohne Weiteres den ANGEZEIGTEN Text. Aus `true`
+ *    wuerde die Zeichenkette «TRUE», und `=== true` faende sie nie —
+ *    stornierte Zeilen kaemen zurueck, inaktive Kunden auch.
+ *    `UNFORMATTED_VALUE` verhindert das.
+ * 2. `batchGet` hoert bei der letzten gefuellten Zelle auf. Eine Zeile,
+ *    deren letzte Spalten leer sind, kommt KUERZER zurueck — und weil
+ *    ueberall nach Spaltenindex zugegriffen wird, stuende dort
+ *    `undefined` statt `''`. Hier wird aufgefuellt.
+ * 3. Die Ergebnisse werden ueber den Bereich zugeordnet, den jedes selbst
+ *    nennt, nicht ueber ihre Reihenfolge. Auf die Reihenfolge zu setzen
+ *    hiesse, an dem Tag `Benutzer` fuer `Wareneingang` zu halten, an dem
+ *    sie einmal nicht stimmt — und nichts saehe falsch aus.
+ */
+function batchLesen(namen) {
+  const antwort = Sheets.Spreadsheets.Values.batchGet(driveId(eigenschaft('SHEET_ID')), {
+    ranges: namen.map(n => "'" + n.replace(/'/g, "''") + "'"),
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'FORMATTED_STRING'
+  });
+
+  const aus = {};
+  // Gezaehlt, weil sonst niemand merkt, ob das Auffuellen ueberhaupt je
+  // etwas zu tun hatte — und ein Auffuellen, das nie greift, faellt beim
+  // naechsten Umbau heraus. Nach dem Auffuellen ist der Fall nicht mehr
+  // zu sehen, also hier.
+  batchLesen.kurz = 0;
+  (antwort.valueRanges || []).forEach(vr => {
+    const name = String(vr.range || '').split('!')[0].replace(/^'|'$/g, '').replace(/''/g, "'");
+    const werte = vr.values || [];
+    const breit = Math.max(0, ...werte.map(z => z.length));
+    aus[name] = werte.map(z => {
+      if (z.length < breit) batchLesen.kurz++;
+      const voll = z.slice();
+      while (voll.length < breit) voll.push('');
+      return voll;
+    });
+  });
+  return aus;
+}
+
+/**
+ * Vergleicht Zelle fuer Zelle, was die beiden Wege liefern — nach Wert
+ * UND nach Typ, und meldet jeden Unterschied mit Blatt, Zeile und
+ * Spaltennamen.
+ *
+ * Die Gefahr ist hier eine andere als in anderen Projekten: `AngDat`,
+ * `AngZeit` und `MHD` stehen als TEXT in der Tabelle, damit Sheets aus
+ * «08:30» keine Uhrzeit macht. Was `batchGet` daraus macht, entscheidet,
+ * ob im Excel-Formular wieder «Sat Dec 30 1899» steht. Das steht hier
+ * nicht zur Vermutung, sondern wird an der lebenden Tabelle nachgesehen.
+ */
+function treueVergleichen() {
+  if (typeof Sheets === 'undefined') {
+    return protokoll(['Der erweiterte Dienst fehlt.',
+                      'Editor → Dienste + → Google Sheets API hinzufuegen.']);
+  }
+
+  const ss = tabelle();
+  const zeilen = [];
+  let zellen = 0, abweichung = 0;
+  const neu = batchLesen(MESS_BLAETTER);
+  const kurz = batchLesen.kurz;
+
+  MESS_BLAETTER.forEach(name => {
+    const a = ss.getSheetByName(name).getDataRange().getValues();
+    const b = neu[name] || [];
+    const kopf = a.length ? a[0].map(x => String(x || '')) : [];
+
+    if (a.length !== b.length) {
+      zeilen.push(name + ': ' + a.length + ' Zeilen bisher, ' + b.length + ' ueber batchGet');
+      abweichung++;
+    }
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      for (let j = 0; j < a[i].length; j++) {
+        zellen++;
+        const x = a[i][j], y = j < b[i].length ? b[i][j] : undefined;
+        const gleich = (x instanceof Date && y instanceof Date)
+          ? x.getTime() === y.getTime()
+          : (x === y && typeof x === typeof y);
+        if (gleich) continue;
+        abweichung++;
+        if (abweichung <= 20) {
+          zeilen.push(name + ' Zeile ' + (i + 1) + ' Spalte «' +
+                      (kopf[j] || (j + 1)) + '»: bisher ' + typBeschreibung(x) +
+                      ', batchGet ' + typBeschreibung(y));
+        }
+      }
+    }
+  });
+
+  zeilen.unshift('');
+  zeilen.unshift(zellen + ' Zellen verglichen, ' + abweichung + ' Unterschiede, ' +
+                 kurz + ' zu kurz zurueckgegebene Zeilen');
+  if (abweichung > 20) zeilen.push('… und ' + (abweichung - 20) + ' weitere');
+  zeilen.push('');
+  zeilen.push(abweichung
+    ? 'Jeder dieser Unterschiede waere beim Umbau still kaputtgegangen.'
+    : 'Kein Unterschied — der Umbau des Lesewegs waere von hier aus sicher.');
+  if (kurz) {
+    zeilen.push('Kurze Zeilen kommen vor: batchLesen() fuellt sie auf, und das');
+    zeilen.push('muss es auch weiterhin tun.');
+  }
+  return protokoll(zeilen);
+}
+
+function typBeschreibung(w) {
+  if (w === undefined) return 'nichts (Zeile war kuerzer)';
+  if (w instanceof Date) return 'Date ' + fmt(w, 'yyyy-MM-dd HH:mm');
+  return typeof w + ' ' + JSON.stringify(w);
+}
+
+function protokoll(zeilen) {
+  const text = zeilen.join('\n');
+  console.log(text);
+  return text;
+}
+
 /**
  * Legt ein starkes TOKEN_READ in den Skripteigenschaften ab und gibt es
  * einmal zurueck. Der Wert gehoert von dort in das Makro

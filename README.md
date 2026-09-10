@@ -138,6 +138,8 @@ Dve pomoćne funkcije za editor:
 |---|---|
 | `einrichtungPruefen()` | javlja koja vrednost fali, da li se tabela otvara, koji listovi postoje i kako glasi CSV adresa za šablon |
 | `tokenErzeugen()` | napravi jak `TOKEN_READ`, upiše ga i ispiše jednom — odatle ide u `Vorlage-Aufbau.bas` |
+| `geschwindigkeitMessen()` | meri koliko traje čitanje listova na oba načina — vidi **Brzina** |
+| `treueVergleichen()` | proverava da li drugi način vraća iste vrednosti i iste tipove |
 
 Ako nešto ne radi, prvo pokreni `einrichtungPruefen()` i pogledaj protokol.
 
@@ -487,11 +489,45 @@ pogrešna strana. Ista zamka je u ovom projektu već jednom odradila svoje:
 pretpostavka da `openById` u jednom izvršavanju košta svaki put bila je
 netačna — platforma ga posle prvog puta servira iz sopstvenog keša.
 
-Ono što **nije** dirano: `SpreadsheetApp` kao put do podataka. Sledeći
-korak je `Sheets.Spreadsheets.Values.batchGet` — jedan zahtev za sve
-opsege, bez otvaranja tabele — ali tek pošto se izmeri na živim podacima.
-Dijagnostika za to je pripremljena (`geschwindigkeitMessen`,
-`treueVergleichen`); rewrite ide samo ako brojevi to opravdaju.
+### Sledeći korak — i zašto još nije urađen
+
+Ono što **nije** dirano: `SpreadsheetApp` kao put do podataka. Ostaju dve
+stavke u samoj skripti — otvaranje tabele (`openById`, jednom po
+izvršavanju) i čitanje listova, jedan po jedan.
+`Sheets.Spreadsheets.Values.batchGet` uzima sve opsege u **jednom**
+zahtevu i pritom ne otvara ništa; na istovetnom projektu to je bilo 150 ms
+umesto 1086.
+
+Ali da li se to isplati **ovde, na ovim podacima**, pitanje je za brojeve,
+ne za razmišljanje — razmišljanje se u ovom projektu već jednom prevarilo.
+Zato prvo dve provere u editoru (traže **Dienste + → Google Sheets API**):
+
+| Funkcija | Šta odgovara |
+|---|---|
+| `geschwindigkeitMessen()` | koliko traje čitanje na oba načina — 5 rundi, min/median/max i sirovi uzorci |
+| `treueVergleichen()` | da li `batchGet` vraća **iste vrednosti i iste tipove**, ćeliju po ćeliju |
+
+Drugi je važniji od prvog. Tri načina da prepravka tiho pukne:
+
+1. **`batchGet` po pravilu vraća prikazani tekst.** `true` bi postalo
+   `"TRUE"`, a `=== true` to ne prepoznaje — stornirani unosi bi se vratili
+   u listu, neaktivni kupci takođe. `UNFORMATTED_VALUE` to sprečava.
+2. **`batchGet` staje na poslednjoj popunjenoj ćeliji.** Red čije su
+   poslednje kolone prazne vraća se **kraći**, a pošto se svuda pristupa po
+   indeksu kolone, tamo bi stajalo `undefined` umesto `''`. `batchLesen`
+   dopunjava i **broji** koliko je puta dopunio.
+3. **Rezultati se ne uparuju po redosledu** nego po opsegu koji svaki sam
+   imenuje. Osloniti se na redosled znači onog dana kad ne bude tačan
+   pročitati `Benutzer` kao `Wareneingang` — i ništa ne bi izgledalo krivo.
+
+Ovde postoji i zamka specifična za ovaj projekat: `AngDat`, `AngZeit` i
+`MHD` stoje kao **tekst** u tabeli, da Sheets od `08:30` ne napravi vreme.
+Šta `batchGet` od toga napravi odlučuje da li se u Excel obrascu opet
+pojavi `Sat Dec 30 1899`. To se ne pretpostavlja — `treueVergleichen()`
+gleda u živu tabelu.
+
+Prepravka ide **samo ako oba izveštaja to opravdaju**: razlika preko pola
+sekunde i nula odstupanja.
 
 ---
 

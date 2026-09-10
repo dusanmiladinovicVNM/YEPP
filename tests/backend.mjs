@@ -956,6 +956,84 @@ console.log('\n18) Die Uhr in der Antwort');
      weg.error === 'session' && typeof weg.ms === 'number', JSON.stringify(weg));
 }
 
+console.log('\n19) Bevor der Leseweg umgebaut wird');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  ss.blaetter.Kunden.appendRow(['Kunde AG', true, 10]);
+  ss.blaetter.Lieferanten.appendRow(['Lieferant GmbH', true, 10]);
+
+  // Ohne den erweiterten Dienst wird nichts gemessen und nichts vermutet —
+  // es wird gesagt, wo der Schalter sitzt.
+  const ohne = ctx.geschwindigkeitMessen();
+  ok('ohne den Dienst sagt die Messung, wo er eingeschaltet wird',
+     ohne.includes('Dienste') && ohne.includes('Google Sheets API'), ohne);
+  ok('dasselbe beim Treuevergleich',
+     ctx.treueVergleichen().includes('Google Sheets API'));
+
+  /** Eine ehrliche Attrappe: gibt zurueck, was auch getValues() gibt. */
+  const attrappe = (verdrehen, kuerzen, verfaelschen) => ({
+    Spreadsheets: { Values: { batchGet: (id, opt) => {
+      const namen = opt.ranges.map(r => r.replace(/^'|'$/g, '').replace(/''/g, "'"));
+      const bereiche = namen.map(n => {
+        const werte = ss.blaetter[n].getDataRange().getValues()
+          .map(z => z.map(w => (verfaelschen && w === true) ? 'TRUE' : w));
+        // batchGet hoert bei der letzten GEFUELLTEN Zelle auf: leere
+        // Endzellen fallen weg, gefuellte nie.
+        if (kuerzen) werte.forEach((z, i) => {
+          let n = z.length;
+          while (n > 0 && (z[n - 1] === '' || z[n - 1] === null)) n--;
+          werte[i] = z.slice(0, n);
+        });
+        return { range: "'" + n + "'!A1:Z", values: werte };
+      });
+      // Die API gibt die Bereiche in der gefragten Reihenfolge zurueck —
+      // sich darauf zu verlassen ist trotzdem eine Wette.
+      if (verdrehen) bereiche.reverse();
+      return { valueRanges: bereiche };
+    } } }
+  });
+
+  ctx.Sheets = attrappe(false, false, false);
+  const treu = ctx.treueVergleichen();
+  ok('mit einer ehrlichen Attrappe kein Unterschied',
+     treu.includes('Kein Unterschied'), treu);
+  ok('und es wird wirklich verglichen, nicht nur behauptet',
+     /[1-9]\d* Zellen verglichen/.test(treu), treu.split('\n')[0]);
+
+  // 1) Zuordnung ueber den Bereichsnamen, nicht ueber die Reihenfolge
+  ctx.Sheets = attrappe(true, false, false);
+  const verdreht = ctx.treueVergleichen();
+  ok('verdrehte Reihenfolge landet trotzdem auf dem richtigen Blatt',
+     verdreht.includes('Kein Unterschied'), verdreht);
+
+  // 2) Kurze Zeilen werden aufgefuellt, nicht als undefined durchgereicht
+  ctx.Sheets = attrappe(false, true, false);
+  const kurz = ctx.treueVergleichen();
+  ok('kurze Zeilen werden aufgefuellt',
+     kurz.includes('Kein Unterschied'), kurz);
+  ok('und gezaehlt, damit das Auffuellen nicht wegfaellt',
+     /[1-9]\d* zu kurz/.test(kurz), kurz.split('\n')[0]);
+
+  // 3) Angezeigter Text statt Wert — genau der Fall, der still kaputtgeht
+  ctx.Sheets = attrappe(false, false, true);
+  const falsch = ctx.treueVergleichen();
+  ok('«TRUE» statt true wird als Unterschied gemeldet',
+     !falsch.includes('Kein Unterschied') && falsch.includes('boolean'), falsch);
+  ok('und der Unterschied nennt Blatt, Zeile und Spaltennamen',
+     /Benutzer Zeile \d+ Spalte «Aktiv»/.test(falsch), falsch);
+
+  // Die Messung laeuft und nennt beide Wege
+  ctx.Sheets = attrappe(false, false, false);
+  const mess = ctx.geschwindigkeitMessen();
+  ok('die Messung nennt beide Wege',
+     mess.includes('SpreadsheetApp') && mess.includes('batchGet'), mess);
+  ok('das Oeffnen wird nur einmal geprobt',
+     mess.includes('nur eine Probe'), mess);
+  ok('und die rohen Werte stehen dabei',
+     /min \d+  Median \d+  max \d+  — /.test(mess), mess);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);
