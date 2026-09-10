@@ -716,42 +716,62 @@ const warten = ms => new Promise(r => setTimeout(r, ms));
  * Der Grund des Fehlschlags landet in der Konsole: «Keine Verbindung» ist
  * fuer den Betrieb die richtige Auskunft, fuer die Fehlersuche keine.
  */
+/**
+ * Antworten, die Googles Frontend gibt, bevor das Skript ueberhaupt laeuft:
+ * die Bereitstellung war fuer diesen Augenblick nicht auffindbar, oder das
+ * Frontend war ueberlastet. Es ist dabei **nichts geschehen** — kein Blatt
+ * gelesen, keine Zeile geschrieben, keine Mail verschickt. Ein zweiter
+ * Versuch ist darum auch dort gefahrlos, wo Wiederholen sonst schadet.
+ *
+ * 500 steht bewusst nicht dabei: ein Fehler im Skript selbst kann auftreten,
+ * nachdem es schon etwas getan hat.
+ */
+const NICHT_ANGEKOMMEN = [404, 429, 502, 503, 504];
+
 async function post(payload) {
   if (!CONFIG.url) throw new Error('nicht_verbunden');
-  const versuche = WIEDERHOLBAR.indexOf(payload.action) >= 0 ? 2 : 1;
+  const sicher = WIEDERHOLBAR.indexOf(payload.action) >= 0;
   let letzter = null;
 
-  for (let i = 0; i < versuche; i++) {
+  for (let i = 0; i < 2; i++) {
     if (i) await warten(700);
+
+    let res, text;
     try {
       // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht
       // beantwortet.
-      const res  = await fetch(CONFIG.url, {
+      res  = await fetch(CONFIG.url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        // Kein JSON heisst: die Bereitstellung ist nicht oeffentlich, eine
-        // Quote ist erreicht, oder Google hat eine Fehlerseite geschickt.
-        // Der Server hat geantwortet — nicht wiederholen.
-        console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-        const fehler = new Error('keine_antwort');
-        // Statuszahl und Anfang der Antwort mitgeben: sie unterscheiden die
-        // Faelle, und niemand soll dafuer die Entwicklerkonsole eines iPads
-        // aufmachen muessen.
-        fehler.status = res.status;
-        fehler.anfang = String(text).replace(/\s+/g, ' ').trim().slice(0, 90);
-        throw fehler;
-      }
+      text = await res.text();
     } catch (e) {
-      if (e.message === 'keine_antwort') throw e;
+      // Unterwegs abgerissen. Ob der Aufruf angekommen ist, weiss hier
+      // niemand — also nur wiederholen, wo ein zweites Mal nichts anrichtet.
       letzter = e;
       console.warn('Aufruf «' + payload.action + '» Versuch ' + (i + 1) +
-                   ' von ' + versuche + ' gescheitert:', e.name, '/', e.message);
+                   ' gescheitert:', e.name, '/', e.message);
+      if (!sicher) break;
+      continue;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
+      if (NICHT_ANGEKOMMEN.indexOf(res.status) >= 0 && i === 0) {
+        console.warn('HTTP ' + res.status + ' — das Skript lief nicht, ' +
+                     'zweiter Versuch.');
+        continue;
+      }
+      const fehler = new Error('keine_antwort');
+      // Statuszahl und Anfang der Antwort mitgeben: sie unterscheiden die
+      // Faelle, und niemand soll dafuer die Entwicklerkonsole eines iPads
+      // aufmachen muessen.
+      fehler.status = res.status;
+      fehler.anfang = String(text).replace(/\s+/g, ' ').trim().slice(0, 90);
+      throw fehler;
     }
   }
 
@@ -777,7 +797,7 @@ function verbindungText(e) {
     // statt «Neue Version»: die alte Adresse zeigt dann ins Leere, und die
     // allgemeine Bitte, den Zugriff zu pruefen, fuehrt in die Irre.
     if (e.status === 404) {
-      return 'Diese Web-App-Adresse gibt es nicht (404). In Apps Script ' +
+      return 'Auch der zweite Versuch kam nicht an (404). In Apps Script ' +
              'unter «Bereitstellungen verwalten» die aktuelle URL holen und ' +
              'in CONFIG.url eintragen — «Neue Bereitstellung» vergibt jedes ' +
              'Mal eine neue Adresse, «Neue Version» behält die alte.';

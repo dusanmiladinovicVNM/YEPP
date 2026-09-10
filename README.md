@@ -430,7 +430,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **440 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **444 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -522,6 +522,17 @@ greške umesto sa JSON-om. Prijava je do sada radila baš to — `ladeListe()`
 bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
 jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
 da nikad nije više od jednog.
+
+**Google povremeno vrati `404` na ispravnu adresu.** Viđeno u pogonu: jednom
+padne, posle osvežavanja radi. Takav odgovor dolazi sa Google-ovog frontenda
+**pre nego što se skript uopšte pokrene** — ništa nije pročitano, ništa
+upisano, nijedan mejl poslat. Zato se `404`, `429`, `502`, `503` i `504`
+ponavljaju **i kod poziva koji se inače ne smeju ponavljati**: nema šta da se
+udvostruči. `500` nije na spisku — greška u samom skriptu može nastupiti
+pošto je već nešto uradio.
+
+`200` sa HTML-om i `403` se ne ponavljaju: tu je skript odgovorio, samo
+pogrešno, ili nema prava. Drugi pokušaj tu ne menja ništa.
 
 **Prekinut poziv se ponavlja jednom — ali samo tamo gde drugi pokušaj ništa
 ne kvari:** čitanje (`stammdaten`, `we_liste`, `we_detail`, `admin_*`) i
