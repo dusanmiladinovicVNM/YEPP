@@ -697,23 +697,61 @@ function datumText(wert) {
 
 /* ---------- API ---------- */
 
+/**
+ * Aufrufe, die ein zweites Mal nichts anrichten: Lesen, und das Erfassen,
+ * das der Vorgangsschluessel ohnehin zusammenlegt. Alles andere wird NICHT
+ * wiederholt — ein zweites «Quittieren» faende den Schritt schon quittiert,
+ * ein zweites «Senden» schickte die Mail zweimal.
+ */
+const WIEDERHOLBAR = ['stammdaten', 'we_liste', 'we_detail', 'we_speichern',
+                      'admin_liste', 'admin_parameter'];
+
+const warten = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Ein abgerissener Aufruf ist im Lager der Normalfall, nicht die Ausnahme.
+ * Wo ein zweiter Versuch gefahrlos ist, geschieht er hier — der Benutzer
+ * soll nicht fuer eine Funkloecke buessen, die eine halbe Sekunde dauert.
+ *
+ * Der Grund des Fehlschlags landet in der Konsole: «Keine Verbindung» ist
+ * fuer den Betrieb die richtige Auskunft, fuer die Fehlersuche keine.
+ */
 async function post(payload) {
   if (!CONFIG.url) throw new Error('nicht_verbunden');
-  // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht beantwortet.
-  const res  = await fetch(CONFIG.url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    // Kein JSON heisst fast immer: die Bereitstellung ist nicht oeffentlich
-    // und Google hat eine Anmelde- oder Fehlerseite geschickt.
-    console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-    throw new Error('keine_antwort');
+  const versuche = WIEDERHOLBAR.indexOf(payload.action) >= 0 ? 2 : 1;
+  let letzter = null;
+
+  for (let i = 0; i < versuche; i++) {
+    if (i) await warten(700);
+    try {
+      // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht
+      // beantwortet.
+      const res  = await fetch(CONFIG.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        // Kein JSON heisst fast immer: die Bereitstellung ist nicht
+        // oeffentlich und Google hat eine Anmelde- oder Fehlerseite
+        // geschickt. Der Server hat geantwortet — nicht wiederholen.
+        console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
+        throw new Error('keine_antwort');
+      }
+    } catch (e) {
+      if (e.message === 'keine_antwort') throw e;
+      letzter = e;
+      console.warn('Aufruf «' + payload.action + '» Versuch ' + (i + 1) +
+                   ' von ' + versuche + ' gescheitert:', e.name, '/', e.message);
+    }
   }
+
+  const fehler = new Error('kein_netz');
+  fehler.grund = letzter ? letzter.name + ': ' + letzter.message : '';
+  throw fehler;
 }
 
 /**
@@ -731,6 +769,8 @@ function verbindungText(e) {
     return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
            'Zugriff «Jeder», Adresse endet auf /exec.';
   }
+  // Der technische Grund steht in der Konsole, nicht auf dem Schirm.
+  if (e && e.grund) console.warn('Verbindung endgültig gescheitert:', e.grund);
   return 'Keine Verbindung. Bitte Internetverbindung prüfen.';
 }
 
@@ -857,7 +897,7 @@ async function passwortSpeichern() {
       m.classList.add('zeigen');
     }
   } catch (e) {
-    m.textContent = 'Keine Verbindung.';
+    m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
     btn.disabled = false; btn.textContent = 'Passwort speichern';
@@ -925,7 +965,7 @@ async function ladeListe() {
     }
     zeichneListe(r.liste || []);
   } catch (e) {
-    $('st-liste').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+    $('st-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }
 }
 
@@ -1214,7 +1254,7 @@ async function detailOeffnen(weNr) {
     S.detail = r;
     zeichneDetail(r.kopf, r.positionen);
   } catch (e) {
-    $('dt-schritte').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+    $('dt-schritte').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }
 }
 
@@ -1313,7 +1353,7 @@ async function schrittSenden(schritt, regalplaetze, btn) {
       }[r.error] || 'Nicht möglich: ' + r.error, 'err');
     }
   } catch (e) {
-    toast('Keine Verbindung.', 'err');
+    toast(verbindungText(e), 'err');
   } finally {
     S.laeuft = false;
     if (btn) { btn.disabled = false; btn.textContent = alt; }
@@ -1363,7 +1403,7 @@ function sendenKlick() {
             : 'Senden nicht möglich: ' + r.error, 'err');
         }
       } catch (e) {
-        toast('Keine Verbindung.', 'err');
+        toast(verbindungText(e), 'err');
       } finally {
         btn.disabled = false; btn.textContent = 'Als Excel senden';
       }
@@ -1385,7 +1425,7 @@ function stornoKlick() {
           toast('Nicht möglich: ' + r.error, 'err');
         }
       } catch (e) {
-        toast('Keine Verbindung.', 'err');
+        toast(verbindungText(e), 'err');
       }
     });
 }
@@ -1467,7 +1507,7 @@ async function adminLaden() {
     }
     adminZeichnen(r.benutzer || []);
   } catch (e) {
-    $('adm-liste').innerHTML = '<div class="leer">Keine Verbindung.</div>';
+    $('adm-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }
 }
 
@@ -1513,7 +1553,7 @@ async function adminAktion(btn) {
       btn.disabled = false;
     }
   } catch (e) {
-    toast('Keine Verbindung.', 'err');
+    toast(verbindungText(e), 'err');
     btn.disabled = false;
   }
 }
@@ -1547,7 +1587,7 @@ async function adminNeu() {
       m.classList.add('zeigen');
     }
   } catch (e) {
-    m.textContent = 'Keine Verbindung.';
+    m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
     btn.disabled = false; btn.textContent = 'Benutzer anlegen';

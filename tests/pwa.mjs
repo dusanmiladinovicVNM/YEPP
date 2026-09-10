@@ -454,6 +454,75 @@ ok('alle Aufrufe gehen als POST', methoden.every(m => m === 'POST'),
 ok('kein Stylesheet von fremdem Host',
    (await page.$$('link[rel=stylesheet]')).length === 0);
 
+// --- 14) Wiederholt wird nur, was gefahrlos ist ----------------------------
+console.log('\n14) Wiederholung nur, wo sie gefahrlos ist');
+
+const lesen = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    if (n === 1) throw new TypeError('Failed to fetch');
+    return { status: 200, text: async () => JSON.stringify({ ok: true, liste: [] }) };
+  };
+  const r = await post({ action: 'we_liste', session: 'tok' });
+  return { n: n, ok: r.ok };
+});
+ok('Lesen ueberlebt einen Aussetzer', lesen.n === 2 && lesen.ok === true,
+   JSON.stringify(lesen));
+
+const erfassen = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  try { await post({ action: 'we_speichern', vorgang: 'v1' }); } catch (e) {}
+  return n;
+});
+ok('Erfassen darf wiederholt werden', erfassen === 2, String(erfassen));
+
+// Das ist der eigentliche Punkt: ein zweites Quittieren faende den Schritt
+// schon quittiert, ein zweites Senden schickte die Mail zweimal.
+const quittieren = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  let fehler = '';
+  try { await post({ action: 'we_schritt', session: 'tok' }); } catch (e) { fehler = e.message; }
+  return { n: n, fehler: fehler };
+});
+ok('Quittieren wird NICHT wiederholt', quittieren.n === 1, JSON.stringify(quittieren));
+ok('und meldet kein_netz', quittieren.fehler === 'kein_netz', quittieren.fehler);
+
+const senden = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  try { await post({ action: 'we_senden', session: 'tok' }); } catch (e) {}
+  return n;
+});
+ok('Senden wird NICHT wiederholt', senden === 1, String(senden));
+
+// Hat der Server geantwortet, nur nicht mit JSON, hilft kein zweiter Versuch
+const kein_json = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 200, text: async () => '<html>' }; };
+  let fehler = '';
+  try { await post({ action: 'we_liste', session: 'tok' }); } catch (e) { fehler = e.message; }
+  return { n: n, fehler: fehler };
+});
+ok('Antwort ohne JSON wird nicht wiederholt',
+   kein_json.n === 1 && kein_json.fehler === 'keine_antwort', JSON.stringify(kein_json));
+
+// Jede Flaeche muss denselben Klartext zeigen, nicht nur Anmeldung und
+// Speichern — sonst sieht eine falsche Bereitstellung aus wie ein Funkloch.
+const flaechen = await page.evaluate(async () => {
+  window.fetch = async () => ({ status: 200, text: async () => '<html>Anmelden</html>' });
+  localStorage.setItem('session', 'tok');
+  await ladeListe();
+  const liste = document.getElementById('st-liste').textContent;
+  await detailOeffnen('WE-2026-0001');
+  const detail = document.getElementById('dt-schritte').textContent;
+  return { liste: liste, detail: detail };
+});
+ok('Liste nennt die Bereitstellung', flaechen.liste.includes('Bereitstellung'), flaechen.liste);
+ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
+
 await browser.close();
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
