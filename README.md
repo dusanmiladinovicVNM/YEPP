@@ -457,6 +457,23 @@ stari put — sporije, ali radi, pa redosled ažuriranja (Pages / `Code.gs`)
 više ništa ne lomi. Da se uzaludan poziv ne ponavlja, pamti se do
 osvežavanja stranice.
 
+**Lista se crta sa uređaja, pa se ispravi.** Otvaranje aplikacije više ne
+pokazuje „Wird geladen …" nego poslednje redove koje je uređaj video, a
+sveži stižu iza toga. Iznad liste tada stoji crveno **`Letzter Stand vom
+Gerät, geladen vor 12 Minuten. Wird aktualisiert …`** — bez te rečenice bi
+nedelju dana star red izgledao kao onaj od malopre, a u magacinu neko po
+njemu postupa. Čim stignu sveži redovi, natpis nestaje.
+
+**Ništa zapamćeno ne odlučuje ništa.** Keširana lista određuje samo šta
+stoji na ekranu dok sveža ne stigne. Svaka radnja i dalje ide na server,
+koji red čita iznova: kvitiranje, slanje i storniranje tamo proveravaju
+stanje, a otvaranje unosa ionako povlači detalj sa servera. Ako osvežavanje
+padne, stari redovi ostaju na ekranu — ali natpis onda kaže i zašto
+(`… Keine Verbindung.`). Prazan ekran ne bi bio iskreniji, samo beskorisniji.
+
+Keš se briše pri odjavi: na zajedničkom iPadu imena kupaca i dobavljača
+prethodnog korisnika ne tiču se sledećeg.
+
 **Merenje je ugrađeno, da se ne bi nagađalo.** Svaki odgovor nosi `ms`
 (vreme na serveru) i `teile` (po fazama: `auth`, pa akcija). Aplikacija od
 svoje wall-clock vrednosti oduzme `ms` i u konzolu ispiše i put:

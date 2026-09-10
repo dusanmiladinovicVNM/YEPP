@@ -198,6 +198,7 @@ select{
 .eintrag .marken{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .trenn{color:var(--rand);font-weight:400;padding:0 2px}
 .leer{color:var(--grau);text-align:center;padding:48px 0;font-size:14px}
+.alt{color:var(--fehler);font-size:12px;padding:6px 0;text-align:center}
 .marke{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
 .marke.offen{background:rgba(143,164,38,.18);color:var(--akzent)}
 .marke.fertig{background:rgba(255,255,255,.08);color:var(--grau)}
@@ -383,6 +384,7 @@ select{
     <input id="st-suche" type="search" autocapitalize="off" autocorrect="off"
            placeholder="Suchen: Nummer, Kunde, Lieferant, Erfasser">
 
+    <div class="alt" id="st-alt" hidden></div>
     <div class="liste" id="st-liste"></div>
 
     <hr class="trennlinie">
@@ -703,8 +705,8 @@ function datumText(wert) {
  * wiederholt — ein zweites «Quittieren» faende den Schritt schon quittiert,
  * ein zweites «Senden» schickte die Mail zweimal.
  */
-const WIEDERHOLBAR = ['stammdaten', 'we_liste', 'we_detail', 'we_speichern',
-                      'admin_liste', 'admin_parameter'];
+const WIEDERHOLBAR = ['start', 'stammdaten', 'we_liste', 'we_detail',
+                      'we_speichern', 'admin_liste', 'admin_parameter'];
 
 const warten = ms => new Promise(r => setTimeout(r, ms));
 
@@ -1011,7 +1013,13 @@ async function start(vorab) {
   if (!start._kennt) { await startEinzeln(cache); return; }
 
   $('st-titel').textContent = 'Offene und letzte';
-  $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+
+  // Zuerst das, was das Geraet noch hat. Der Weg zum Server dauert
+  // Sekunden; solange auf «Wird geladen …» zu starren ist die
+  // Wartezeit, die man loswerden wollte.
+  const zuletzt = listeAusSpeicher();
+  if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen(zuletzt.zeit); }
+  else         { $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>'; }
 
   try {
     // EIN Aufruf fuer Liste und Stammdaten. Zwei kosten den Weg zum Server
@@ -1030,19 +1038,82 @@ async function start(vorab) {
       return;
     }
 
-    if (!antwortOk(r)) {
-      $('st-zahl').textContent = '';
-      $('st-liste').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
-      return;
-    }
+    if (!antwortOk(r)) { nichtErneuert(abgelehntText(r), zuletzt); return; }
     startUebernehmen(r);
   } catch (e) {
-    $('st-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
+    nichtErneuert(verbindungText(e), zuletzt);
     if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
   }
 }
 
+/**
+ * Der Abruf ist gescheitert. Steht eine alte Liste auf dem Schirm, bleibt
+ * sie stehen — leer waere sie nicht ehrlicher, nur nutzloser. Der Hinweis
+ * darueber sagt dann aber, dass sie alt ist und warum sie es bleibt.
+ */
+function nichtErneuert(grund, zuletzt) {
+  if (zuletzt) {
+    $('st-alt').hidden = false;
+    $('st-alt').textContent = 'Stand vom Gerät, geladen ' + altText(zuletzt.zeit) +
+                              '. ' + grund;
+    return;
+  }
+  altVerbergen();
+  $('st-zahl').textContent = '';
+  $('st-liste').innerHTML = '<div class="leer">' + esc(grund) + '</div>';
+}
+
 start._kennt = true;
+
+/**
+ * Die zuletzt gesehene Liste auf dem Geraet.
+ *
+ * Nichts davon entscheidet etwas: sie bestimmt, was auf dem Schirm steht,
+ * waehrend die frische Fassung unterwegs ist. Jede Handlung geht weiter
+ * an den Server, der die Zeile neu liest — Quittieren, Senden und
+ * Zurueckziehen pruefen dort ihren Stand, und das Antippen eines Eintrags
+ * holt das Detail ohnehin frisch.
+ *
+ * Nur die ungesuchte Liste: ein Suchergebnis gehoert zu seiner Frage.
+ */
+function listeSpeichern(liste) {
+  if ($('st-suche').value.trim()) return;
+  try {
+    localStorage.setItem('liste', JSON.stringify({ liste: liste, zeit: Date.now() }));
+  } catch (e) { /* voller Speicher — die Liste ist der falsche Ort zum Klagen */ }
+}
+
+function listeAusSpeicher() {
+  try {
+    const c = JSON.parse(localStorage.getItem('liste') || 'null');
+    return c && Array.isArray(c.liste) ? c : null;
+  } catch (e) { return null; }
+}
+
+/**
+ * Sagt, dass das hier ein alter Stand ist — und seit wann.
+ *
+ * Ohne diesen Satz waere die gezeigte Liste eine Behauptung: im Lager
+ * handelt jemand danach, und eine Woche alte Zeile sieht aus wie eine
+ * von eben. Verschwindet, sobald frische Zeilen da sind.
+ */
+function altText(zeit) {
+  const min = Math.round((Date.now() - zeit) / 60000);
+  if (min < 1)  return 'gerade eben';
+  if (min < 60) return 'vor ' + min + ' Minuten';
+  const std = Math.round(min / 60);
+  if (std < 24) return 'vor ' + std + (std === 1 ? ' Stunde' : ' Stunden');
+  const tage = Math.round(std / 24);
+  return 'vor ' + tage + (tage === 1 ? ' Tag' : ' Tagen');
+}
+
+function altZeigen(zeit) {
+  $('st-alt').hidden = false;
+  $('st-alt').textContent = 'Letzter Stand vom Gerät, geladen ' + altText(zeit) +
+                            '. Wird aktualisiert …';
+}
+
+function altVerbergen() { $('st-alt').hidden = true; }
 
 function stammdatenAusSpeicher() {
   const roh = localStorage.getItem('stammdaten');
@@ -1063,7 +1134,9 @@ function startUebernehmen(r) {
       JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
     fuelleStammdaten();
   }
+  altVerbergen();
   zeichneListe(r.liste || []);
+  listeSpeichern(r.liste || []);
 }
 
 /**
@@ -1106,18 +1179,23 @@ const STATUS_TEXT = {
 async function ladeListe() {
   const suche = $('st-suche').value.trim();
   $('st-titel').textContent = suche ? 'Suche' : 'Offene und letzte';
+  altVerbergen();
   $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   try {
     const r = await post({ action: 'we_liste', session: S.session, suche: suche });
     if (!antwortOk(r)) {
       // Der Zaehler stammt sonst noch vom letzten geglueckten Aufruf und
       // behauptet Eintraege, die gerade niemand sehen kann.
+      altVerbergen();
       $('st-zahl').textContent = '';
       $('st-liste').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
       return;
     }
+    altVerbergen();
     zeichneListe(r.liste || []);
+    listeSpeichern(r.liste || []);
   } catch (e) {
+    altVerbergen();
     $('st-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }
 }

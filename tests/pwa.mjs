@@ -24,7 +24,14 @@ const attrappe = () => {
   window.__methoden = [];
   window.__gleichzeitig = 0;      // gerade unterwegs
   window.__hoechstens = 0;        // hoechster je erreichter Stand
-  const DB = { kopf: null, positionen: [] };
+  // Der Server vergisst beim Neuladen der Seite nichts — die Attrappe darf
+  // es auch nicht, sonst prueft «was steht nach einem Reload da» nichts.
+  // sessionStorage, nicht localStorage: Abmelden raeumt localStorage aus.
+  const DB = JSON.parse(sessionStorage.getItem('__db') || 'null') ||
+             { kopf: null, positionen: [] };
+  const merken = () => {
+    try { sessionStorage.setItem('__db', JSON.stringify(DB)); } catch (e) {}
+  };
   // Der weiteste quittierte Schritt, wie statusAus() im Backend.
   const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
                              : DB.ang ? 'angenommen' : 'erfasst';
@@ -37,10 +44,15 @@ const attrappe = () => {
     window.__methoden.push(opt && opt.method ? opt.method : 'GET');
     window.__gleichzeitig++;
     window.__hoechstens = Math.max(window.__hoechstens, window.__gleichzeitig);
-    await new Promise(r => setTimeout(r, 5));      // eine Antwort dauert
+    // Eine Antwort dauert. Einstellbar, damit sich pruefen laesst, was auf
+    // dem Schirm steht, WAEHREND sie unterwegs ist.
+    await new Promise(r => setTimeout(r, window.__langsam || 5));
     window.__gleichzeitig--;
 
-    const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
+    const A = o => {
+      merken();
+      return { text: async () => JSON.stringify(o), json: async () => o, status: 200 };
+    };
 
     // Wie im Code.gs: die Liste steht an einer Stelle, und «start» und
     // «we_liste» geben dieselbe zurueck. Eine Attrappe, in der die beiden
@@ -746,6 +758,80 @@ ok('der vergebliche Aufruf wird nicht wiederholt',
      'we_liste,stammdaten',
    (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
 await alt.close();
+
+// --- 16) Die Liste steht sofort ---------------------------------------------
+// Der Weg zum Server dauert Sekunden. Solange auf «Wird geladen …» zu
+// starren ist genau die Wartezeit, die weg sollte — also zeichnet die App
+// zuerst, was das Geraet zuletzt gesehen hat, und sagt dabei, dass es alt ist.
+console.log('\n16) Die Liste steht sofort');
+const lok = await browser.newPage();
+lok.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await lok.addInitScript(attrappe);
+await lok.goto(APP);
+await lok.fill('#lg-email', 'anna@firma.ch');
+await lok.fill('#lg-pass', 'geheim123');
+await lok.click('#lg-senden');
+await lok.waitForSelector('#scr-start.aktiv');
+
+// Ein Eintrag, damit es etwas zu merken gibt
+await lok.click('#st-neu');
+await lok.waitForSelector('#scr-form.aktiv');
+await lok.fill('#fm-kunde', 'Kunde AG');
+await lok.fill('#fm-lieferant', 'Lieferant GmbH');
+await lok.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await lok.click('#fm-speichern');
+await lok.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('WE-2026-0001'));
+ok('die Liste wird gemerkt',
+   (await lok.evaluate(() => JSON.parse(localStorage.getItem('liste') || 'null')
+                              ?.liste?.length)) === 1);
+
+// Jetzt langsam antworten und neu laden: die Zeilen muessen VOR der Antwort stehen
+await lok.evaluate(() => localStorage.setItem('langsam', '1'));
+await lok.addInitScript(() => { window.__langsam = 600; });
+await lok.reload();
+await lok.waitForSelector('#scr-start.aktiv');
+ok('gezeichnet, bevor die Antwort da ist',
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'),
+   await lok.textContent('#st-liste'));
+ok('und es steht dabei, dass der Stand vom Geraet ist',
+   !(await lok.$eval('#st-alt', e => e.hidden)) &&
+   (await lok.textContent('#st-alt')).includes('Gerät'),
+   await lok.textContent('#st-alt'));
+ok('kein «Wird geladen» ueber vorhandenen Zeilen',
+   !(await lok.textContent('#st-liste')).includes('Wird geladen'));
+
+// Sobald die frischen Zeilen da sind, verschwindet der Hinweis
+await lok.waitForFunction(() => document.getElementById('st-alt').hidden);
+ok('frische Zeilen loeschen den Hinweis',
+   (await lok.$eval('#st-alt', e => e.hidden)) &&
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'));
+
+// Scheitert die Erneuerung, bleibt die alte Liste stehen — mit Grund
+// Nach der Attrappe eingehaengt, also gewinnt es — und es steht schon,
+// bevor start() den ersten Aufruf schickt. Danach eingesetzt waere es ein
+// Rennen gegen den eigenen Start.
+await lok.addInitScript(() => {
+  window.__langsam = 0;
+  window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+});
+await lok.reload();
+await lok.waitForSelector('#scr-start.aktiv');
+await lok.waitForFunction(() =>
+  document.getElementById('st-alt').textContent.includes('Verbindung'));
+ok('nach einem Fehlschlag bleiben die alten Zeilen stehen',
+   (await lok.textContent('#st-liste')).includes('WE-2026-0001'),
+   await lok.textContent('#st-liste'));
+ok('und der Hinweis nennt den Grund',
+   (await lok.textContent('#st-alt')).includes('Gerät') &&
+   (await lok.textContent('#st-alt')).includes('Verbindung'),
+   await lok.textContent('#st-alt'));
+// Auf einem geteilten iPad hat der naechste Benutzer die Kunden- und
+// Lieferantennamen des vorigen nichts anzugehen.
+await lok.evaluate(() => abmelden());
+ok('Abmelden vergisst die gemerkte Liste',
+   (await lok.evaluate(() => localStorage.getItem('liste'))) === null);
+await lok.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
