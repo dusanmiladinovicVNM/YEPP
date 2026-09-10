@@ -597,6 +597,42 @@ const dreiNull3 = await page.evaluate(async () => {
 });
 ok('403 wird nicht wiederholt', dreiNull3 === 1, String(dreiNull3));
 
+// Der Fall aus dem Betrieb: Apps Script leitet den POST um, der Browser
+// folgt mit GET, der Rumpf ist weg — doGet() antwortet, das Skript tat
+// nichts. Ein zweiter Versuch erledigt es, auch beim Quittieren.
+const verlorenerRumpf = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    const o = n === 1 ? { ok: false, error: 'nur_post', hinweis: 'nur CSV' }
+                      : { ok: true };
+    return { status: 200, text: async () => JSON.stringify(o) };
+  };
+  const r = await post({ action: 'we_schritt', session: 'tok' });
+  return { n: n, ok: r.ok };
+});
+ok('verlorener Rumpf wird noch einmal geschickt',
+   verlorenerRumpf.n === 2 && verlorenerRumpf.ok === true,
+   JSON.stringify(verlorenerRumpf));
+
+const immerGet = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    return { status: 200,
+             text: async () => JSON.stringify({ ok: false, error: 'nur_post' }) };
+  };
+  try { await post({ action: 'we_liste', session: 'tok' }); }
+  catch (e) { return { n: n, text: verbindungText(e) }; }
+  return { n: n, text: '' };
+});
+ok('zweimal verloren wird nicht endlos wiederholt', immerGet.n === 2,
+   String(immerGet.n));
+ok('und die Meldung bittet um einen neuen Versuch',
+   immerGet.text.includes('noch einmal versuchen'), immerGet.text);
+ok('ohne die Bereitstellung zu verdaechtigen',
+   !immerGet.text.includes('Bereitstellung'), immerGet.text);
+
 // Bleibt es auch beim zweiten Mal bei 404, sagt die Meldung, was zu tun ist
 const zweimal404 = await page.evaluate(async () => {
   window.fetch = async () => ({ status: 404, text: async () => '<!DOCTYPE html>' });

@@ -86,8 +86,14 @@ function doPost(e) {
 function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.format !== 'csv') {
-    return ContentService.createTextOutput(
-      'Diese Adresse liefert nur den CSV-Export: ?token=…&format=csv');
+    // Hierher kommt auch die App, wenn Apps Script ihren POST weiterleitet
+    // und der Browser der Weiterleitung mit GET folgt — dabei geht der Rumpf
+    // verloren. Das Skript hat dann nichts getan, und die Antwort sagt genau
+    // das, als JSON: die App erkennt es und schickt den Aufruf noch einmal.
+    // Als blosser Text sah es fuer sie aus wie eine kaputte Bereitstellung.
+    return json({ ok: false, error: 'nur_post',
+                  hinweis: 'Diese Adresse liefert nur den CSV-Export: ' +
+                           '?token=…&format=csv' });
   }
 
   const token = eigenschaft('TOKEN_READ', true);

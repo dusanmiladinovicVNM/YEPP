@@ -784,7 +784,15 @@ console.log('\n19) Suche, GET, Foto, Versandvermerk');
   // GET fuehrt keine Aktionen mehr aus — kein Token in einer Adresse
   const antwort = ctx.doGet({ parameter: { action: 'we_liste', session: 'tokA' } });
   const text = typeof antwort === 'string' ? antwort : antwort.t;
-  ok('GET ohne format=csv fuehrt nichts aus', text.indexOf('nur den CSV-Export') >= 0, text);
+  // Als blosser Text sah diese Antwort fuer die App aus wie eine kaputte
+  // Bereitstellung. Als JSON erkennt sie den Fall und schickt den Aufruf
+  // noch einmal — genau das braucht sie, wenn eine Weiterleitung aus ihrem
+  // POST ein GET gemacht hat.
+  const alsJson = JSON.parse(text);
+  ok('GET ohne format=csv fuehrt nichts aus', alsJson.ok === false, text);
+  ok('und meldet sich als nur_post', alsJson.error === 'nur_post', text);
+  ok('mit einem Hinweis fuer Menschen',
+     alsJson.hinweis.indexOf('nur den CSV-Export') >= 0, text);
 
   // Endung nach Bildtyp
   ctx.parameterSetzen('FotoOrdner', '1FotoFotoFotoFotoFotoFotoFo');

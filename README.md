@@ -430,7 +430,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **444 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **450 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -522,6 +522,19 @@ greške umesto sa JSON-om. Prijava je do sada radila baš to — `ladeListe()`
 bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
 jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
 da nikad nije više od jednog.
+
+**Apps Script na POST odgovara preusmerenjem.** Kad ga browser prati, po
+HTTP standardu se POST pretvara u **GET** i telo zahteva nestane. Sporadično
+to preusmerenje završi natrag na `/exec`, pa se izvrši `doGet` umesto
+`doPost` — skript pri tom **ne uradi ništa**.
+
+`doGet` zato odgovara JSON-om `{ok:false, error:"nur_post"}`, a ne golim
+tekstom: aplikacija tako prepoznaje slučaj i **pošalje poziv ponovo**. Pošto
+se ništa nije desilo, to važi i za kvitiranje i za slanje.
+
+Isti kvar je postojao i ranije, samo je drukčije izgledao: pre grupe C
+`doGet` je propadao do `verteilen({})` i vraćao `{"error":"session"}`, pa je
+aplikacija **izbacivala korisnika na prijavu** bez vidljivog razloga.
 
 **Google povremeno vrati `404` na ispravnu adresu.** Viđeno u pogonu: jednom
 padne, posle osvežavanja radi. Takav odgovor dolazi sa Google-ovog frontenda
