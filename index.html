@@ -756,8 +756,9 @@ async function post(payload) {
       continue;
     }
 
+    let antwort;
     try {
-      return JSON.parse(text);
+      antwort = JSON.parse(text);
     } catch (e) {
       console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
       if (NICHT_ANGEKOMMEN.indexOf(res.status) >= 0 && i === 0) {
@@ -773,6 +774,19 @@ async function post(payload) {
       fehler.anfang = String(text).replace(/\s+/g, ' ').trim().slice(0, 90);
       throw fehler;
     }
+
+    // Apps Script beantwortet POST mit einer Weiterleitung. Folgt der
+    // Browser ihr, wird aus dem POST ein GET, und der Rumpf ist weg — der
+    // Aufruf landet in doGet(), das Skript tut nichts. Sporadisch, und mit
+    // einem zweiten Versuch erledigt. Weil nichts geschehen ist, gilt das
+    // auch fuer Aufrufe, die sonst kein zweites Mal hinausgehen duerfen.
+    if (antwort && antwort.error === 'nur_post') {
+      console.warn('Der Aufruf kam als GET an — die Weiterleitung hat den ' +
+                   'Rumpf verloren. Versuch ' + (i + 1) + '.');
+      if (i === 0) continue;
+      throw new Error('nur_post');
+    }
+    return antwort;
   }
 
   const fehler = new Error('kein_netz');
@@ -790,6 +804,10 @@ function verbindungText(e) {
   if (art === 'nicht_verbunden') {
     return 'Diese App ist noch nicht mit dem Backend verbunden: ' +
            'CONFIG.url in index.html ist leer.';
+  }
+  if (art === 'nur_post') {
+    return 'Der Aufruf kam beim Server ohne Inhalt an — das passiert, wenn ' +
+           'Google die Anfrage umleitet. Bitte noch einmal versuchen.';
   }
   if (art === 'keine_antwort') {
     // 404 heisst nicht «kaputt», sondern «diese Bereitstellung gibt es
