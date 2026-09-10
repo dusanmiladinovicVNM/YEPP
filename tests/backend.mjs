@@ -802,6 +802,61 @@ console.log('\n19) Suche, GET, Foto, Versandvermerk');
      ctx.weListe({ suche: meins }, u).liste[0].gesendet === String(zeile[k.Gesendet]));
 }
 
+console.log('\n20) Ablage und woechentliche Sicherung');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  ctx.console = { log: () => {}, error: () => {} };   // Berichte nicht mitdrucken
+  const bericht = ctx.setupAnlegen();
+
+  ok('Ordner neben der Tabelle angelegt',
+     ctx.__ordner.join(',') === 'Excel,Lieferscheine,Sicherung',
+     ctx.__ordner.join(','));
+  ok('ArchivOrdner eingetragen', ctx.parameter('ArchivOrdner') === 'id-Excel',
+     ctx.parameter('ArchivOrdner'));
+  ok('FotoOrdner eingetragen', ctx.parameter('FotoOrdner') === 'id-Lieferscheine');
+  ok('SicherungOrdner eingetragen', ctx.parameter('SicherungOrdner') === 'id-Sicherung');
+  ok('setupAnlegen berichtet davon', bericht.indexOf('ArchivOrdner →') >= 0, bericht);
+
+  // Zweiter Lauf darf nichts verdoppeln und nichts ueberschreiben
+  ctx.__ordner.length = 0;
+  ctx.parameterSetzen('FotoOrdner', '1EigenerFotoOrdnerVonHand99');
+  const zweiter = ctx.ordnerAnlegen();
+  ok('nichts neu angelegt', ctx.__ordner.length === 0, ctx.__ordner.join(','));
+  ok('eigener Eintrag bleibt stehen',
+     ctx.parameter('FotoOrdner') === '1EigenerFotoOrdnerVonHand99');
+  ok('und wird als solcher gemeldet',
+     zweiter.indexOf('FotoOrdner: bleibt') >= 0, zweiter);
+
+  // Sicherung laeuft damit wirklich
+  ok('Sicherung findet ihren Ordner', ctx.sicherung() === 'gesichert');
+
+  // Der Zeit-Ausloeser: einmal, nicht zweimal
+  ok('anfangs kein Ausloeser', ctx.__ausloeser.length === 0);
+  ctx.sicherungPlanen();
+  ok('ein Ausloeser angelegt', ctx.__ausloeser.length === 1);
+  ok('haengt an sicherung', ctx.__ausloeser[0].fn === 'sicherung');
+  ok('sonntags um drei',
+     ctx.__ausloeser[0].tag === 'SUNDAY' && ctx.__ausloeser[0].stunde === 3,
+     JSON.stringify(ctx.__ausloeser[0].tag) + '/' + ctx.__ausloeser[0].stunde);
+  ctx.sicherungPlanen();
+  ok('zweiter Aufruf verdoppelt nicht', ctx.__ausloeser.length === 1,
+     String(ctx.__ausloeser.length));
+
+  // Fremde Ausloeser bleiben unberuehrt
+  ctx.__ausloeser.push({ fn: 'anderes', getHandlerFunction: () => 'anderes' });
+  ctx.sicherungPlanen();
+  ok('fremder Ausloeser bleibt',
+     ctx.__ausloeser.filter(a => a.fn === 'anderes').length === 1 &&
+     ctx.__ausloeser.filter(a => a.fn === 'sicherung').length === 1,
+     ctx.__ausloeser.map(a => a.fn).join(','));
+
+  // Der Bericht nennt die Ablage
+  const pruef = ctx.einrichtungPruefen();
+  ok('Bericht nennt den Archivordner', pruef.indexOf('ArchivOrdner: Ordner id-Excel') >= 0,
+     pruef);
+  ok('Bericht meldet fehlende Mailadresse', pruef.indexOf('MailAn: FEHLT') >= 0);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

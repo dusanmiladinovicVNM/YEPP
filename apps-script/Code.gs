@@ -1396,7 +1396,12 @@ function setupAnlegen() {
       ['SicherungOrdner', '']  // eigener Ordner: die Kopie enthaelt Hashes
     ]);
   }
-  return 'fertig';
+
+  // Die Ablage gleich mit: sonst muesste jemand drei Ordner von Hand
+  // anlegen und ihre IDs aus der Adressleiste abschreiben.
+  const ordner = ordnerAnlegen();
+
+  return 'fertig\n' + ordner;
 }
 
 /**
@@ -1447,6 +1452,13 @@ function einrichtungPruefen() {
     zeilen.push('Tabelle: ' + e.message);
   }
 
+  ORDNER_PLAN.forEach(o => {
+    const id = parameter(o.par);
+    zeilen.push(o.par + ': ' + (id ? (ordnerName(id) || 'ID nicht erreichbar')
+                                   : 'leer — abgeschaltet'));
+  });
+  zeilen.push('MailAn: ' + (parameter('MailAn') || 'FEHLT — Versand meldet einen Fehler'));
+
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {
     zeilen.push('CSV fuer die Vorlage: <Web-App-URL>?token=' + token +
@@ -1469,6 +1481,59 @@ function tokenErzeugen() {
   eigenschaft._alle = null;
   console.log('TOKEN_READ: ' + token);
   return token;
+}
+
+/**
+ * Die drei Ablageordner. Sie entstehen neben der Tabelle — im selben Ordner,
+ * in dem auch das Skript liegt — damit alles zu diesem Wareneingang an einer
+ * Stelle steht und niemand IDs aus Adressleisten kopieren muss.
+ *
+ * «Sicherung» ist bewusst ein eigener Ordner: die Kopie enthaelt das Blatt
+ * «Benutzer» mit PassHash und Salt, waehrend «Excel» mit der Buchhaltung
+ * geteilt wird.
+ */
+const ORDNER_PLAN = [
+  { par: 'ArchivOrdner',    name: 'Excel' },
+  { par: 'FotoOrdner',      name: 'Lieferscheine' },
+  { par: 'SicherungOrdner', name: 'Sicherung' }
+];
+
+/**
+ * Legt die Ordner an und traegt sie ein — aber nur dort, wo noch nichts
+ * steht. Ein leeres Feld heisst in der Verwaltung «abgeschaltet»; wer den
+ * Fotoordner absichtlich leer laesst, bekommt ihn hier nicht zurueck.
+ * Deshalb nur beim Einrichten, nicht aus der Oberflaeche heraus.
+ */
+function ordnerAnlegen() {
+  const eltern = elternOrdner();
+  if (!eltern) return 'kein Ordner neben der Tabelle gefunden';
+
+  return ORDNER_PLAN.map(o => {
+    if (parameter(o.par)) return o.par + ': bleibt, wie eingetragen';
+    const ordner = unterordner(eltern, o.name);
+    parameterSetzen(o.par, ordner.getId());
+    return o.par + ' → ' + eltern.getName() + '/' + o.name;
+  }).join('\n');
+}
+
+/** Der Ordner, in dem die Tabelle liegt. */
+function elternOrdner() {
+  const eltern = DriveApp.getFileById(driveId(eigenschaft('SHEET_ID'))).getParents();
+  return eltern.hasNext() ? eltern.next() : null;
+}
+
+/**
+ * Haengt die woechentliche Sicherung an einen Zeit-Trigger. Ein zweiter
+ * Aufruf legt keinen zweiten an — sonst liefe sie doppelt und der Ordner
+ * fuellte sich mit Kopien derselben Nacht.
+ */
+function sicherungPlanen() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'sicherung') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sicherung').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+  return 'Sicherung laeuft ab jetzt sonntags gegen 3 Uhr';
 }
 
 /** Erstzugang: in «Benutzer» nur Email und Name eintragen, dann hier starten. */

@@ -146,7 +146,14 @@ function laden(ss) {
       })
     },
     DriveApp: {
-      getFileById: () => ({ setTrashed() {}, makeCopy() {} }),
+      getFileById: id => ({
+        setTrashed() {}, makeCopy() {},
+        // Der Ordner, in dem die Tabelle liegt — daneben entsteht die Ablage.
+        getParents: () => {
+          let da = String(id).indexOf('ohne-ordner') < 0;
+          return { hasNext: () => da, next: () => { da = false; return ordner('eltern'); } };
+        }
+      }),
       getFolderById: id => {
         // Eine ID, die es nicht gibt, wirft — daran haengt die Rueckmeldung
         // «Ordner nicht erreichbar» im Adminbereich.
@@ -155,7 +162,25 @@ function laden(ss) {
       }
     },
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
-    ScriptApp: { getOAuthToken: () => 'tok' },
+    ScriptApp: {
+      getOAuthToken: () => 'tok',
+      WeekDay: { SUNDAY: 'SUNDAY' },
+      getProjectTriggers: () => ctx.__ausloeser.slice(),
+      deleteTrigger: t => {
+        const i = ctx.__ausloeser.indexOf(t);
+        if (i >= 0) ctx.__ausloeser.splice(i, 1);
+      },
+      newTrigger: fn => {
+        const bau = { fn: fn, getHandlerFunction: () => fn };
+        const kette = {
+          timeBased: () => kette,
+          onWeekDay: tag => { bau.tag = tag; return kette; },
+          atHour: h => { bau.stunde = h; return kette; },
+          create: () => { ctx.__ausloeser.push(bau); return bau; }
+        };
+        return kette;
+      }
+    },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperties: () => Object.assign({}, eigenschaften),
@@ -192,12 +217,20 @@ function laden(ss) {
     __mails: [],
     __sperren: [],
     __eigenschaften: eigenschaften,
-    __dateien: []
+    __dateien: [],
+    __ordner: [],
+    __ausloeser: []
   };
   function ordner(id) {
     return { getName: () => 'Ordner ' + String(id || 'X'),
-             getFoldersByName: () => ({ hasNext: () => false }),
-             createFolder: () => ordner(id),
+             getId: () => 'id-' + String(id || 'X'),
+             getFoldersByName: name => {
+               // Beim zweiten Aufruf denselben Ordner zurueckgeben, sonst
+               // liesse sich nicht pruefen, dass nichts doppelt entsteht.
+               const da = ctx.__ordner.indexOf(name) >= 0;
+               return { hasNext: () => da, next: () => ordner(name) };
+             },
+             createFolder: name => { ctx.__ordner.push(name); return ordner(name); },
              createFile: b => { ctx.__dateien.push(b && b.name); 
                                 return { getUrl: () => 'https://drive/x' }; } };
   }

@@ -121,7 +121,8 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
    | `PWA_URL` | adresa PWA, ide u pristupne mejlove |
    | `TOKEN_READ` | štiti CSV izlaz — ili pokreni `tokenErzeugen()` |
 
-3. Pokreni **`setupAnlegen`** jednom — pravi sve listove i zaglavlja
+3. Pokreni **`setupAnlegen`** jednom — pravi listove, zaglavlja i tri
+   Drive foldera pored tabele
 4. **Bereitstellen → Neue Bereitstellung → Web-App**
    *Ausführen als: Ich*, *Zugriff: Jeder*
 5. Prvi put traži odobrenje za tabelu, Drive i slanje pošte — potvrdi
@@ -182,9 +183,19 @@ Ažuriranje je time svedeno na tri koraka bez ijednog polja za popunjavanje:
 **zalepi `Code.gs` → Neue Version → `setupAnlegen`.** Skripteigenschaften
 preživljavaju zamenu koda; `setupAnlegen` dopiše kolone kojih još nema.
 
-## Faza 3 — Parametri (~10 min)
+## Faza 3 — Parametri (~3 min)
 
-U listu `Parameter`, kolona `Schluessel` / `Wert`:
+Tri foldera **već stoje** — napravio ih je `setupAnlegen`, pored same tabele:
+
+```
+Wareneingang/                  ← tu gde je i tabela
+  Excel/           → ArchivOrdner       .xlsx, u podfolder GGGG-MM
+  Lieferscheine/   → FotoOrdner         slike otpremnica, isto po mesecima
+  Sicherung/       → SicherungOrdner    nedeljna kopija cele tabele
+```
+
+Ostaje samo **`MailAn`** — adresa koja dobija popunjeni `.xlsx`. Upiši je u
+**Verwaltung** u aplikaciji, ili u list `Parameter`.
 
 | `Schluessel` | `Wert` | Čemu služi |
 |---|---|---|
@@ -193,14 +204,24 @@ U listu `Parameter`, kolona `Schluessel` / `Wert`:
 | `FotoOrdner` | ID Drive foldera | tu idu slike otpremnice, u podfolder `GGGG-MM` |
 | `SicherungOrdner` | ID Drive foldera | tu ide nedeljna kopija cele tabele |
 
-ID foldera je deo URL-a posle `/folders/`.
-
 **Prazan `ArchivOrdner` znači: samo mejl, bez arhive.** Prazan `FotoOrdner`
 znači: slika se tiho preskače, unos i dalje prolazi. Prazan `MailAn` je
-jedina od te tri koja blokira — slanje tada javlja `kein_empfaenger`.
+jedini koji blokira — slanje tada javlja `kein_empfaenger`.
 
-Ova tri parametra tiču se samo **slanja**. Šablon na SharePointu ne koristi
-nijedan od njih — on povlači CSV i ne zna ni za mejl ni za Drive.
+Zato `setupAnlegen` **ne pregazi ono što je već upisano**: prazno polje je
+namerno gašenje, ne rupa. Ko obriše `FotoOrdner` da isključi slike, neće ga
+dobiti nazad ponovnim pokretanjem.
+
+**`SicherungOrdner` ne deli ni sa kim** — kopija sadrži list `Benutzer`, a u
+njemu `PassHash` i `Salt`. Zato je odvojen od `Excel/`, koji se po pravilu
+deli sa računovodstvom.
+
+Za nedeljnu kopiju pokreni jednom **`sicherungPlanen()`** u editoru — sam
+zakači okidač za nedelju oko 3h i ukloni eventualni duplikat, pa se ne mora
+kroz UI za okidače.
+
+Ovi parametri tiču se samo **slanja i arhive**. Šablon na SharePointu ne
+koristi nijedan — on povlači CSV i ne zna ni za mejl ni za Drive.
 
 ## Faza 4 — PWA (~15 min)
 
@@ -392,7 +413,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **405 provera**:
+Tri suite, sve bez mreže i bez Google naloga — **422 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -460,6 +481,9 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 31 | Prijava naloga napravljenog pre ove verzije | prolazi; heš u tabeli dobija `v2$` |
 | 32 | Pretraga po imenu dobavljača od pre dva meseca | nađe i tuđ završen dokument |
 | 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
+| 34 | Pokrenuti `setupAnlegen` dvaput | folderi se ne dupliraju, upisi ostaju |
+| 35 | Obrisati `FotoOrdner`, pa `setupAnlegen` | ostaje prazan — gašenje je namerno |
+| 36 | Pokrenuti `sicherungPlanen()` dvaput | jedan okidač, ne dva |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |
@@ -494,8 +518,8 @@ Sign-In — `login` tada prima ID token umesto lozinke, ostatak arhitekture
 se ne menja.
 
 **Sheets nema verzionisanje kakvo ima SharePoint.** Funkcija `sicherung()`
-u `Code.gs` pravi kopiju u folder iz parametra `SicherungOrdner` — zakači je
-na nedeljni vremenski okidač. Bez tog parametra ne radi ništa i to javi.
+pravi kopiju u folder iz parametra `SicherungOrdner`; `sicherungPlanen()`
+joj jednom zakači nedeljni okidač. Bez tog parametra ne radi ništa i to javi.
 
 **Nema izmene posle čuvanja.** Pogrešan unos se povlači i unosi ponovo.
 Za obrazac koji se potpisuje u tri koraka to je namerno: izmena posle
