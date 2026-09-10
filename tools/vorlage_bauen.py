@@ -108,6 +108,11 @@ def bauen():
 
     setz(fm, 'A1', 'Wareneingang / Material reception', fett=True, gross=14)
 
+    # Die Nummer gehoert in den Druckbereich: der Ausdruck wird
+    # unterschrieben und abgelegt. J2 selbst steht ausserhalb.
+    setz(fm, 'F1', '=IF($J$2="","",$J$2)', fett=True, gross=12, aus='right')
+    fm.merge_cells('F1:H1')
+
     # Auswahl — ausserhalb des Druckbereichs, damit sie nicht mitgedruckt wird
     setz(fm, 'J1', 'Wareneingang wählen', fett=True)
     wahl = setz(fm, 'J2', '', fett=True, rahmen=True, fuell=BLASS)
@@ -128,25 +133,33 @@ def bauen():
     pruef.add(fm['J2'])
 
     # -- Quittungen -------------------------------------------------
-    for sp, titel in zip('ABCD', ['Aufgabe / Task',
+    # Spalte A ist die schmale N°-Spalte des Positionsblocks; die
+    # Beschriftungen des Papiers passen dort nicht hinein und wuerden bei
+    # fester Zeilenhoehe abgeschnitten. Darum vier verbundene Bereiche:
+    # A:B Aufgabe, C:D Name, E Datum, F Uhrzeit — wie in blattAufbauen.
+    for sp, titel in zip('ACEF', ['Aufgabe / Task',
                                   'Name Mitarbeiter / Employee name',
                                   'Datum / Date', 'Uhrzeit / Time']):
         setz(fm, f'{sp}3', titel, fett=True, wrap=True, rahmen=True, fuell=GRAU)
-    fm.row_dimensions[3].height = 30
+    fm.row_dimensions[3].height = 26
 
     schritte = [
-        (4, 'Angenommen /\nAccepted',                        'AngNam', 'AngDat', 'AngZeit'),
-        (5, 'Gezählt & kontrolliert /\ncounted & controlled', 'GezNam', 'GezDat', 'GezZeit'),
-        (6, 'Eingelagert / stored',                           'EinNam', 'EinDat', 'EinZeit'),
+        (4, 'Angenommen / Accepted',                         'AngNam', 'AngDat', 'AngZeit'),
+        (5, 'Gezählt & kontrolliert / counted & controlled', 'GezNam', 'GezDat', 'GezZeit'),
+        (6, 'Eingelagert / stored',                          'EinNam', 'EinDat', 'EinZeit'),
     ]
     for zeile, beschriftung, nam, dat, zeit in schritte:
-        setz(fm, f'A{zeile}', beschriftung, fett=True, gross=9,
-             wrap=True, rahmen=True)
-        for sp, feld in zip('BCD', (nam, dat, zeit)):
+        setz(fm, f'A{zeile}', beschriftung, fett=True, wrap=True, rahmen=True)
+        for sp, feld in zip('CEF', (nam, dat, zeit)):
             setz(fm, f'{sp}{zeile}',
                  f'=IFERROR(INDEX({B(feld)},MATCH($J$2,{WE},0)),"")',
                  rahmen=True)
-        fm.row_dimensions[zeile].height = 30
+        fm.row_dimensions[zeile].height = 26
+
+    for zeile in range(3, 7):
+        fm.merge_cells(f'A{zeile}:B{zeile}')
+        fm.merge_cells(f'C{zeile}:D{zeile}')
+        rahmen_um(fm, f'A{zeile}:F{zeile}')
 
     setz(fm, 'A8',
          'Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.\n'
@@ -159,10 +172,11 @@ def bauen():
     for zeile, beschriftung, feld in [(10, 'Kunde / Client',      'Kunde'),
                                       (11, 'Lieferant / Supplier', 'Lieferant')]:
         setz(fm, f'A{zeile}', beschriftung, fett=True, rahmen=True)
-        setz(fm, f'B{zeile}',
+        setz(fm, f'C{zeile}',
              f'=IFERROR(INDEX({B(feld)},MATCH($J$2,{WE},0)),"")', rahmen=True)
-        fm.merge_cells(f'B{zeile}:D{zeile}')
-        rahmen_um(fm, f'A{zeile}:D{zeile}')
+        fm.merge_cells(f'A{zeile}:B{zeile}')
+        fm.merge_cells(f'C{zeile}:F{zeile}')
+        rahmen_um(fm, f'A{zeile}:F{zeile}')
 
     setz(fm, 'A13',
          'Bei neuem und bestehendem Material mit oder ohne Lieferschein notwendig:\n'

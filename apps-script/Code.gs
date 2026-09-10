@@ -77,13 +77,15 @@ function verteilen(d) {
   const u = sitzungPruefen(d.session);
   if (!u) return { ok: false, error: 'session' };
 
-  // Solange das zugestellte Passwort nicht ersetzt ist, geht nur der Wechsel.
-  if (!u.pwGeaendert && aktion !== 'passwort') {
+  // Solange das zugestellte Passwort nicht ersetzt ist, geht nur der Wechsel
+  // — abmelden bleibt trotzdem erlaubt, sonst sitzt man auf dem Geraet fest.
+  if (!u.pwGeaendert && aktion !== 'passwort' && aktion !== 'abmelden') {
     return { ok: false, error: 'passwort_noetig' };
   }
 
   switch (aktion) {
     case 'passwort':      return passwortSetzen(d, u);
+    case 'abmelden':      return abmelden(d, u);
     case 'stammdaten':    return stammdaten();
     case 'we_speichern':  return weSpeichern(d, u);
     case 'we_schritt':    return weSchritt(d, u);
@@ -101,6 +103,7 @@ function verteilen(d) {
       case 'admin_liste':  return adminListe();
       case 'admin_neu':    return adminNeu(d, u);
       case 'admin_aktion': return adminAktion(d, u);
+      case 'admin_parameter': return adminParameter(d, u);
     }
   }
 
@@ -161,10 +164,34 @@ function login(d) {
 
 function sitzungAnlegen(email) {
   const token = zufall(32);
-  blatt(T.sessions).appendRow([
-    token, email, new Date(Date.now() + SITZUNG_TAGE * 86400000)
-  ]);
+  const bl    = blatt(T.sessions);
+
+  // Abgelaufene Zeilen bei dieser Gelegenheit wegraeumen. Das Blatt wird bei
+  // jedem einzelnen Aufruf ganz gelesen; ohne das waechst es ewig weiter,
+  // und mit ihm die Zeit, die jede Aktion braucht. Anmelden ist selten —
+  // der richtige Moment dafuer.
+  const dat   = bl.getDataRange().getValues();
+  const jetzt = new Date();
+  for (let i = dat.length - 1; i >= 1; i--) {
+    if (dat[i][2] && new Date(dat[i][2]) < jetzt) bl.deleteRow(i + 1);
+  }
+
+  bl.appendRow([token, email, new Date(Date.now() + SITZUNG_TAGE * 86400000)]);
   return token;
+}
+
+/**
+ * Meldet dieses eine Geraet ab. Der Token wird geloescht, nicht nur im
+ * Browser vergessen: sonst bliebe eine abgemeldete Sitzung dreissig Tage
+ * lang gueltig, und «Abmelden» auf einem geteilten iPad waere eine Geste.
+ */
+function abmelden(d, u) {
+  const bl  = blatt(T.sessions);
+  const dat = bl.getDataRange().getValues();
+  for (let i = dat.length - 1; i >= 1; i--) {
+    if (String(dat[i][0]) === String(d.session)) bl.deleteRow(i + 1);
+  }
+  return { ok: true };
 }
 
 /** Gibt den Benutzer zurueck oder null. Einzige Quelle fuer die Identitaet. */
@@ -293,13 +320,19 @@ function weSpeichern(d, u) {
   const sperre = LockService.getScriptLock();
   sperre.waitLock(20000);
   try {
+    // Derselbe Vorgang darf nicht zweimal in der Tabelle landen. Bricht die
+    // Verbindung nach dem Schreiben ab, sieht der Erfasser einen Fehler und
+    // speichert noch einmal — mit demselben Schluessel aus dem Formular.
+    const schon = vorgangSuchen(d.vorgang);
+    if (schon) return { ok: true, weNr: schon, wiederholt: true };
+
     const weNr = naechsteNummer();
     const jetzt = new Date();
     const datum = fmt(jetzt, 'yyyy-MM-dd');
     const zeit  = fmt(jetzt, 'HH:mm');
 
     const bl = blatt(T.we);
-    const k  = spalten(bl.getDataRange().getValues()[0]);
+    const k  = kopfSpalten(bl);
     const z  = new Array(bl.getLastColumn()).fill('');
 
     z[k.WeNr]        = weNr;
@@ -313,11 +346,12 @@ function weSpeichern(d, u) {
       z[k[SCHRITTE[s].dat]]  = datum;
       z[k[SCHRITTE[s].zeit]] = zeit;
     });
-    z[k.LagerM2]     = d.lagerM2 === '' || d.lagerM2 == null ? '' : Number(d.lagerM2);
+    z[k.LagerM2]     = zahl(d.lagerM2);
     z[k.Bemerkung]   = String(d.bemerkung || '').trim();
     z[k.Storniert]   = false;
     z[k.Status]      = statusAus(z, k);
     z[k.FotoUrl]     = d.foto ? fotoAblegen(d.foto, weNr, u) : '';
+    if (k.Vorgang != null) z[k.Vorgang] = String(d.vorgang || '').trim();
     bl.appendRow(z);
 
     positionenSchreiben(weNr, pos);
@@ -327,9 +361,28 @@ function weSpeichern(d, u) {
   }
 }
 
+/**
+ * Sucht den Schluessel eines Erfassungsvorgangs und gibt die Nummer zurueck,
+ * unter der er schon steht. Liest nur diese eine Spalte.
+ */
+function vorgangSuchen(vorgang) {
+  const schluessel = String(vorgang || '').trim();
+  if (!schluessel) return '';
+  const bl = blatt(T.we);
+  const k  = kopfSpalten(bl);
+  if (k.Vorgang == null || bl.getLastRow() < 2) return '';
+  const spalte = bl.getRange(2, k.Vorgang + 1, bl.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < spalte.length; i++) {
+    if (String(spalte[i][0]) === schluessel) {
+      return String(bl.getRange(i + 2, k.WeNr + 1).getValue());
+    }
+  }
+  return '';
+}
+
 function positionenSchreiben(weNr, pos) {
   const bl = blatt(T.pos);
-  const k  = spalten(bl.getDataRange().getValues()[0]);
+  const k  = kopfSpalten(bl);
   const breite = bl.getLastColumn();
   const zeilen = [];
   let nr = 0;
@@ -345,8 +398,10 @@ function positionenSchreiben(weNr, pos) {
     z[k.WeNr]       = weNr;
     z[k.Nr]         = nr;
     z[k.Artikel]    = artikel;
-    z[k.Anzahl]     = p.anzahl === '' || p.anzahl == null ? '' : Number(p.anzahl);
-    z[k.KG]         = p.kg === '' || p.kg == null ? '' : Number(p.kg);
+    // Das Komma ersetzt der Server selbst: die Umrechnung im Browser ist
+    // Bequemlichkeit, keine Zusicherung — der Client kann alles schicken.
+    z[k.Anzahl]     = zahl(p.anzahl);
+    z[k.KG]         = zahl(p.kg);
     z[k.MHD]        = String(p.mhd || '').trim();
     z[k.Regalplatz] = String(p.regalplatz || '').trim();
     z[k.Bemerkung]  = String(p.bemerkung || '').trim();
@@ -362,12 +417,17 @@ function positionenSchreiben(weNr, pos) {
 /** Fortlaufend, pro Jahr: WE-2026-0001 */
 function naechsteNummer() {
   const jahr = fmt(new Date(), 'yyyy');
-  const dat  = blatt(T.we).getDataRange().getValues();
-  const k    = spalten(dat[0]);
+  const bl   = blatt(T.we);
+  const k    = kopfSpalten(bl);
   let max = 0;
-  for (let i = 1; i < dat.length; i++) {
-    const m = String(dat[i][k.WeNr] || '').match(/^WE-(\d{4})-(\d+)$/);
-    if (m && m[1] === jahr) max = Math.max(max, Number(m[2]));
+  // Nur die Nummernspalte, nicht das ganze Blatt: das hier laeuft bei jeder
+  // Erfassung, und die Tabelle waechst jedes Jahr.
+  if (bl.getLastRow() > 1) {
+    const spalte = bl.getRange(2, k.WeNr + 1, bl.getLastRow() - 1, 1).getValues();
+    spalte.forEach(z => {
+      const m = String(z[0] || '').match(/^WE-(\d{4})-(\d+)$/);
+      if (m && m[1] === jahr) max = Math.max(max, Number(m[2]));
+    });
   }
   return 'WE-' + jahr + '-' + String(max + 1).padStart(4, '0');
 }
@@ -399,6 +459,19 @@ function weSchritt(d, u) {
   const feld = SCHRITTE[String(d.schritt || '')];
   if (!feld) return { ok: false, error: 'unbekannter Schritt' };
 
+  // Unter Sperre, wie das Erfassen: sonst kommen zwei gleichzeitige Klicks
+  // beide an der Pruefung «bereits quittiert» vorbei, und im Blatt steht
+  // der Name dessen, der zufaellig zuletzt geschrieben hat.
+  const sperre = LockService.getScriptLock();
+  sperre.waitLock(20000);
+  try {
+    return schrittSchreiben(d, u, feld);
+  } finally {
+    sperre.releaseLock();
+  }
+}
+
+function schrittSchreiben(d, u, feld) {
   const bl  = blatt(T.we);
   const dat = bl.getDataRange().getValues();
   const k   = spalten(dat[0]);
@@ -457,8 +530,8 @@ function weListe(d, u) {
     }
     aus.push({
       weNr:      String(dat[i][k.WeNr]),
-      datum:     String(dat[i][k.AngDat] || ''),
-      zeit:      String(dat[i][k.AngZeit] || ''),
+      datum:     feldText('AngDat', dat[i][k.AngDat]),
+      zeit:      feldText('AngZeit', dat[i][k.AngZeit]),
       kunde:     String(dat[i][k.Kunde] || ''),
       lieferant: String(dat[i][k.Lieferant] || ''),
       status:    String(dat[i][k.Status] || ''),
@@ -470,6 +543,21 @@ function weListe(d, u) {
   return { ok: true, liste: aus.slice(0, 100) };
 }
 
+/**
+ * Ein Feld als Text. Ist die Spalte in der Tabelle nicht als Text formatiert,
+ * macht Sheets aus dem geschriebenen «08:30» eine Uhrzeit und aus
+ * «2026-09-09» ein Datum; zurueck kommt dann ein Zeitstempel, und in der App
+ * stand «Sat Dec 30 1899 17:03:00». setupAnlegen verhindert den Fall fuer
+ * neue Tabellen — das hier holt zurueck, was schon falsch drinsteht, und
+ * bleibt die Bremse, falls jemand das Format wieder wegnimmt.
+ */
+function feldText(name, wert) {
+  if (!(wert instanceof Date)) return String(wert == null ? '' : wert);
+  if (/Zeit$/.test(name))           return fmt(wert, 'HH:mm');
+  if (/Dat$/.test(name) || name === 'MHD') return fmt(wert, 'yyyy-MM-dd');
+  return fmt(wert, 'yyyy-MM-dd HH:mm');
+}
+
 function weDetail(d, u) {
   const dat = blatt(T.we).getDataRange().getValues();
   const k   = spalten(dat[0]);
@@ -477,10 +565,7 @@ function weDetail(d, u) {
   if (i < 0) return { ok: false, error: 'nicht_gefunden' };
 
   const kopf = {};
-  Object.keys(k).forEach(name => {
-    const w = dat[i][k[name]];
-    kopf[name] = w instanceof Date ? fmt(w, 'yyyy-MM-dd HH:mm') : String(w == null ? '' : w);
-  });
+  Object.keys(k).forEach(name => { kopf[name] = feldText(name, dat[i][k[name]]); });
 
   return { ok: true, kopf: kopf, positionen: positionenLesen(d.weNr) };
 }
@@ -496,7 +581,7 @@ function positionenLesen(weNr) {
       artikel:    String(dat[i][k.Artikel] || ''),
       anzahl:     dat[i][k.Anzahl] === '' ? '' : Number(dat[i][k.Anzahl]),
       kg:         dat[i][k.KG] === '' ? '' : Number(dat[i][k.KG]),
-      mhd:        String(dat[i][k.MHD] || ''),
+      mhd:        feldText('MHD', dat[i][k.MHD]),
       regalplatz: String(dat[i][k.Regalplatz] || ''),
       bemerkung:  String(dat[i][k.Bemerkung] || ''),
       bestehend:  String(dat[i][k.Bestehend]).toLowerCase() === 'true'
@@ -606,7 +691,8 @@ function blattAufbauen(sh, kopf, pos) {
   sh.setColumnWidths(1, 8, 110);
   sh.setColumnWidth(1, 60);    // N
   sh.setColumnWidth(2, 260);   // Artikelbezeichnung
-  sh.setColumnWidth(6, 150);   // Regalplatz
+  sh.setColumnWidth(5, 130);   // MHD, und in Zeile 3-6 das Datum
+  sh.setColumnWidth(6, 150);   // Regalplatz, und in Zeile 3-6 die Uhrzeit
   sh.setColumnWidth(7, 150);   // Bemerkungen
   sh.setColumnWidth(8, 90);    // Bestehend
 
@@ -614,36 +700,66 @@ function blattAufbauen(sh, kopf, pos) {
   sh.getRange('A1').setValue('Wareneingang / Material reception')
     .setFontWeight('bold').setFontSize(12);
 
+  // Die Nummer gehoert auf das Blatt, nicht nur in den Dateinamen: der
+  // Ausdruck wird unterschrieben und abgelegt, und dann muss darauf stehen,
+  // zu welcher Lieferung er gehoert.
+  sh.getRange(1, 6).setValue(kopf.WeNr)
+    .setFontWeight('bold').setFontSize(12).setHorizontalAlignment('right');
+  sh.getRange(1, 6, 1, 3).merge();
+
   // --- Quittungen ---
+  // Die Beschriftungen des Papiers sind lang, Spalte A ist aber die schmale
+  // N°-Spalte des Positionsblocks. Darum stehen die vier Felder auf
+  // verbundenen Bereichen: A:B Aufgabe, C:D Name, E Datum, F Uhrzeit.
   const kt = [
-    ['Aufgabe / Task', 'Name Mitarbeiter / Employee name', 'Datum / Date', 'Uhrzeit / Time'],
-    ['Angenommen /\nAccepted',                       kopf.AngNam, kopf.AngDat, kopf.AngZeit],
-    ['Gezählt & kontrolliert /\ncounted & controlled', kopf.GezNam, kopf.GezDat, kopf.GezZeit],
+    ['Aufgabe / Task', 'Name Mitarbeiter / Employee name',
+     'Datum / Date', 'Uhrzeit / Time'],
+    ['Angenommen / Accepted',                         kopf.AngNam, kopf.AngDat, kopf.AngZeit],
+    ['Gezählt & kontrolliert / counted & controlled', kopf.GezNam, kopf.GezDat, kopf.GezZeit],
     ['Eingelagert / stored',                          kopf.EinNam, kopf.EinDat, kopf.EinZeit]
   ];
-  sh.getRange(3, 1, 4, 4).setValues(kt)
+  kt.forEach((zeile, i) => {
+    const r = 3 + i;
+    sh.getRange(r, 1).setValue(zeile[0]);
+    sh.getRange(r, 3).setValue(zeile[1]);
+    sh.getRange(r, 5).setValue(zeile[2]);
+    sh.getRange(r, 6).setValue(zeile[3]);
+    sh.getRange(r, 1, 1, 2).merge();
+    sh.getRange(r, 3, 1, 2).merge();
+    sh.setRowHeight(r, 26);
+  });
+  sh.getRange(3, 1, 4, 6)
     .setBorder(true, true, true, true, true, true, '#000000', RAND)
     .setVerticalAlignment('middle').setWrap(true);
-  sh.getRange(3, 1, 1, 4).setFontWeight('bold').setBackground(GRAU);
-  sh.getRange(4, 1, 3, 1).setFontSize(9);
+  sh.getRange(3, 1, 1, 6).setFontWeight('bold').setBackground(GRAU);
+  sh.getRange(4, 1, 3, 1).setFontWeight('bold');
 
   sh.getRange('A8').setValue(
     'Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.\n' +
     'Please check off or adapt the article quantities directly on the delivery slip'
-  ).setFontWeight('bold').setWrap(true);
+  ).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+  sh.getRange(8, 1, 1, 8).merge();
   sh.setRowHeight(8, 32);
 
   // --- Kunde / Lieferant ---
-  sh.getRange(10, 1, 2, 2).setValues([
-    ['Kunde / Client',      kopf.Kunde],
-    ['Lieferant / Supplier', kopf.Lieferant]
-  ]).setBorder(true, true, true, true, true, true, '#000000', RAND);
+  // Gleiches Raster wie oben: Beschriftung auf A:B, Wert auf C:F.
+  [[10, 'Kunde / Client', kopf.Kunde], [11, 'Lieferant / Supplier', kopf.Lieferant]]
+    .forEach(x => {
+      sh.getRange(x[0], 1).setValue(x[1]);
+      sh.getRange(x[0], 3).setValue(x[2]);
+      sh.getRange(x[0], 1, 1, 2).merge();
+      sh.getRange(x[0], 3, 1, 4).merge();
+      sh.setRowHeight(x[0], 22);
+    });
+  sh.getRange(10, 1, 2, 6)
+    .setBorder(true, true, true, true, true, true, '#000000', RAND);
   sh.getRange(10, 1, 2, 1).setFontWeight('bold');
 
   sh.getRange('A13').setValue(
     'Bei neuem und bestehendem Material mit oder ohne Lieferschein notwendig:\n' +
     'For new and existing material with or without delivery slip needed'
-  ).setFontWeight('bold').setWrap(true);
+  ).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+  sh.getRange(13, 1, 1, 8).merge();
   sh.setRowHeight(13, 32);
 
   // --- Positionen ---
@@ -693,7 +809,6 @@ function blattAufbauen(sh, kopf, pos) {
   if (kopf.Bemerkung) {
     sh.getRange(fuss + 3, 1).setValue('Bemerkung: ' + kopf.Bemerkung);
   }
-  sh.getRange(fuss + 4, 1).setValue(kopf.WeNr).setFontSize(8).setFontColor('#808080');
 
   sh.setFrozenRows(kopfZeile);
 }
@@ -840,6 +955,77 @@ function adminAktion(d, u) {
   return { ok: false, error: 'unbekannte Aktion' };
 }
 
+/**
+ * Die drei Einstellungen, die den Versand steuern. Nur diese drei sind
+ * ueber die App erreichbar — alles andere im Blatt «Parameter» ist
+ * Datenbestand, keine Einstellung.
+ */
+const ADMIN_PARAMETER = ['MailAn', 'ArchivOrdner', 'FotoOrdner', 'SicherungOrdner'];
+
+/**
+ * Liest die Einstellungen, und schreibt sie, wenn `werte` mitkommt.
+ * Zurueck kommt immer der gespeicherte Stand plus der Name des Ordners,
+ * den die ID wirklich trifft: eine ID sagt einem Menschen nichts, ein
+ * falsch eingefuegter Ordner faellt sonst erst beim ersten Versand auf.
+ */
+function adminParameter(d, u) {
+  if (d.werte && typeof d.werte === 'object') {
+    const mail = String(d.werte.MailAn == null ? parameter('MailAn') : d.werte.MailAn).trim();
+    if (mail && mail.indexOf('@') < 0) return { ok: false, error: 'mail_ungueltig' };
+
+    ADMIN_PARAMETER.forEach(s => {
+      if (d.werte[s] == null) return;
+      const wert = s === 'MailAn' ? String(d.werte[s]).trim()
+                                  : ordnerId(d.werte[s]);
+      parameterSetzen(s, wert);
+    });
+  }
+
+  const werte = {}, namen = {};
+  ADMIN_PARAMETER.forEach(s => { werte[s] = parameter(s); });
+  ADMIN_PARAMETER.forEach(s => {
+    if (s !== 'MailAn') namen[s] = ordnerName(werte[s]);
+  });
+  return { ok: true, werte: werte, ordner: namen };
+}
+
+/** Schreibt einen Parameter; legt die Zeile an, wenn es sie noch nicht gibt. */
+function parameterSetzen(schluessel, wert) {
+  const bl  = blatt(T.parameter);
+  const dat = bl.getDataRange().getValues();
+  const k   = spalten(dat[0]);
+  for (let i = 1; i < dat.length; i++) {
+    if (String(dat[i][k.Schluessel]).trim() === schluessel) {
+      bl.getRange(i + 1, k.Wert + 1).setValue(wert);
+      return;
+    }
+  }
+  const z = new Array(Math.max(bl.getLastColumn(), 2)).fill('');
+  z[k.Schluessel] = schluessel;
+  z[k.Wert]       = wert;
+  bl.appendRow(z);
+}
+
+/**
+ * Aus einer eingefuegten Drive-Adresse die blosse Ordner-ID holen. Wer den
+ * Ordner offen hat, kopiert die Adresse — nicht den Teil dahinter.
+ */
+function ordnerId(wert) {
+  const s = String(wert || '').trim();
+  const m = s.match(/[-\w]{25,}/);
+  return m ? m[0] : s;
+}
+
+/** Name des Ordners zu einer ID, oder leer wenn sie nicht stimmt. */
+function ordnerName(id) {
+  if (!String(id || '').trim()) return '';
+  try {
+    return DriveApp.getFolderById(String(id).trim()).getName();
+  } catch (e) {
+    return '';
+  }
+}
+
 function zugangText(name, pass) {
   return [
     'Guten Tag ' + name,
@@ -929,8 +1115,8 @@ function csvExport(p) {
     ]);
   }
 
-  return aus.map(z => z.map(feld => {
-    const s = String(feld == null ? '' : feld);
+  return aus.map((z, i) => z.map((feld, j) => {
+    const s = i === 0 ? String(feld) : feldText(CSV_SPALTEN[j], feld);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(',')).join('\n');
 }
@@ -981,11 +1167,41 @@ function hash(pass, salt) {
   );
 }
 
+/**
+ * Zufall fuer Sitzungstoken, Passwoerter und Salz.
+ *
+ * NICHT Math.random(): das ist ein vorhersagbarer Generator, und wer einen
+ * eigenen Sitzungstoken bekommt, hat 32 seiner Ausgaben in der Hand — daraus
+ * laesst sich der Zustand rekonstruieren und der naechste Token berechnen.
+ * Utilities.getUuid() zieht aus dem sicheren Zufall der Laufzeit.
+ *
+ * Das Alphabet laesst 0/O und 1/l/I weg, weil Passwoerter vorgelesen und
+ * abgetippt werden. 224 ist 4*56: Bytes darueber werden verworfen, sonst
+ * waeren die ersten 32 Zeichen des Alphabets haeufiger als die letzten.
+ */
 function zufall(n) {
   const z = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
   let aus = '';
-  for (let i = 0; i < n; i++) aus += z.charAt(Math.floor(Math.random() * z.length));
+  while (aus.length < n) {
+    const hex = Utilities.getUuid().replace(/-/g, '');
+    for (let i = 0; i + 1 < hex.length && aus.length < n; i += 2) {
+      const b = parseInt(hex.substr(i, 2), 16);
+      if (b < 224) aus += z.charAt(b % z.length);
+    }
+  }
   return aus;
+}
+
+/** «3,4» und «3.4» ergeben beide 3.4; alles andere wird leer. */
+function zahl(wert) {
+  if (wert === '' || wert == null) return '';
+  const n = parseFloat(String(wert).replace(/\s/g, '').replace(',', '.'));
+  return isNaN(n) ? '' : n;
+}
+
+/** Spaltennamen eines Blattes, ohne die ganze Tabelle dafuer zu lesen. */
+function kopfSpalten(bl) {
+  return spalten(bl.getRange(1, 1, 1, bl.getLastColumn()).getValues()[0]);
 }
 
 function fmt(d, muster) {
@@ -1008,7 +1224,8 @@ function setupAnlegen() {
   plan[T.we] = ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
                 'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
                 'EinNam', 'EinDat', 'EinZeit', 'LagerM2', 'Bemerkung',
-                'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet'];
+                'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet',
+                'Vorgang'];
   plan[T.pos] = ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
                  'Regalplatz', 'Bemerkung', 'Bestehend'];
   plan[T.kunden]      = ['Name', 'Aktiv', 'Sortierung'];
@@ -1025,6 +1242,18 @@ function setupAnlegen() {
       bl.getRange(1, 1, 1, plan[name].length).setValues([plan[name]])
         .setFontWeight('bold');
       bl.setFrozenRows(1);
+      return;
+    }
+    // Bestehende Tabelle: fehlende Spalten hinten anhaengen. Damit zieht eine
+    // laufende Installation eine neue Version nach, ohne dass jemand
+    // Kopfzeilen abtippt — und hinten, nie dazwischen, weil die CSV-
+    // Schnittstelle auf der Reihenfolge steht.
+    const kopf  = bl.getRange(1, 1, 1, bl.getLastColumn()).getValues()[0]
+                    .map(x => String(x || '').trim());
+    const fehlt = plan[name].filter(s => kopf.indexOf(s) < 0);
+    if (fehlt.length) {
+      bl.getRange(1, kopf.length + 1, 1, fehlt.length).setValues([fehlt])
+        .setFontWeight('bold');
     }
   });
 
@@ -1038,10 +1267,11 @@ function setupAnlegen() {
 
   const par = ss.getSheetByName(T.parameter);
   if (par.getLastRow() < 2) {
-    par.getRange(2, 1, 3, 2).setValues([
-      ['MailAn', ''],        // Adresse, die das fertige Formular erhaelt
-      ['ArchivOrdner', ''],  // Drive-Ordner-ID fuer die xlsx-Ablage
-      ['FotoOrdner', '']     // Drive-Ordner-ID fuer Lieferschein-Fotos
+    par.getRange(2, 1, 4, 2).setValues([
+      ['MailAn', ''],          // Adresse, die das fertige Formular erhaelt
+      ['ArchivOrdner', ''],    // Drive-Ordner-ID fuer die xlsx-Ablage
+      ['FotoOrdner', ''],      // Drive-Ordner-ID fuer Lieferschein-Fotos
+      ['SicherungOrdner', '']  // eigener Ordner: die Kopie enthaelt Hashes
     ]);
   }
   return 'fertig';
@@ -1092,11 +1322,18 @@ function zugangVerschicken() {
   return n + ' Zugang/Zugaenge verschickt';
 }
 
-/** Woechentliche Sicherung — an einen Zeit-Trigger haengen. */
+/**
+ * Woechentliche Sicherung — an einen Zeit-Trigger haengen.
+ *
+ * Eigener Ordner, nicht der Archivordner: die Kopie enthaelt das Blatt
+ * «Benutzer» mit PassHash und Salt. Der Archivordner wird mit der
+ * Buchhaltung geteilt, dieser hier gehoert mit niemandem geteilt.
+ */
 function sicherung() {
-  const wurzel = String(parameter('ArchivOrdner') || '').trim();
-  if (!wurzel) return;
-  const ordner = unterordner(DriveApp.getFolderById(wurzel), 'Sicherung');
-  DriveApp.getFileById(SHEET_ID)
-    .makeCopy('Wareneingang ' + fmt(new Date(), 'yyyy-MM-dd'), ordner);
+  const wurzel = String(parameter('SicherungOrdner') || '').trim();
+  if (!wurzel) return 'kein SicherungOrdner gesetzt — nichts gesichert';
+  DriveApp.getFileById(SHEET_ID).makeCopy(
+    'Wareneingang ' + fmt(new Date(), 'yyyy-MM-dd'),
+    DriveApp.getFolderById(wurzel));
+  return 'gesichert';
 }

@@ -377,7 +377,7 @@ button.sekundaer:active{background:#1d1d1d}
 
     <hr class="trennlinie">
     <div class="knopfzeile" style="margin-top:8px">
-      <button id="st-admin" class="gross sekundaer" hidden>Benutzer verwalten</button>
+      <button id="st-admin" class="gross sekundaer" hidden>Verwaltung</button>
       <button id="st-passwort" class="gross sekundaer">Passwort ändern</button>
       <button id="st-abmelden" class="gross sekundaer">Abmelden</button>
     </div>
@@ -517,10 +517,46 @@ button.sekundaer:active{background:#1d1d1d}
 <section id="scr-admin" class="screen">
   <header class="kopf-liste">
     <button class="zurueck" id="adm-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1>Benutzer verwalten</h1>
+    <h1>Verwaltung</h1>
   </header>
 
   <div class="scroll">
+    <div class="pos-kopf" style="margin-top:0">
+      <h2>Versand</h2>
+      <span class="zahl">Mail und Ablage</span>
+    </div>
+
+    <label for="adm-mailan">Empfänger der Excel-Datei</label>
+    <input id="adm-mailan" type="email" inputmode="email"
+           autocapitalize="off" placeholder="lager@firma.ch">
+    <p class="hinweis">Leer heisst: «Als Excel senden» meldet einen Fehler.</p>
+
+    <label for="adm-archiv">Drive-Ordner für die Excel-Ablage</label>
+    <input id="adm-archiv" type="text" placeholder="Ordner-Adresse einfügen">
+    <p class="hinweis" id="adm-archiv-name">Leer heisst: nur Mail, kein Archiv.</p>
+
+    <label for="adm-foto">Drive-Ordner für die Lieferschein-Fotos</label>
+    <input id="adm-foto" type="text" placeholder="Ordner-Adresse einfügen">
+    <p class="hinweis" id="adm-foto-name">Leer heisst: Fotos werden übersprungen.</p>
+
+    <label for="adm-sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
+    <input id="adm-sicherung" type="text" placeholder="Ordner-Adresse einfügen">
+    <p class="hinweis" id="adm-sicherung-name">Leer heisst: keine Sicherung.
+       Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.</p>
+
+    <div id="adm-par-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="adm-par" class="gross primaer">Einstellungen speichern</button>
+    </div>
+
+    <hr class="trennlinie">
+
+    <div class="pos-kopf" style="margin-top:0">
+      <h2>Neuer Benutzer</h2>
+      <span class="zahl">bekommt ein Zugangsmail</span>
+    </div>
+
     <label for="adm-name">Name</label>
     <input id="adm-name" type="text" placeholder="Vorname Nachname">
 
@@ -592,6 +628,7 @@ const S = {
   lieferanten: [],
   positionen:  [],
   bild:        null,
+  vorgang:     '',       // Schluessel dieser Erfassung, gegen Doppeleintraege
   altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
   pwPflicht:   false,
   detail:      null,
@@ -631,6 +668,16 @@ function zahl(text) {
   if (!s) return '';
   const n = parseFloat(s);
   return isNaN(n) ? '' : n;
+}
+
+/**
+ * Schluessel eines Erfassungsvorgangs. Kein Sicherheitsmerkmal — er sorgt
+ * nur dafuer, dass ein zweiter Versuch nach einem Verbindungsabbruch
+ * denselben Wareneingang trifft statt einen zweiten anzulegen.
+ */
+function vorgangsNr() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'v' + Date.now() + Math.random().toString(36).slice(2, 10);
 }
 
 function datumText(wert) {
@@ -748,6 +795,10 @@ async function anmelden() {
 }
 
 function abmelden() {
+  // Erst dem Server sagen, dann lokal vergessen. Ohne das bleibt der Token
+  // dreissig Tage gueltig, und «Abmelden» auf einem geteilten iPad waere
+  // nur eine Geste. Schlaegt der Ruf fehl, wird trotzdem abgemeldet.
+  if (S.session) post({ action: 'abmelden', session: S.session }).catch(() => {});
   localStorage.clear();
   S.session = ''; S.name = ''; S.rolle = '';
   $('lg-pass').value = '';
@@ -909,6 +960,7 @@ function formularNeu() {
   $('fm-m2').value = '';
   $('fm-bemerkung').value = '';
   SCHRITT_FOLGE.forEach(s => $('fm-s-' + s).checked = s === 'angenommen');
+  S.vorgang = vorgangsNr();
   fotoWeg();
   S.positionen = [];
   for (let i = 0; i < MIN_ZEILEN; i++) S.positionen.push(leerePosition());
@@ -1029,6 +1081,7 @@ async function speichern() {
     kunde:     kunde,
     lieferant: lieferant,
     schritte:  schritte,
+    vorgang:   S.vorgang,
     lagerM2:   zahl($('fm-m2').value),
     bemerkung: $('fm-bemerkung').value.trim(),
     foto:      S.bild || '',
@@ -1051,7 +1104,9 @@ async function speichern() {
   try {
     const r = await post(daten);
     if (r.ok) {
-      toast('Wareneingang ' + r.weNr + ' erfasst.', 'ok');
+      toast(r.wiederholt
+        ? 'Dieser Wareneingang war schon gespeichert: ' + r.weNr
+        : 'Wareneingang ' + r.weNr + ' erfasst.', 'ok');
       await ladeListe();
       detailOeffnen(r.weNr);
     } else if (!antwortOk(r)) {
@@ -1067,7 +1122,11 @@ async function speichern() {
   } catch (e) {
     toast(e && e.message === 'keine_antwort' || e && e.message === 'nicht_verbunden'
       ? verbindungText(e)
-      : 'Keine Verbindung. Der Wareneingang wurde nicht gespeichert.', 'err');
+      // Ob die Zeile geschrieben wurde, weiss hier niemand — deshalb nicht
+      // behaupten, sie sei es nicht. Der Vorgangsschluessel sorgt dafuer,
+      // dass ein zweiter Versuch nichts verdoppelt.
+      : 'Keine Verbindung. Bitte nochmals speichern — doppelt wird es nicht.',
+      'err');
   } finally {
     S.laeuft = false;
     btn.disabled = false;
@@ -1326,9 +1385,60 @@ function frage(text, dann) {
 
 async function adminOeffnen() {
   $('adm-meldung').classList.remove('zeigen');
+  $('adm-par-meldung').classList.remove('zeigen');
   $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   zeigeScreen('scr-admin');
+  adminParameter();
   await adminLaden();
+}
+
+/* ---------- Einstellungen ---------- */
+
+const PAR_FELDER = { MailAn: 'adm-mailan', ArchivOrdner: 'adm-archiv',
+                     FotoOrdner: 'adm-foto', SicherungOrdner: 'adm-sicherung' };
+
+const PAR_LEER = {
+  ArchivOrdner:    'Leer heisst: nur Mail, kein Archiv.',
+  FotoOrdner:      'Leer heisst: Fotos werden übersprungen.',
+  SicherungOrdner: 'Leer heisst: keine Sicherung. Diesen Ordner mit niemandem ' +
+                   'teilen — die Kopie enthält die Passwörter.'
+};
+
+/** Ohne `werte` nur lesen, mit `werte` speichern — dieselbe Antwort. */
+async function adminParameter(werte) {
+  const btn = $('adm-par');
+  const m   = $('adm-par-meldung');
+  m.classList.remove('zeigen');
+  if (werte) { btn.disabled = true; btn.textContent = 'Wird gespeichert …'; }
+
+  try {
+    const r = await post({ action: 'admin_parameter', session: S.session,
+                           werte: werte || null });
+    if (!antwortOk(r)) {
+      m.textContent = r.error === 'mail_ungueltig'
+        ? 'Die Empfängeradresse sieht nicht wie eine E-Mail aus.'
+        : 'Nicht möglich: ' + r.error;
+      m.classList.add('zeigen');
+      return;
+    }
+    Object.keys(PAR_FELDER).forEach(s => { $(PAR_FELDER[s]).value = r.werte[s] || ''; });
+
+    // Der Name sagt einem Menschen, ob die eingefuegte ID den richtigen
+    // Ordner trifft. Eine ID allein sagt gar nichts.
+    Object.keys(PAR_LEER).forEach(s => {
+      const feld = $(PAR_FELDER[s] + '-name');
+      if (!r.werte[s]) feld.textContent = PAR_LEER[s];
+      else if (r.ordner[s]) feld.textContent = 'Ordner: ' + r.ordner[s];
+      else feld.textContent = 'Dieser Ordner ist nicht erreichbar — ID prüfen.';
+    });
+    if (werte) toast('Einstellungen gespeichert.', 'ok');
+  } catch (e) {
+    m.textContent = verbindungText(e);
+    m.classList.add('zeigen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Einstellungen speichern';
+  }
 }
 
 async function adminLaden() {
@@ -1471,6 +1581,11 @@ $('rg-senden').addEventListener('click', regalSenden);
 
 $('adm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
 $('adm-neu').addEventListener('click', adminNeu);
+$('adm-par').addEventListener('click', () => {
+  const werte = {};
+  Object.keys(PAR_FELDER).forEach(s => { werte[s] = $(PAR_FELDER[s]).value.trim(); });
+  adminParameter(werte);
+});
 
 $('pw-fertig').addEventListener('click', () => $('dlg-pw').classList.remove('zeigen'));
 $('pw-kopieren').addEventListener('click', async () => {

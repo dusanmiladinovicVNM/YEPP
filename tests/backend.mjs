@@ -275,7 +275,59 @@ console.log('\n8) Sitzung');
         .error === 'zu_kurz');
 }
 
-console.log('\n9) Excel-Blatt');
+console.log('\n9) Einstellungen im Adminbereich');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const bob = ctx.sitzungPruefen('tokB');
+
+  const leer = ctx.adminParameter({}, u);
+  ok('anfangs alle drei leer',
+     leer.werte.MailAn === '' && leer.werte.ArchivOrdner === '' &&
+     leer.werte.FotoOrdner === '', JSON.stringify(leer.werte));
+
+  // Wer den Ordner offen hat, kopiert die Adresse - nicht die ID darin.
+  const r = ctx.adminParameter({ werte: {
+    MailAn: ' lager@firma.ch ',
+    ArchivOrdner: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz09/',
+    FotoOrdner: '1FotoFotoFotoFotoFotoFotoFo'
+  } }, u);
+  ok('Mail getrimmt gespeichert', r.werte.MailAn === 'lager@firma.ch', r.werte.MailAn);
+  ok('Ordner-ID aus der Adresse geholt',
+     r.werte.ArchivOrdner === '1AbCdEfGhIjKlMnOpQrStUvWxYz09', r.werte.ArchivOrdner);
+  ok('blosse ID bleibt, wie sie ist',
+     r.werte.FotoOrdner === '1FotoFotoFotoFotoFotoFotoFo', r.werte.FotoOrdner);
+  ok('Ordnername kommt mit', r.ordner.ArchivOrdner.startsWith('Ordner '),
+     r.ordner.ArchivOrdner);
+
+  // Der Wert steht wirklich im Blatt und wird von parameter() gefunden
+  ok('MailAn im Blatt Parameter', ctx.parameter('MailAn') === 'lager@firma.ch');
+  const par = ss.blaetter.Parameter;
+  ok('keine Zeile doppelt angelegt',
+     par.daten.filter(z => z[0] === 'MailAn').length === 1,
+     JSON.stringify(par.daten));
+
+  ctx.adminParameter({ werte: { MailAn: 'neu@firma.ch' } }, u);
+  ok('zweites Speichern ueberschreibt', ctx.parameter('MailAn') === 'neu@firma.ch');
+  ok('nicht mitgeschickte Werte bleiben stehen',
+     ctx.parameter('FotoOrdner') === '1FotoFotoFotoFotoFotoFotoFo');
+
+  ok('unsinnige Adresse abgewiesen',
+     ctx.adminParameter({ werte: { MailAn: 'lager.firma.ch' } }, u).error === 'mail_ungueltig');
+  ok('nach der Abweisung steht der alte Wert', ctx.parameter('MailAn') === 'neu@firma.ch');
+
+  const kaputt = ctx.adminParameter({ werte: { ArchivOrdner: 'kaputt-kaputt-kaputt-kaputt' } }, u);
+  ok('unerreichbarer Ordner ohne Namen', kaputt.ordner.ArchivOrdner === '',
+     kaputt.ordner.ArchivOrdner);
+
+  // Rechte: die Pruefung sitzt in verteilen(), nicht in der Oberflaeche
+  ok('Nicht-Admin abgewiesen',
+     ctx.verteilen({ action: 'admin_parameter', session: 'tokB' }).error === 'keine Berechtigung');
+  ok('Admin kommt durch',
+     ctx.verteilen({ action: 'admin_parameter', session: 'tokA' }).ok === true);
+}
+
+console.log('\n10) Excel-Blatt');
 {
   const ss = neueTabelle(), ctx = laden(ss);
   const u = mitBenutzer(ctx, ss);
@@ -289,12 +341,31 @@ console.log('\n9) Excel-Blatt');
   const zelle = (r, c) => (sh.daten[r - 1] || [])[c - 1];
 
   ok('Titel in A1', String(zelle(1, 1)).startsWith('Wareneingang / Material reception'));
+  // Der Ausdruck wird unterschrieben und abgelegt — ohne Nummer weiss
+  // niemand, zu welcher Lieferung das Blatt gehoert.
+  ok('WE-Nummer im Kopf', String(zelle(1, 6)).startsWith('WE-'), String(zelle(1, 6)));
   ok('Quittungskopf in Zeile 3', zelle(3, 1) === 'Aufgabe / Task');
-  ok('Angenommen mit Namen', zelle(4, 2) === 'Anna Muster');
-  ok('Gezaehlt mit Namen', zelle(5, 2) === 'Anna Muster');
-  ok('Eingelagert leer', zelle(6, 2) === '');
-  ok('Kunde in A10/B10', zelle(10, 1) === 'Kunde / Client' && zelle(10, 2) === 'Kunde AG');
-  ok('Lieferant in Zeile 11', zelle(11, 2) === 'Lief GmbH');
+  ok('Angenommen mit Namen', zelle(4, 3) === 'Anna Muster');
+  ok('Gezaehlt mit Namen', zelle(5, 3) === 'Anna Muster');
+  ok('Eingelagert leer', zelle(6, 3) === '');
+  ok('Datum der Quittung in Spalte E', /^\d{4}-\d{2}-\d{2}$/.test(String(zelle(4, 5))),
+     String(zelle(4, 5)));
+  ok('Uhrzeit der Quittung in Spalte F', /^\d{2}:\d{2}$/.test(String(zelle(4, 6))),
+     String(zelle(4, 6)));
+  ok('Kunde in A10/C10', zelle(10, 1) === 'Kunde / Client' && zelle(10, 3) === 'Kunde AG');
+  ok('Lieferant in Zeile 11', zelle(11, 3) === 'Lief GmbH');
+
+  // Ohne die Verbindungen stehen die langen Beschriftungen in der 60px
+  // schmalen N°-Spalte und werden abgeschnitten.
+  const verbunden = (z, s, n) => sh.verbunden.some(v =>
+    v.zeile === z && v.spalte === s && v.spalten === n && v.zeilen === 1);
+  ok('Aufgabenspalte verbunden A:B', [3, 4, 5, 6].every(z => verbunden(z, 1, 2)),
+     JSON.stringify(sh.verbunden));
+  ok('Namensspalte verbunden C:D', [3, 4, 5, 6].every(z => verbunden(z, 3, 2)));
+  ok('Hinweis ueber die ganze Breite', verbunden(8, 1, 8) && verbunden(13, 1, 8));
+  ok('Kunde und Lieferant verbunden',
+     verbunden(10, 1, 2) && verbunden(10, 3, 4) &&
+     verbunden(11, 1, 2) && verbunden(11, 3, 4));
   ok('Positionskopf in Zeile 15', zelle(15, 1) === 'N°');
   ok('achte Spalte ist Bestehend', String(zelle(15, 8)).startsWith('Bestehend'));
   ok('erste Position in Zeile 16', zelle(16, 2) === 'Schrauben M6');
@@ -321,7 +392,42 @@ console.log('\n9) Excel-Blatt');
   ok('Fuss wandert auf Zeile 26', z2(26, 1) === 'Lagerfläche / storage space');
 }
 
-console.log('\n10) Einrichtung — Textspalten');
+console.log('\n11) Umgedeutete Datums- und Zeitwerte');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const nr = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u).weNr;
+
+  // Genau das, was eine Tabelle ohne Textformat zurueckgibt: aus «08:30»
+  // wurde eine Uhrzeit am 30.12.1899, aus «2026-09-09» ein Datum.
+  const w = ss.blaetter.Wareneingang, k = ctx.spalten(w.daten[0]);
+  w.daten[1][k.AngDat]  = new Date(2026, 8, 9);
+  w.daten[1][k.AngZeit] = new Date(1899, 11, 30, 17, 3);
+  const p = ss.blaetter.Positionen, pk = ctx.spalten(p.daten[0]);
+  p.daten[1][pk.MHD] = new Date(2027, 9, 1);
+
+  const det = ctx.weDetail({ weNr: nr }, u);
+  ok('Datum wieder als Datum', det.kopf.AngDat === '2026-09-09', det.kopf.AngDat);
+  ok('Uhrzeit wieder als Uhrzeit', det.kopf.AngZeit === '17:03', det.kopf.AngZeit);
+  ok('MHD wieder als Datum', det.positionen[0].mhd === '2027-10-01',
+     det.positionen[0].mhd);
+
+  const liste = ctx.weListe({}, u).liste[0];
+  ok('Liste zeigt kein 1899', liste.zeit === '17:03', liste.zeit);
+
+  const zeilen = ctx.csvExport().split('\n');
+  const kopfCsv = felder(zeilen[0]), erste = felder(zeilen[1]);
+  ok('CSV liefert die Uhrzeit als Text',
+     erste[kopfCsv.indexOf('AngZeit')] === '17:03',
+     erste[kopfCsv.indexOf('AngZeit')]);
+  ok('CSV liefert das Datum als Text',
+     erste[kopfCsv.indexOf('AngDat')] === '2026-09-09',
+     erste[kopfCsv.indexOf('AngDat')]);
+  ok('CSV laesst Zahlen in Ruhe',
+     erste[kopfCsv.indexOf('Anzahl')] === '120', erste[kopfCsv.indexOf('Anzahl')]);
+}
+
+console.log('\n12) Einrichtung — Textspalten');
 {
   const ZEIT = ['AngDat', 'AngZeit', 'GezDat', 'GezZeit', 'EinDat', 'EinZeit'];
 
@@ -359,6 +465,132 @@ console.log('\n10) Einrichtung — Textspalten');
     !w2.formate.some(f => f.format === '@' && f.spalte === k2[name] + 1));
   ok('Textformat folgt der umgestellten Spalte', daneben.length === 0,
      'ohne Format: ' + daneben.join(', '));
+}
+
+console.log('\n13) Zufall, Sitzung, Sperre');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+  const viele = [];
+  for (let i = 0; i < 200; i++) viele.push(ctx.zufall(32));
+  ok('richtige Laenge', viele.every(s => s.length === 32));
+  ok('nur Zeichen aus dem Alphabet',
+     viele.every(s => Array.from(s).every(c => ALPHABET.includes(c))));
+  ok('keine Verwechslerzeichen', !viele.join('').match(/[0O1lI]/));
+  ok('alle verschieden', new Set(viele).size === 200);
+
+  // Beweist die Quelle: waere noch Math.random() im Spiel, aenderte ein
+  // festgenageltes getUuid nichts an der Ausgabe.
+  const echt = ctx.Utilities.getUuid;
+  ctx.Utilities.getUuid = () => '00112233-4455-6677-8899-aabbccddeeff';
+  const a = ctx.zufall(20), b = ctx.zufall(20);
+  ctx.Utilities.getUuid = echt;
+  ok('Zufall stammt aus getUuid', a === b && a.length === 20, a + ' / ' + b);
+
+  // Anmeldung: der Weg war bisher gar nicht gefahren
+  const bl = ss.blaetter.Benutzer, k = ctx.spalten(bl.daten[0]);
+  const salt = ctx.zufall(16);
+  bl.appendRow(['eva@firma.ch', 'Eva Weber', ctx.hash('geheim123', salt), salt,
+                true, 0, '', '', true, '']);
+  const an = ctx.login({ email: ' Eva@Firma.CH ', passwort: 'geheim123' });
+  ok('Anmeldung mit Gross- und Kleinschreibung', an.ok === true, JSON.stringify(an));
+  ok('Sitzung angelegt', ss.blaetter.Sessions.daten.some(z => z[0] === an.session));
+  ok('falsches Passwort abgewiesen',
+     ctx.login({ email: 'eva@firma.ch', passwort: 'falsch' }).error === 'login');
+
+  // Abmelden raeumt den Token weg, nicht nur den Browser
+  ok('abmelden bestaetigt', ctx.verteilen({ action: 'abmelden', session: an.session }).ok === true);
+  ok('Token geloescht', !ss.blaetter.Sessions.daten.some(z => z[0] === an.session));
+  ok('Sitzung danach ungueltig', ctx.sitzungPruefen(an.session) === null);
+
+  // Abgelaufene Zeilen verschwinden beim naechsten Anmelden
+  ss.blaetter.Sessions.appendRow(['alt1', 'eva@firma.ch', new Date(Date.now() - 8.64e7)]);
+  ss.blaetter.Sessions.appendRow(['alt2', 'eva@firma.ch', new Date(Date.now() - 1)]);
+  const vorher = ss.blaetter.Sessions.daten.length;
+  ctx.login({ email: 'eva@firma.ch', passwort: 'geheim123' });
+  ok('abgelaufene Sitzungen aufgeraeumt',
+     ss.blaetter.Sessions.daten.length === vorher - 1,
+     vorher + ' -> ' + ss.blaetter.Sessions.daten.length);
+
+  // Quittieren unter Sperre, wie das Erfassen
+  const u = mitBenutzer(ctx, ss);
+  const nr = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u).weNr;
+  ctx.__sperren.length = 0;
+  ctx.weSchritt({ weNr: nr, schritt: 'gezaehlt' }, u);
+  ok('Quittieren nimmt die Sperre',
+     ctx.__sperren.join(',') === 'an,aus', ctx.__sperren.join(','));
+  ctx.__sperren.length = 0;
+  ctx.weSchritt({ weNr: nr, schritt: 'gezaehlt' }, u);
+  ok('Sperre auch bei Abweisung wieder frei',
+     ctx.__sperren.join(',') === 'an,aus', ctx.__sperren.join(','));
+}
+
+console.log('\n14) Doppelte Erfassung');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const w = ss.blaetter.Wareneingang;
+  const eingabe = () => ({ kunde: 'K', positionen: POS, vorgang: 'v-4711' });
+
+  const erst = ctx.weSpeichern(eingabe(), u);
+  const nochmal = ctx.weSpeichern(eingabe(), u);
+  ok('zweiter Versuch legt nichts an', w.daten.length === 2, w.daten.length + ' Zeilen');
+  ok('dieselbe Nummer zurueck', nochmal.weNr === erst.weNr,
+     erst.weNr + ' / ' + nochmal.weNr);
+  ok('als Wiederholung gekennzeichnet', nochmal.wiederholt === true);
+  ok('keine doppelten Positionen', ss.blaetter.Positionen.daten.length === 3,
+     ss.blaetter.Positionen.daten.length + ' Zeilen');
+
+  const anderer = ctx.weSpeichern({ kunde: 'K', positionen: POS, vorgang: 'v-4712' }, u);
+  ok('anderer Vorgang legt an', anderer.weNr !== erst.weNr && w.daten.length === 3);
+  ok('Schluessel steht in der Zeile',
+     w.daten[1][ctx.spalten(w.daten[0]).Vorgang] === 'v-4711',
+     String(w.daten[1][ctx.spalten(w.daten[0]).Vorgang]));
+
+  // Ohne Schluessel bleibt es beim alten Verhalten
+  ctx.weSpeichern({ kunde: 'K', positionen: POS }, u);
+  ctx.weSpeichern({ kunde: 'K', positionen: POS }, u);
+  ok('ohne Schluessel wird nicht zusammengelegt', w.daten.length === 5,
+     w.daten.length + ' Zeilen');
+
+  // Komma statt Punkt: der Server rechnet selbst um
+  ctx.weSpeichern({ kunde: 'K', lagerM2: '12,5', vorgang: 'v-komma', positionen: [
+    { artikel: 'Mit Komma', anzahl: '3,4', kg: ' 1,25 ', mhd: '', bemerkung: '',
+      bestehend: false },
+    { artikel: 'Unsinn', anzahl: 'viele', kg: '', mhd: '', bemerkung: '',
+      bestehend: false }] }, u);
+  const k = ctx.spalten(w.daten[0]);
+  const p = ss.blaetter.Positionen, pk = ctx.spalten(p.daten[0]);
+  ok('Komma im m2-Feld', w.daten[w.daten.length - 1][k.LagerM2] === 12.5);
+  ok('Komma in der Anzahl', p.daten[p.daten.length - 2][pk.Anzahl] === 3.4,
+     String(p.daten[p.daten.length - 2][pk.Anzahl]));
+  ok('Komma mit Leerzeichen im kg', p.daten[p.daten.length - 2][pk.KG] === 1.25);
+  ok('unsinnige Zahl wird leer, nicht NaN',
+     p.daten[p.daten.length - 1][pk.Anzahl] === '',
+     String(p.daten[p.daten.length - 1][pk.Anzahl]));
+}
+
+console.log('\n15) Sicherung und Nachruesten');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  ok('ohne Ordner wird nicht gesichert',
+     ctx.sicherung() === 'kein SicherungOrdner gesetzt — nichts gesichert');
+  ctx.parameterSetzen('SicherungOrdner', '1SicherungSicherungSicherung');
+  ok('mit eigenem Ordner wird gesichert', ctx.sicherung() === 'gesichert');
+  ok('Archivordner bleibt aussen vor', ctx.parameter('ArchivOrdner') === '');
+
+  // Bestehende Tabelle ohne die neue Spalte: setupAnlegen zieht sie nach
+  const alt = neueTabelle(), ctx2 = laden(alt);
+  const w = alt.blaetter.Wareneingang;
+  w.daten[0] = w.daten[0].filter(s => s !== 'Vorgang');
+  w.appendRow(['WE-2026-0001']);
+  ctx2.setupAnlegen();
+  ok('fehlende Spalte hinten angehaengt',
+     w.daten[0][w.daten[0].length - 1] === 'Vorgang', JSON.stringify(w.daten[0]));
+  ok('vorhandene Daten unberuehrt', w.daten[1][0] === 'WE-2026-0001');
+  ok('nichts doppelt angelegt',
+     w.daten[0].filter(s => s === 'Vorgang').length === 1);
 }
 
 console.log('\n' + '='.repeat(46));

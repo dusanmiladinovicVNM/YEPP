@@ -44,6 +44,11 @@ await page.addInitScript(() => {
           kunde: DB.kopf.kunde, lieferant: DB.kopf.lieferant,
           status: DB.status || 'angenommen', erfasser: 'Anna Muster', gesendet: '' }] : [] });
       case 'we_speichern': {
+        DB.vorgaenge = DB.vorgaenge || {};
+        if (d.vorgang && DB.vorgaenge[d.vorgang]) {
+          return A({ ok: true, weNr: DB.vorgaenge[d.vorgang], wiederholt: true });
+        }
+        DB.vorgaenge[d.vorgang] = 'WE-2026-0001';
         DB.kopf = d;
         DB.positionen = d.positionen.map((p, i) => Object.assign({ nr: i + 1, regalplatz: '' }, p));
         const s = d.schritte || [];
@@ -71,6 +76,19 @@ await page.addInitScript(() => {
         return A({ ok: true });
       case 'we_senden':
         return A({ ok: true, an: 'lager@firma.ch', url: '' });
+      case 'admin_parameter':
+        if (d.werte) DB.par = d.werte;
+        return A({ ok: true,
+          werte: DB.par || { MailAn: 'lager@firma.ch', ArchivOrdner: '1Arch',
+                             FotoOrdner: '', SicherungOrdner: '' },
+          ordner: { ArchivOrdner: 'Wareneingang Archiv', FotoOrdner: '',
+                    SicherungOrdner: '' } });
+      case 'admin_liste':
+        return A({ ok: true, benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
+          aktiv: true, admin: true, neu: false, gesperrt: false }] });
+      case 'admin_neu':
+        return A({ ok: true, passwort: 'Xy7k9m2Qw4', text: 'Guten Tag …',
+                   wem: d.name + ' <' + d.email + '>' });
       default:
         return A({ ok: true });
     }
@@ -157,6 +175,9 @@ ok('nur Angenommen quittiert',
    JSON.stringify(gesendet.schritte) === '["angenommen"]',
    JSON.stringify(gesendet.schritte));
 ok('Sitzung mitgeschickt', gesendet.session === 'tok');
+ok('Vorgangsschluessel mitgeschickt',
+   typeof gesendet.vorgang === 'string' && gesendet.vorgang.length > 8,
+   JSON.stringify(gesendet.vorgang));
 
 // --- 5) Detail und Quittieren ----------------------------------------------
 console.log('\n5) Detail und Quittieren');
@@ -231,19 +252,131 @@ await page.waitForFunction(() => !document.querySelector('[data-schritt="angenom
 ok('nach dem Nachtragen kein Knopf mehr',
    !(await page.$('[data-schritt="angenommen"]')));
 
-// --- 9) Abgelaufene Sitzung -------------------------------------------------
-console.log('\n9) Abgelaufene Sitzung');
+// --- 9) Verwaltung ---------------------------------------------------------
+console.log('\n9) Verwaltung');
+await page.click('#dt-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-admin');
+await page.waitForSelector('#scr-admin.aktiv');
+await page.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
+
+ok('Empfaengeradresse geladen',
+   (await page.inputValue('#adm-mailan')) === 'lager@firma.ch');
+ok('Ordner-ID geladen', (await page.inputValue('#adm-archiv')) === '1Arch');
+ok('Ordnername statt blosser ID',
+   (await page.textContent('#adm-archiv-name')).includes('Wareneingang Archiv'));
+ok('leerer Ordner erklaert sich',
+   (await page.textContent('#adm-foto-name')).includes('übersprungen'));
+ok('Sicherungsordner wird gewarnt',
+   (await page.textContent('#adm-sicherung-name')).includes('niemandem'));
+
+await page.fill('#adm-mailan', 'neu@firma.ch');
+await page.fill('#adm-foto', 'https://drive.google.com/drive/folders/1Foto');
+await page.click('#adm-par');
+await page.waitForFunction(() =>
+  window.__gesendet.some(x => x.action === 'admin_parameter' && x.werte));
+const par = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_parameter' && x.werte).pop());
+ok('neue Adresse mitgeschickt', par.werte.MailAn === 'neu@firma.ch',
+   JSON.stringify(par.werte));
+ok('eingefuegte Ordner-Adresse mitgeschickt',
+   par.werte.FotoOrdner === 'https://drive.google.com/drive/folders/1Foto');
+ok('Sicherungsordner mitgeschickt', par.werte.SicherungOrdner === '',
+   JSON.stringify(par.werte.SicherungOrdner));
+
+// Der Weg, der schon da war: Benutzer anlegen und Zugangsmail verschicken
+await page.fill('#adm-name', 'Bob Meier');
+await page.fill('#adm-email', 'bob@firma.ch');
+await page.check('#adm-mail');
+await page.click('#adm-neu');
+await page.waitForSelector('#dlg-pw.zeigen');
+const neu = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_neu').pop());
+ok('Benutzer mit Mailwunsch angelegt',
+   neu.email === 'bob@firma.ch' && neu.mail === true, JSON.stringify(neu));
+ok('Passwort wird einmal gezeigt',
+   (await page.textContent('#pw-wert')) === 'Xy7k9m2Qw4');
+await page.click('#pw-fertig');
+
+await page.click('#adm-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-abmelden');
+await page.waitForSelector('#scr-login.aktiv');
+const ab = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'abmelden').pop());
+ok('Abmelden sagt es dem Server', ab && ab.session === 'tok', JSON.stringify(ab));
+ok('lokal auch vergessen',
+   (await page.evaluate(() => localStorage.getItem('session'))) === null);
+
+// Wieder anmelden fuer die restlichen Abschnitte
+await page.fill('#lg-email', 'anna@firma.ch');
+await page.fill('#lg-pass', 'geheim123');
+await page.click('#lg-senden');
+await page.waitForSelector('#scr-start.aktiv');
+
+// --- 10) Zweiter Versuch nach Verbindungsabbruch ---------------------------
+console.log('\n10) Zweiter Versuch nach Verbindungsabbruch');
+await page.click('#st-neu');
+await page.waitForSelector('#scr-form.aktiv');
+await feld(0, 'artikel', 'Nach Funkloch');
+await page.fill('#fm-kunde', 'Kunde AG');
+
+// Das Netz bricht ab, nachdem der Aufruf raus ist — genau der Fall, in dem
+// die App frueher «wurde nicht gespeichert» behauptete.
+await page.evaluate(() => {
+  window.__echt = window.fetch;
+  // Der Server bekommt den Aufruf und schreibt die Zeile — nur die Antwort
+  // kommt nicht mehr an. Genau so sieht ein Funkloch im Lager aus.
+  window.fetch = async (url, opt) => {
+    await window.__echt(url, opt);
+    throw new Error('offline');
+  };
+});
+await page.click('#fm-speichern');
+await page.waitForFunction(() =>
+  document.getElementById('toast').textContent.includes('doppelt wird es nicht'));
+ok('Meldung behauptet nicht, es sei nichts gespeichert',
+   (await page.textContent('#toast')).includes('nochmals speichern'));
+
+await page.evaluate(() => { window.fetch = window.__echt; });
+await page.click('#fm-speichern');
+await page.waitForSelector('#scr-detail.aktiv');
+
+const zwei = await page.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_speichern').slice(-2));
+ok('zweiter Versuch traegt denselben Schluessel',
+   zwei[0].vorgang && zwei[0].vorgang === zwei[1].vorgang,
+   JSON.stringify(zwei.map(x => x.vorgang)));
+ok('Server meldet die Wiederholung, App sagt es',
+   (await page.textContent('#toast')).includes('war schon gespeichert'),
+   await page.textContent('#toast'));
+
+await page.click('#dt-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-neu');
+await page.waitForSelector('#scr-form.aktiv');
+const neuerSchluessel = await page.evaluate(() => S.vorgang);
+ok('neues Formular, neuer Schluessel', neuerSchluessel !== zwei[0].vorgang,
+   neuerSchluessel);
+await page.click('#fm-zurueck');
+await page.waitForSelector('#scr-start.aktiv');
+await page.click('#st-admin');
+await page.waitForSelector('#scr-admin.aktiv');
+
+// --- 11) Abgelaufene Sitzung ------------------------------------------------
+console.log('\n11) Abgelaufene Sitzung');
 await page.evaluate(() => {
   window.fetch = async () => ({ text: async () => '{"ok":false,"error":"session"}',
                                 json: async () => ({ ok: false, error: 'session' }) });
 });
-await page.click('#dt-zurueck');
+// Ein Klick, der wirklich zum Server geht — «Zurück» allein tut es nicht.
+await page.click('#adm-par');
 await page.waitForSelector('#scr-login.aktiv');
 ok('faellt auf den Login zurueck', await sichtbar('#scr-login'));
 ok('Sitzung geloescht', (await page.evaluate(() => localStorage.getItem('session'))) === null);
 
 // --- 10) Nicht verbunden, falsch bereitgestellt ----------------------------
-console.log('\n10) Klartext statt «Keine Verbindung»');
+console.log('\n12) Klartext statt «Keine Verbindung»');
 await page.evaluate(() => { CONFIG.url = ''; });
 await page.fill('#lg-email', 'anna@firma.ch');
 await page.fill('#lg-pass', 'geheim123');

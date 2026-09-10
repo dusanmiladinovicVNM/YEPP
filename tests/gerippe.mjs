@@ -5,6 +5,7 @@
  */
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { randomUUID } from 'node:crypto';
 
 /* ---------- Tabellen-Gerippe ---------- */
 
@@ -19,6 +20,7 @@ class Range {
     }
     return aus;
   }
+  getValue() { return this.getValues()[0][0]; }
   setValues(v) {
     v.forEach((z, i) => z.forEach((w, j) => { this.sh._z(this.r + i)[this.c + j - 1] = w; }));
     return this;
@@ -34,6 +36,13 @@ class Range {
     this.sh.formate.push({ format: f, spalte: this.c, zeile: this.r, zeilen: this.nr });
     return this;
   }
+  // Verbundene Bereiche werden gemerkt: an ihnen haengt, ob die langen
+  // Beschriftungen des Papiers im Excel lesbar sind oder abgeschnitten.
+  merge() {
+    this.sh.verbunden.push({ zeile: this.r, spalte: this.c,
+                             zeilen: this.nr, spalten: this.nc });
+    return this;
+  }
   setFontWeight() { return this; } setFontSize() { return this; }
   setBackground() { return this; } setBorder() { return this; }
   setWrap() { return this; } setVerticalAlignment() { return this; }
@@ -47,6 +56,7 @@ class Sheet {
     this.daten = [];
     this.geloescht = [];
     this.formate = [];
+    this.verbunden = [];
     if (kopf) this.daten.push(kopf.slice());
   }
   _z(n) { while (this.daten.length < n) this.daten.push([]); return this.daten[n - 1]; }
@@ -85,7 +95,7 @@ function neueTabelle() {
   B('Wareneingang', ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
     'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
     'EinNam', 'EinDat', 'EinZeit', 'LagerM2', 'Bemerkung',
-    'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet']);
+    'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet', 'Vorgang']);
   B('Positionen', ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
     'Regalplatz', 'Bemerkung', 'Bestehend']);
   B('Kunden', ['Name', 'Aktiv', 'Sortierung']);
@@ -104,16 +114,31 @@ function laden(ss) {
     .replace("const SHEET_ID   = '';", "const SHEET_ID   = 'X';");
   const ctx = {
     console,
+    // Dasselbe Date wie im Test, sonst scheitert `instanceof Date` an der
+    // Realm-Grenze der vm — in Apps Script gibt es nur eine Realm.
+    Date,
     SpreadsheetApp: {
       openById: () => ss,
       create: () => { const t = new Spreadsheet(); t.blaetter.T = new Sheet('T'); return t; },
       flush: () => {},
       BorderStyle: { SOLID: 'SOLID' }
     },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    // Die Sperre wird mitgeschrieben: an ihr haengt, ob zwei gleichzeitige
+    // Klicks an derselben Pruefung vorbeikommen.
+    LockService: {
+      getScriptLock: () => ({
+        waitLock() { ctx.__sperren.push('an'); },
+        releaseLock() { ctx.__sperren.push('aus'); }
+      })
+    },
     DriveApp: {
       getFileById: () => ({ setTrashed() {}, makeCopy() {} }),
-      getFolderById: () => ordner()
+      getFolderById: id => {
+        // Eine ID, die es nicht gibt, wirft — daran haengt die Rueckmeldung
+        // «Ordner nicht erreichbar» im Adminbereich.
+        if (String(id).indexOf('kaputt') >= 0) throw new Error('not found');
+        return ordner(id);
+      }
     },
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
     ScriptApp: { getOAuthToken: () => 'tok' },
@@ -124,6 +149,7 @@ function laden(ss) {
       base64Encode: b => Buffer.from(b).toString('base64'),
       base64Decode: s => Buffer.from(s, 'base64'),
       newBlob: () => ({}),
+      getUuid: () => randomUUID(),
       formatDate: (d, _z, m) => {
         const p = x => String(x).padStart(2, '0');
         return m
@@ -138,11 +164,13 @@ function laden(ss) {
       MimeType: { JSON: 'json', CSV: 'csv' },
       createTextOutput: t => ({ setMimeType: () => t, t })
     },
-    __mails: []
+    __mails: [],
+    __sperren: []
   };
-  function ordner() {
-    return { getFoldersByName: () => ({ hasNext: () => false }),
-             createFolder: () => ordner(), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
+  function ordner(id) {
+    return { getName: () => 'Ordner ' + String(id || 'X'),
+             getFoldersByName: () => ({ hasNext: () => false }),
+             createFolder: () => ordner(id), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
   }
   vm.createContext(ctx);
   vm.runInContext(quelle, ctx);
