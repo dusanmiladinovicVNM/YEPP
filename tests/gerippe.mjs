@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 /* ---------- Tabellen-Gerippe ---------- */
 
@@ -87,6 +87,7 @@ class Spreadsheet {
   insertSheet(n) { return (this.blaetter[n] = new Sheet(n)); }
   getSheets() { return Object.values(this.blaetter); }
   getId() { return 'TMPID'; }
+  getName() { return 'Wareneingang (Test)'; }
 }
 
 function neueTabelle() {
@@ -110,15 +111,28 @@ function neueTabelle() {
 /* ---------- Code.gs laden ---------- */
 
 function laden(ss) {
-  const quelle = fs.readFileSync(process.cwd() + '/apps-script/Code.gs', 'utf8')
-    .replace("const SHEET_ID   = '';", "const SHEET_ID   = 'X';");
+  // Der Code wird unveraendert geladen — die Installation steckt in den
+  // Skripteigenschaften, nicht mehr in drei Konstanten, die der Test
+  // vorher im Quelltext ersetzen musste.
+  const quelle = fs.readFileSync(process.cwd() + '/apps-script/Code.gs', 'utf8');
+  const eigenschaften = {
+    SHEET_ID:   '1TabelleTabelleTabelleTabelleTabelle',
+    PWA_URL:    'https://wareneingang.example/',
+    TOKEN_READ: 'geheimwort'
+  };
   const ctx = {
     console,
     // Dasselbe Date wie im Test, sonst scheitert `instanceof Date` an der
     // Realm-Grenze der vm — in Apps Script gibt es nur eine Realm.
     Date,
     SpreadsheetApp: {
-      openById: () => ss,
+      // Wie das Original: eine Adresse statt einer ID gibt «Invalid argument».
+      openById: id => {
+        if (!/^[-\w]{25,}$/.test(String(id || ''))) {
+          throw new Error('Invalid argument: id');
+        }
+        return ss;
+      },
       create: () => { const t = new Spreadsheet(); t.blaetter.T = new Sheet('T'); return t; },
       flush: () => {},
       BorderStyle: { SOLID: 'SOLID' }
@@ -132,7 +146,14 @@ function laden(ss) {
       })
     },
     DriveApp: {
-      getFileById: () => ({ setTrashed() {}, makeCopy() {} }),
+      getFileById: id => ({
+        setTrashed() {}, makeCopy() {},
+        // Der Ordner, in dem die Tabelle liegt — daneben entsteht die Ablage.
+        getParents: () => {
+          let da = String(id).indexOf('ohne-ordner') < 0;
+          return { hasNext: () => da, next: () => { da = false; return ordner('eltern'); } };
+        }
+      }),
       getFolderById: id => {
         // Eine ID, die es nicht gibt, wirft — daran haengt die Rueckmeldung
         // «Ordner nicht erreichbar» im Adminbereich.
@@ -141,14 +162,43 @@ function laden(ss) {
       }
     },
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
-    ScriptApp: { getOAuthToken: () => 'tok' },
+    ScriptApp: {
+      getOAuthToken: () => 'tok',
+      WeekDay: { SUNDAY: 'SUNDAY' },
+      getProjectTriggers: () => ctx.__ausloeser.slice(),
+      deleteTrigger: t => {
+        const i = ctx.__ausloeser.indexOf(t);
+        if (i >= 0) ctx.__ausloeser.splice(i, 1);
+      },
+      newTrigger: fn => {
+        const bau = { fn: fn, getHandlerFunction: () => fn };
+        const kette = {
+          timeBased: () => kette,
+          onWeekDay: tag => { bau.tag = tag; return kette; },
+          atHour: h => { bau.stunde = h; return kette; },
+          create: () => { ctx.__ausloeser.push(bau); return bau; }
+        };
+        return kette;
+      }
+    },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperties: () => Object.assign({}, eigenschaften),
+        setProperty: (k, v) => { eigenschaften[k] = v; },
+        deleteProperty: k => { delete eigenschaften[k]; }
+      })
+    },
     MailApp: { sendEmail: (...a) => ctx.__mails.push(a) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'S' },
-      computeDigest: (_, s) => Array.from(s).map(c => c.charCodeAt(0)),
+      // Echtes SHA-256: die Spielzeugfassung von frueher lieferte pro Runde
+      // ein laengeres Ergebnis, was beim wiederholten Hashen ausufert.
+      computeDigest: (_, s) =>
+        Array.from(createHash('sha256').update(String(s), 'utf8').digest()),
       base64Encode: b => Buffer.from(b).toString('base64'),
       base64Decode: s => Buffer.from(s, 'base64'),
-      newBlob: () => ({}),
+      // Name und Typ merken: daran haengt, ob die Endung zum Bild passt.
+      newBlob: (bytes, typ, name) => ({ typ: typ, name: name }),
       getUuid: () => randomUUID(),
       formatDate: (d, _z, m) => {
         const p = x => String(x).padStart(2, '0');
@@ -165,12 +215,24 @@ function laden(ss) {
       createTextOutput: t => ({ setMimeType: () => t, t })
     },
     __mails: [],
-    __sperren: []
+    __sperren: [],
+    __eigenschaften: eigenschaften,
+    __dateien: [],
+    __ordner: [],
+    __ausloeser: []
   };
   function ordner(id) {
     return { getName: () => 'Ordner ' + String(id || 'X'),
-             getFoldersByName: () => ({ hasNext: () => false }),
-             createFolder: () => ordner(id), createFile: () => ({ getUrl: () => 'https://drive/x' }) };
+             getId: () => 'id-' + String(id || 'X'),
+             getFoldersByName: name => {
+               // Beim zweiten Aufruf denselben Ordner zurueckgeben, sonst
+               // liesse sich nicht pruefen, dass nichts doppelt entsteht.
+               const da = ctx.__ordner.indexOf(name) >= 0;
+               return { hasNext: () => da, next: () => ordner(name) };
+             },
+             createFolder: name => { ctx.__ordner.push(name); return ordner(name); },
+             createFile: b => { ctx.__dateien.push(b && b.name); 
+                                return { getUrl: () => 'https://drive/x' }; } };
   }
   vm.createContext(ctx);
   vm.runInContext(quelle, ctx);

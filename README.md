@@ -30,9 +30,9 @@ Aplikacija to preslikava: ko kvitira, njegovo ime i serversko vreme se upisuju.
 ```
 index.html                 CIJELA aplikacija: CSS, HTML, logika, konfiguracija, logo
 manifest.webmanifest       ime i ikone za dodavanje na home screen
-icons/icon-192.png         ← zamijeni
-icons/icon-512.png         ← zamijeni
-icons/icon-maskable-512.png ← zamijeni
+icons/icon-192.png         ikone za home screen, iste kao u Spesenu
+icons/icon-512.png
+icons/icon-maskable-512.png
 
 apps-script/Code.gs        ceo backend — prijava, unos, kvitiranje, xlsx, CSV
 
@@ -54,9 +54,25 @@ Sve što se menja nalazi se u `index.html`, u tri označena bloka:
 
 | Blok | Šta je unutra |
 |---|---|
-| `:root` u `<style>` | boje; akcentna žuta je `#E0A32E` |
-| `<symbol id="logo">` | logotip — zameni sadržaj svojim SVG-om |
+| `:root` u `<style>` | boje; akcentna je maslinasta `#8FA426`, kao u Spesenu |
+| `<symbol id="logo">` | wordmark; `#logo-zeichen` je isti crtež, samo isečen |
 | `const CONFIG` | Web-App-URL iz Apps Scripta |
+
+**Izgled je isti kao u Spesenu** — ista maslinasta `#8FA426`, isti wordmark,
+iste ikone, isti razmaci. Jedina namerna razlika je žuta `--gelb`: ona nije
+kućna boja nego žuta kolona `Bestehend` sa papira, i u izvezenom Excelu stoji
+isto tako. Zato je nose samo ta kućica i njena oznaka.
+
+Jedna sitnica je usput ispravljena, ne prepisana: u Spesenu `.sekundaer`
+gubi od `button.gross` po specifičnosti, pa sporedna dugmad tamo nemaju
+okvir i izgledaju kao goli tekst. Ovde pravilo stoji kao `.gross`, pa okvir
+zaista i postoji. Ako hoćeš da budu identična do piksela, isto se popravlja
+i u Spesenu — jedna reč.
+
+**Bez ijednog spoljnog zahteva.** Stranica ne povlači font sa
+`fonts.googleapis.com` — taj zahtev je blokirao prvi prikaz baš tamo gde je
+mreža slaba. Ako je Open Sans na uređaju, koristi se; inače sistemski font,
+što je na iPadu ionako prirodniji izgled.
 
 **Bez service workera.** Aplikacija ionako traži mrežu za svaku radnju,
 pa keš donosi samo problem zastarele verzije. Bez njega je izmena vidljiva
@@ -97,12 +113,38 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
 **Erweiterungen → Apps Script** iz same tabele.
 
 1. Obriši sadržaj i zalepi `apps-script/Code.gs`
-2. Na vrhu postavi `SHEET_ID`, `PWA_URL` i `TOKEN_READ`
-3. Pokreni **`setupAnlegen`** jednom — pravi sve listove i zaglavlja
+2. **Projekteinstellungen → Skripteigenschaften** → tri reda:
+
+   | Ime | Vrednost |
+   |---|---|
+   | `SHEET_ID` | ID tabele, iz URL-a između `/d/` i `/edit` — sme i cela adresa |
+   | `PWA_URL` | adresa PWA, ide u pristupne mejlove |
+   | `TOKEN_READ` | štiti CSV izlaz — ili pokreni `tokenErzeugen()` |
+
+3. Pokreni **`setupAnlegen`** jednom — pravi listove, zaglavlja i tri
+   Drive foldera pored tabele
 4. **Bereitstellen → Neue Bereitstellung → Web-App**
    *Ausführen als: Ich*, *Zugriff: Jeder*
 5. Prvi put traži odobrenje za tabelu, Drive i slanje pošte — potvrdi
 6. Zapiši **Web-App-URL**
+
+**U kodu nema nijedne od te tri vrednosti** — stoje u skripteigenschaften.
+To znači da se kod sme **ceo zameniti** kad stigne nova verzija, bez ponovnog
+unošenja ijednog polja; i da javni repo ne nosi token.
+
+Dve pomoćne funkcije za editor:
+
+| Funkcija | Šta radi |
+|---|---|
+| `einrichtungPruefen()` | javlja koja vrednost fali, da li se tabela otvara, koji listovi postoje i kako glasi CSV adresa za šablon |
+| `tokenErzeugen()` | napravi jak `TOKEN_READ`, upiše ga i ispiše jednom — odatle ide u `Vorlage-Aufbau.bas` |
+
+Ako nešto ne radi, prvo pokreni `einrichtungPruefen()` i pogledaj protokol.
+
+**`Invalid argument: id`** znači da `SHEET_ID` nije ispravan Drive ID.
+Cela adresa je dozvoljena — kod iz nje izvuče ID — ali ID Apps Script
+projekta ili ime foldera nisu. `einrichtungPruefen()` ispisuje šta je upisano
+i šta je iz toga izvučeno.
 
 **`setupAnlegen` sme da se pokrene i kasnije, više puta.** Zaglavlja se ne
 diraju ako već postoje; ono što svaki put iznova postavlja jeste **tekstualni
@@ -137,9 +179,23 @@ Mora vratiti CSV sa zaglavljem. Ako vidiš Google login stranicu,
 Bez toga URL i dalje servira stari kod. Ovo je najčešći uzrok
 „izmenio sam, a ništa se nije promenilo".
 
-## Faza 3 — Parametri (~10 min)
+Ažuriranje je time svedeno na tri koraka bez ijednog polja za popunjavanje:
+**zalepi `Code.gs` → Neue Version → `setupAnlegen`.** Skripteigenschaften
+preživljavaju zamenu koda; `setupAnlegen` dopiše kolone kojih još nema.
 
-U listu `Parameter`, kolona `Schluessel` / `Wert`:
+## Faza 3 — Parametri (~3 min)
+
+Tri foldera **već stoje** — napravio ih je `setupAnlegen`, pored same tabele:
+
+```
+Wareneingang/                  ← tu gde je i tabela
+  Excel/           → ArchivOrdner       .xlsx, u podfolder GGGG-MM
+  Lieferscheine/   → FotoOrdner         slike otpremnica, isto po mesecima
+  Sicherung/       → SicherungOrdner    nedeljna kopija cele tabele
+```
+
+Ostaje samo **`MailAn`** — adresa koja dobija popunjeni `.xlsx`. Upiši je u
+**Verwaltung** u aplikaciji, ili u list `Parameter`.
 
 | `Schluessel` | `Wert` | Čemu služi |
 |---|---|---|
@@ -148,23 +204,30 @@ U listu `Parameter`, kolona `Schluessel` / `Wert`:
 | `FotoOrdner` | ID Drive foldera | tu idu slike otpremnice, u podfolder `GGGG-MM` |
 | `SicherungOrdner` | ID Drive foldera | tu ide nedeljna kopija cele tabele |
 
-ID foldera je deo URL-a posle `/folders/`.
-
 **Prazan `ArchivOrdner` znači: samo mejl, bez arhive.** Prazan `FotoOrdner`
 znači: slika se tiho preskače, unos i dalje prolazi. Prazan `MailAn` je
-jedina od te tri koja blokira — slanje tada javlja `kein_empfaenger`.
+jedini koji blokira — slanje tada javlja `kein_empfaenger`.
 
-Ova tri parametra tiču se samo **slanja**. Šablon na SharePointu ne koristi
-nijedan od njih — on povlači CSV i ne zna ni za mejl ni za Drive.
+Zato `setupAnlegen` **ne pregazi ono što je već upisano**: prazno polje je
+namerno gašenje, ne rupa. Ko obriše `FotoOrdner` da isključi slike, neće ga
+dobiti nazad ponovnim pokretanjem.
+
+**`SicherungOrdner` ne deli ni sa kim** — kopija sadrži list `Benutzer`, a u
+njemu `PassHash` i `Salt`. Zato je odvojen od `Excel/`, koji se po pravilu
+deli sa računovodstvom.
+
+Za nedeljnu kopiju pokreni jednom **`sicherungPlanen()`** u editoru — sam
+zakači okidač za nedelju oko 3h i ukloni eventualni duplikat, pa se ne mora
+kroz UI za okidače.
+
+Ovi parametri tiču se samo **slanja i arhive**. Šablon na SharePointu ne
+koristi nijedan — on povlači CSV i ne zna ni za mejl ni za Drive.
 
 ## Faza 4 — PWA (~15 min)
 
 1. `index.html` → u bloku `const CONFIG` upiši Web-App-URL
-2. `index.html` → u `<symbol id="logo">` zalepi svoj SVG logotip;
-   svetla verzija, jer taman logo na crnoj podlozi nestaje
-3. `icons/` → kvadratne PNG ikone, **samo znak bez teksta**, oko 10%
-   praznog ruba. Priložene su privremene — zameni ih.
-4. Objavi sadržaj repoa na statični host sa HTTPS —
+2. Logo i ikone su već unutra — isti kao u Spesenu, ništa se ne dira
+3. Objavi sadržaj repoa na statični host sa HTTPS —
    Cloudflare Pages, Netlify, GitHub Pages
 
 Kasnije izmene: `index.html` uredi direktno u GitHub browseru, ikonica
@@ -207,6 +270,16 @@ Prazna polja ostaju prazna, kvitiranje ide svejedno.
 **Status** je uvek najdalji kvitirani korak, ne poslednji kliknuti —
 naknadno kvitiranje `Angenommen` ne vraća eingelagert dokument na početak.
 Dokument bez ijednog potpisa ima status `erfasst`.
+
+**Pretraga** iznad liste traži po broju, kupcu, dobavljaču i imenu onoga ko
+je uneo. Bez nje lista pokazuje tvoje unose i sve što je timu još otvoreno —
+najnovijih sto. Sa pretragom se gleda ceo bestand, uključujući tuđe završene
+dokumente: inače beleg od prošlog meseca iz aplikacije više ne bi bio
+dostupan. Stornirani ne izlaze ni tako.
+
+U listi se ime onoga ko je uneo prikazuje **samo kad to nisi ti**, a već
+poslati dokument nosi oznaku `gesendet` — da se isti obrazac ne pošalje
+dvaput bez namere.
 
 **Als Excel senden** može se pozvati u bilo kom trenutku i više puta.
 Šalje trenutno stanje; ako se pošalje pre nego što je sve kvitirano,
@@ -319,6 +392,19 @@ prijavi — odjavi se i prijavi ponovo.
 **Sopstveni nalog ne može da se deaktivira ni da sebi oduzme prava.**
 Bez toga bi jedan pogrešan klik ostavio firmu bez ijednog admina.
 
+**Prijava ne odaje da li nalog postoji.** Dok lozinka nije tačna, odgovor je
+uvek `login` — i za nepoznatu adresu, i za deaktiviran nalog, i za zaključan.
+Tek kad lozinka prođe, poruka sme reći više (`inaktiv`, `gesperrt`); ko je ne
+zna, ne dobija potvrdu da je pogodio adresu.
+
+**Posle isteka blokade brojač kreće od nule.** Inače bi prvi tipfeler posle
+petnaest minuta čekanja odmah vratio blokadu.
+
+**Lozinke se hešuju u 1000 prolaza** (`HASH_RUNDEN`), sa oznakom `v2$` na
+početku. Jedan prolaz SHA-256 je toliko brz da je ukradena tabela praktično
+jednaka lozinkama. Stari zapisi bez oznake i dalje važe i **zamenjuju se sami
+pri prvoj sledećoj prijavi** — niko nije zaključan zbog ove izmene.
+
 **Provera prava je na serveru, ne u aplikaciji.** Svaka `admin_*` akcija
 prolazi kroz istu proveru role iz sesije. To što dugme kod običnog
 korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
@@ -327,7 +413,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **344 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **422 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -388,6 +474,16 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 24 | Avionski režim usred *Speichern*, pa ponovo *Speichern* | jedan dokument, ne dva |
 | 25 | *Abmelden*, pa isti token ubačen ručno | odbijen sa `session` |
 | 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |
+| 27 | Zameniti ceo `Code.gs` novom verzijom | radi bez unošenja ijedne vrednosti |
+| 28 | Obrisati `TOKEN_READ` iz skripteigenschaften | CSV izlaz vraća `kein Zugriff` |
+| 29 | Prijava na nepostojeću adresu i na deaktiviran nalog | ista poruka u oba slučaja |
+| 30 | Sačekati da blokada istekne, pa jednom pogrešiti | ne zaključava odmah |
+| 31 | Prijava naloga napravljenog pre ove verzije | prolazi; heš u tabeli dobija `v2$` |
+| 32 | Pretraga po imenu dobavljača od pre dva meseca | nađe i tuđ završen dokument |
+| 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
+| 34 | Pokrenuti `setupAnlegen` dvaput | folderi se ne dupliraju, upisi ostaju |
+| 35 | Obrisati `FotoOrdner`, pa `setupAnlegen` | ostaje prazan — gašenje je namerno |
+| 36 | Pokrenuti `sicherungPlanen()` dvaput | jedan okidač, ne dva |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |
@@ -422,8 +518,8 @@ Sign-In — `login` tada prima ID token umesto lozinke, ostatak arhitekture
 se ne menja.
 
 **Sheets nema verzionisanje kakvo ima SharePoint.** Funkcija `sicherung()`
-u `Code.gs` pravi kopiju u folder iz parametra `SicherungOrdner` — zakači je
-na nedeljni vremenski okidač. Bez tog parametra ne radi ništa i to javi.
+pravi kopiju u folder iz parametra `SicherungOrdner`; `sicherungPlanen()`
+joj jednom zakači nedeljni okidač. Bez tog parametra ne radi ništa i to javi.
 
 **Nema izmene posle čuvanja.** Pogrešan unos se povlači i unosi ponovo.
 Za obrazac koji se potpisuje u tri koraka to je namerno: izmena posle

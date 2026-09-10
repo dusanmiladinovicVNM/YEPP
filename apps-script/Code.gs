@@ -11,12 +11,41 @@
  */
 
 /* ============================================================
-   1) Konfiguration — hier eintragen
+   1) Konfiguration — in den Skripteigenschaften, nicht hier
    ============================================================ */
 
-const SHEET_ID   = '';   // ID der Tabelle, aus der URL zwischen /d/ und /edit
-const PWA_URL    = '';   // Adresse der PWA, kommt in die Zugangsmails
-const TOKEN_READ = '';   // frei gewaehltes Wort, schuetzt den CSV-Export
+/**
+ * Die drei Werte, die eine Installation ausmachen, stehen NICHT im Code:
+ *
+ *   SHEET_ID     ID der Tabelle, aus der URL zwischen /d/ und /edit
+ *   PWA_URL      Adresse der PWA, kommt in die Zugangsmails
+ *   TOKEN_READ   schuetzt den CSV-Export
+ *
+ * Sie liegen in den Skripteigenschaften: **Projekteinstellungen →
+ * Skripteigenschaften → Skripteigenschaft hinzufuegen**. Einmal eintragen,
+ * danach nie wieder — auch nicht, wenn der ganze Code ersetzt wird. Das
+ * spart bei jeder Aktualisierung drei Felder, und ein oeffentliches Repo
+ * traegt kein Token.
+ *
+ * Zum Pruefen: einrichtungPruefen() im Editor ausfuehren.
+ * Fuer ein starkes Token: tokenErzeugen() ausfuehren.
+ *
+ * @param darfFehlen  true: ein leerer Wert ist in Ordnung und kommt als ''
+ *                    zurueck. Sonst gibt es eine Meldung, die sagt, wo der
+ *                    Wert hingehoert — statt eines stillen Fehlschlags.
+ */
+function eigenschaft(name, darfFehlen) {
+  // Einmal je Ausfuehrung lesen: blatt() ruft das hier bei jedem Zugriff.
+  if (!eigenschaft._alle) {
+    eigenschaft._alle = PropertiesService.getScriptProperties().getProperties();
+  }
+  const wert = String(eigenschaft._alle[name] || '').trim();
+  if (!wert && !darfFehlen) {
+    throw new Error('Skripteigenschaft «' + name + '» fehlt — ' +
+                    'Projekteinstellungen → Skripteigenschaften.');
+  }
+  return wert;
+}
 
 /* Blattnamen — nur aendern, wenn die Tabelle anders heisst. */
 const T = {
@@ -48,23 +77,25 @@ function doPost(e) {
   }
 }
 
+/**
+ * GET dient ausschliesslich dem CSV-Export fuer Excel. Die App selbst spricht
+ * nur ueber POST — sonst stuende der Sitzungstoken in der Adresse und damit
+ * in den Ausfuehrungsprotokollen, im Verlauf des Browsers und in jedem
+ * Zwischenspeicher, der Adressen mitschreibt.
+ */
 function doGet(e) {
   const p = (e && e.parameter) || {};
-
-  // CSV-Export fuer Excel / Power Query — nur mit Token, ohne Sitzung
-  if (p.format === 'csv') {
-    if (!TOKEN_READ || p.token !== TOKEN_READ) {
-      return ContentService.createTextOutput('kein Zugriff');
-    }
-    return ContentService.createTextOutput(csvExport(p))
-      .setMimeType(ContentService.MimeType.CSV);
+  if (p.format !== 'csv') {
+    return ContentService.createTextOutput(
+      'Diese Adresse liefert nur den CSV-Export: ?token=…&format=csv');
   }
 
-  try {
-    return json(verteilen(p));
-  } catch (err) {
-    return json({ ok: false, error: String(err) });
+  const token = eigenschaft('TOKEN_READ', true);
+  if (!token || p.token !== token) {
+    return ContentService.createTextOutput('kein Zugriff');
   }
+  return ContentService.createTextOutput(csvExport(p))
+    .setMimeType(ContentService.MimeType.CSV);
 }
 
 /** Eine Stelle, an der entschieden wird, was eine Aktion darf. */
@@ -127,23 +158,43 @@ function login(d) {
     if (String(dat[i][k.Email]).trim().toLowerCase() !== email) continue;
 
     const zeile = i + 1;
-    if (String(dat[i][k.Aktiv]).toLowerCase() === 'false') {
-      return { ok: false, error: 'inaktiv' };
-    }
+    const bis      = dat[i][k.GesperrtBis];
+    const gesperrt = !!(bis && new Date(bis) > new Date());
 
-    const bis = dat[i][k.GesperrtBis];
-    if (bis && new Date(bis) > new Date()) return { ok: false, error: 'gesperrt' };
+    // Eine abgelaufene Sperre gibt wieder volle Versuche. Ohne das steht der
+    // Zaehler weiter auf fuenf, und der erste Tippfehler nach der Wartezeit
+    // sperrt sofort erneut.
+    let fehler = Number(dat[i][k.Fehler] || 0);
+    if (bis && !gesperrt && fehler) {
+      fehler = 0;
+      bl.getRange(zeile, k.Fehler + 1).setValue(0);
+      bl.getRange(zeile, k.GesperrtBis + 1).setValue('');
+    }
 
     const salt = String(dat[i][k.Salt] || '');
     const soll = String(dat[i][k.PassHash] || '');
-    if (!salt || !soll || hash(pass, salt) !== soll) {
-      const fehler = Number(dat[i][k.Fehler] || 0) + 1;
+    if (!hashPasst(pass, salt, soll)) {
+      fehler++;
       bl.getRange(zeile, k.Fehler + 1).setValue(fehler);
       if (fehler >= MAX_FEHLER) {
         bl.getRange(zeile, k.GesperrtBis + 1)
           .setValue(new Date(Date.now() + SPERRE_MINUTEN * 60000));
       }
       return { ok: false, error: 'login' };
+    }
+
+    // Ab hier stimmt das Passwort. Erst jetzt darf die Antwort mehr sagen als
+    // «falsch»: wer es nicht kennt, erfaehrt nicht einmal, ob es das Konto
+    // gibt — «inaktiv» oder «gesperrt» waeren sonst die Bestaetigung.
+    if (gesperrt) return { ok: false, error: 'gesperrt' };
+    if (String(dat[i][k.Aktiv]).toLowerCase() === 'false') {
+      return { ok: false, error: 'inaktiv' };
+    }
+
+    // Alte Fassung im Vorbeigehen ersetzen: hier liegt das Passwort im
+    // Klartext vor, spaeter nie wieder.
+    if (soll.indexOf(HASH_MARKE) !== 0) {
+      bl.getRange(zeile, k.PassHash + 1).setValue(hash(pass, salt));
     }
 
     bl.getRange(zeile, k.Fehler + 1).setValue(0);
@@ -235,7 +286,7 @@ function passwortSetzen(d, u) {
   const k   = spalten(dat[0]);
   const i   = u.zeile - 1;
 
-  if (hash(alt, String(dat[i][k.Salt] || '')) !== String(dat[i][k.PassHash] || '')) {
+  if (!hashPasst(alt, String(dat[i][k.Salt] || ''), dat[i][k.PassHash])) {
     return { ok: false, error: 'alt_falsch' };
   }
 
@@ -516,16 +567,30 @@ function regalplaetzeSchreiben(weNr, werte) {
    7) Ansehen und zuruecknehmen
    ============================================================ */
 
+/**
+ * Die Uebersicht. Ohne Suche zeigt sie die eigenen Erfassungen und alles,
+ * was beim Team noch offen ist — sonst koennte niemand quittieren, was ein
+ * Kollege angenommen hat.
+ *
+ * Mit Suche gilt das nicht: dann wird der ganze Bestand durchsucht, auch
+ * abgeschlossene Dokumente fremder Erfasser. Ohne das waere ein Beleg von
+ * vorletztem Monat aus der App gar nicht mehr erreichbar — die Liste bricht
+ * bei hundert Zeilen ab, und weDetail steht ohnehin jedem offen.
+ */
 function weListe(d, u) {
   const dat = blatt(T.we).getDataRange().getValues();
   const k   = spalten(dat[0]);
   const aus = [];
+  const suche = String(d.suche || '').trim().toLowerCase();
 
   for (let i = 1; i < dat.length; i++) {
     if (String(dat[i][k.Storniert]).toLowerCase() === 'true') continue;
-    if (!d.alle && String(dat[i][k.Email]).toLowerCase() !== u.email) {
-      // Offene Schritte sieht das ganze Team — sonst koennte niemand
-      // quittieren, was ein Kollege angenommen hat.
+
+    if (suche) {
+      const heuhaufen = [dat[i][k.WeNr], dat[i][k.Kunde], dat[i][k.Lieferant],
+                         dat[i][k.Erfasser]].join(' ').toLowerCase();
+      if (heuhaufen.indexOf(suche) < 0) continue;
+    } else if (!d.alle && String(dat[i][k.Email]).toLowerCase() !== u.email) {
       if (String(dat[i][k.Status]) === 'eingelagert') continue;
     }
     aus.push({
@@ -649,12 +714,16 @@ function weSenden(d, u) {
   const ordner = ordnerFuerMonat();
   const url = ordner ? ordner.createFile(blob).getUrl() : '';
 
+  // Die Mail ist raus; der Vermerk darf daran nichts mehr aendern. Fehlt die
+  // Zeile wider Erwarten, waere getRange(0, …) ein Fehler nach getaner Arbeit.
   const bl  = blatt(T.we);
   const dat = bl.getDataRange().getValues();
   const k   = spalten(dat[0]);
   const i   = zeileFinden(dat, k.WeNr, d.weNr);
-  bl.getRange(i + 1, k.Gesendet + 1).setValue(fmt(new Date(), 'yyyy-MM-dd HH:mm'));
-  if (url) bl.getRange(i + 1, k.DateiUrl + 1).setValue(url);
+  if (i >= 0) {
+    bl.getRange(i + 1, k.Gesendet + 1).setValue(fmt(new Date(), 'yyyy-MM-dd HH:mm'));
+    if (url) bl.getRange(i + 1, k.DateiUrl + 1).setValue(url);
+  }
 
   return { ok: true, an: empfaenger, url: url };
 }
@@ -840,8 +909,13 @@ function fotoAblegen(dataUrl, weNr, u) {
     if (!teile) return '';
 
     const ordner = unterordner(DriveApp.getFolderById(wurzel), fmt(new Date(), 'yyyy-MM'));
+    // Endung nach dem wirklichen Typ: die App schickt JPEG, ein anderer
+    // Client koennte PNG schicken, und eine falsche Endung faellt erst auf,
+    // wenn jemand die Datei nicht oeffnen kann.
+    const endung = (teile[1].split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const blob = Utilities.newBlob(
-      Utilities.base64Decode(teile[2]), teile[1], weNr + '_Lieferschein.jpg'
+      Utilities.base64Decode(teile[2]), teile[1],
+      weNr + '_Lieferschein.' + endung
     );
     return ordner.createFile(blob).getUrl();
   } catch (err) {
@@ -976,7 +1050,7 @@ function adminParameter(d, u) {
     ADMIN_PARAMETER.forEach(s => {
       if (d.werte[s] == null) return;
       const wert = s === 'MailAn' ? String(d.werte[s]).trim()
-                                  : ordnerId(d.werte[s]);
+                                  : driveId(d.werte[s]);
       parameterSetzen(s, wert);
     });
   }
@@ -1007,10 +1081,12 @@ function parameterSetzen(schluessel, wert) {
 }
 
 /**
- * Aus einer eingefuegten Drive-Adresse die blosse Ordner-ID holen. Wer den
- * Ordner offen hat, kopiert die Adresse — nicht den Teil dahinter.
+ * Aus einer eingefuegten Adresse die blosse Drive-ID holen. Wer die Tabelle
+ * oder den Ordner offen hat, kopiert die Adresse aus der Leiste — nicht den
+ * Teil zwischen /d/ und /edit. openById() antwortet darauf mit «Invalid
+ * argument: id», und das sagt niemandem, was zu tun ist.
  */
-function ordnerId(wert) {
+function driveId(wert) {
   const s = String(wert || '').trim();
   const m = s.match(/[-\w]{25,}/);
   return m ? m[0] : s;
@@ -1032,7 +1108,7 @@ function zugangText(name, pass) {
     '',
     'Der Wareneingang wird neu direkt am Gerät erfasst.',
     '',
-    'Adresse:  ' + PWA_URL,
+    'Adresse:  ' + eigenschaft('PWA_URL'),
     'Passwort: ' + pass,
     '',
     'Bitte auf dem iPad in Safari öffnen und anmelden. Beim ersten Mal',
@@ -1125,8 +1201,25 @@ function csvExport(p) {
    12) Hilfsmittel
    ============================================================ */
 
+/**
+ * Die Tabelle. Eine falsch eingetragene SHEET_ID ist der haeufigste
+ * Einrichtungsfehler, und «Invalid argument: id» sagt nicht, welche der
+ * Eigenschaften gemeint ist oder was drinsteht — hier steht beides.
+ */
+function tabelle() {
+  const id = driveId(eigenschaft('SHEET_ID'));
+  try {
+    return SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Error('Tabelle nicht erreichbar. SHEET_ID ergab «' + id + '»: ' +
+                    e.message + '. In den Skripteigenschaften gehoert der ' +
+                    'Teil der Tabellen-URL zwischen /d/ und /edit — die ganze ' +
+                    'Adresse tut es auch.');
+  }
+}
+
 function blatt(name) {
-  const bl = SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);
+  const bl = tabelle().getSheetByName(name);
   if (!bl) throw new Error('Blatt fehlt: ' + name);
   return bl;
 }
@@ -1161,10 +1254,39 @@ function parameter(schluessel) {
   return '';
 }
 
+/**
+ * Passwort-Hash. Ein einzelner SHA-256-Durchgang ist so schnell, dass eine
+ * abhanden gekommene Zeile aus «Benutzer» praktisch so gut ist wie das
+ * Passwort selbst. Wiederholtes Hashen verteuert das Durchprobieren um den
+ * Faktor der Rundenzahl, kostet beim Anmelden aber nur einmal Bruchteile
+ * einer Sekunde — Anmelden geschieht je Geraet einmal im Monat.
+ *
+ * Die Marke am Anfang sagt, nach welchem Verfahren gerechnet wurde. Ohne sie
+ * ist es die alte Fassung; hashPasst() nimmt beide an, und login() ersetzt
+ * die alte beim naechsten erfolgreichen Anmelden. So sperrt diese Aenderung
+ * niemanden aus.
+ */
+const HASH_MARKE  = 'v2$';
+const HASH_RUNDEN = 1000;
+
 function hash(pass, salt) {
+  let wert = salt + pass;
+  for (let i = 0; i < HASH_RUNDEN; i++) wert = digest(wert);
+  return HASH_MARKE + wert;
+}
+
+function digest(text) {
   return Utilities.base64Encode(
-    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + pass)
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text)
   );
+}
+
+/** Prueft gegen beide Fassungen. */
+function hashPasst(pass, salt, soll) {
+  const s = String(soll || '');
+  if (!salt || !s) return false;
+  if (s.indexOf(HASH_MARKE) === 0) return hash(pass, salt) === s;
+  return digest(String(salt) + pass) === s;
 }
 
 /**
@@ -1219,7 +1341,7 @@ function json(obj) {
 
 /** Legt alle Blaetter mit den richtigen Kopfzeilen an. Einmalig. */
 function setupAnlegen() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = tabelle();
   const plan = {};
   plan[T.we] = ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
                 'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
@@ -1274,7 +1396,12 @@ function setupAnlegen() {
       ['SicherungOrdner', '']  // eigener Ordner: die Kopie enthaelt Hashes
     ]);
   }
-  return 'fertig';
+
+  // Die Ablage gleich mit: sonst muesste jemand drei Ordner von Hand
+  // anlegen und ihre IDs aus der Adressleiste abschreiben.
+  const ordner = ordnerAnlegen();
+
+  return 'fertig\n' + ordner;
 }
 
 /**
@@ -1294,6 +1421,119 @@ function textSpalten(ss, blattName, namen) {
     if (k[name] == null) return;
     bl.getRange(2, k[name] + 1, bl.getMaxRows() - 1, 1).setNumberFormat('@');
   });
+}
+
+/**
+ * Sagt, wie es um die Einrichtung steht: welche Eigenschaft fehlt, ob sich
+ * die Tabelle oeffnen laesst, welche Blaetter da sind und wie die CSV-Adresse
+ * fuer die Excel-Vorlage lautet. Im Editor ausfuehren und ins Protokoll sehen.
+ */
+function einrichtungPruefen() {
+  eigenschaft._alle = null;                       // frisch lesen, nicht aus dem Cache
+  const zeilen = [];
+
+  ['SHEET_ID', 'PWA_URL', 'TOKEN_READ'].forEach(name => {
+    const wert = eigenschaft(name, true);
+    zeilen.push(name + ': ' + (wert || 'FEHLT'));
+    // Steht dort die ganze Adresse, ist das in Ordnung — aber sichtbar
+    // machen, womit wirklich gearbeitet wird.
+    if (name === 'SHEET_ID' && wert && driveId(wert) !== wert) {
+      zeilen.push('  daraus die ID: ' + driveId(wert));
+    }
+  });
+
+  try {
+    const ss = tabelle();
+    zeilen.push('Tabelle: ' + ss.getName());
+    const fehlt = Object.keys(T).map(s => T[s]).filter(n => !ss.getSheetByName(n));
+    zeilen.push(fehlt.length ? 'Blaetter FEHLEN: ' + fehlt.join(', ') + ' — setupAnlegen()'
+                             : 'Blaetter: alle sieben da');
+  } catch (e) {
+    zeilen.push('Tabelle: ' + e.message);
+  }
+
+  ORDNER_PLAN.forEach(o => {
+    const id = parameter(o.par);
+    zeilen.push(o.par + ': ' + (id ? (ordnerName(id) || 'ID nicht erreichbar')
+                                   : 'leer — abgeschaltet'));
+  });
+  zeilen.push('MailAn: ' + (parameter('MailAn') || 'FEHLT — Versand meldet einen Fehler'));
+
+  const token = eigenschaft('TOKEN_READ', true);
+  if (token) {
+    zeilen.push('CSV fuer die Vorlage: <Web-App-URL>?token=' + token +
+                '&format=csv&tage=365');
+  }
+
+  const text = zeilen.join('\n');
+  console.log(text);
+  return text;
+}
+
+/**
+ * Legt ein starkes TOKEN_READ in den Skripteigenschaften ab und gibt es
+ * einmal zurueck. Der Wert gehoert von dort in das Makro
+ * `Vorlage-Aufbau.bas` — nicht in den Code und nicht ins Repo.
+ */
+function tokenErzeugen() {
+  const token = zufall(24);
+  PropertiesService.getScriptProperties().setProperty('TOKEN_READ', token);
+  eigenschaft._alle = null;
+  console.log('TOKEN_READ: ' + token);
+  return token;
+}
+
+/**
+ * Die drei Ablageordner. Sie entstehen neben der Tabelle — im selben Ordner,
+ * in dem auch das Skript liegt — damit alles zu diesem Wareneingang an einer
+ * Stelle steht und niemand IDs aus Adressleisten kopieren muss.
+ *
+ * «Sicherung» ist bewusst ein eigener Ordner: die Kopie enthaelt das Blatt
+ * «Benutzer» mit PassHash und Salt, waehrend «Excel» mit der Buchhaltung
+ * geteilt wird.
+ */
+const ORDNER_PLAN = [
+  { par: 'ArchivOrdner',    name: 'Excel' },
+  { par: 'FotoOrdner',      name: 'Lieferscheine' },
+  { par: 'SicherungOrdner', name: 'Sicherung' }
+];
+
+/**
+ * Legt die Ordner an und traegt sie ein — aber nur dort, wo noch nichts
+ * steht. Ein leeres Feld heisst in der Verwaltung «abgeschaltet»; wer den
+ * Fotoordner absichtlich leer laesst, bekommt ihn hier nicht zurueck.
+ * Deshalb nur beim Einrichten, nicht aus der Oberflaeche heraus.
+ */
+function ordnerAnlegen() {
+  const eltern = elternOrdner();
+  if (!eltern) return 'kein Ordner neben der Tabelle gefunden';
+
+  return ORDNER_PLAN.map(o => {
+    if (parameter(o.par)) return o.par + ': bleibt, wie eingetragen';
+    const ordner = unterordner(eltern, o.name);
+    parameterSetzen(o.par, ordner.getId());
+    return o.par + ' → ' + eltern.getName() + '/' + o.name;
+  }).join('\n');
+}
+
+/** Der Ordner, in dem die Tabelle liegt. */
+function elternOrdner() {
+  const eltern = DriveApp.getFileById(driveId(eigenschaft('SHEET_ID'))).getParents();
+  return eltern.hasNext() ? eltern.next() : null;
+}
+
+/**
+ * Haengt die woechentliche Sicherung an einen Zeit-Trigger. Ein zweiter
+ * Aufruf legt keinen zweiten an — sonst liefe sie doppelt und der Ordner
+ * fuellte sich mit Kopien derselben Nacht.
+ */
+function sicherungPlanen() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'sicherung') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sicherung').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).create();
+  return 'Sicherung laeuft ab jetzt sonntags gegen 3 Uhr';
 }
 
 /** Erstzugang: in «Benutzer» nur Email und Name eintragen, dann hier starten. */
@@ -1332,7 +1572,7 @@ function zugangVerschicken() {
 function sicherung() {
   const wurzel = String(parameter('SicherungOrdner') || '').trim();
   if (!wurzel) return 'kein SicherungOrdner gesetzt — nichts gesichert';
-  DriveApp.getFileById(SHEET_ID).makeCopy(
+  DriveApp.getFileById(driveId(eigenschaft('SHEET_ID'))).makeCopy(
     'Wareneingang ' + fmt(new Date(), 'yyyy-MM-dd'),
     DriveApp.getFolderById(wurzel));
   return 'gesichert';
