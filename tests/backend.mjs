@@ -593,6 +593,64 @@ console.log('\n15) Sicherung und Nachruesten');
      w.daten[0].filter(s => s === 'Vorgang').length === 1);
 }
 
+console.log('\n16) Konfiguration in den Skripteigenschaften');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const text = r => (typeof r === 'string' ? r : r.t);
+  const frisch = () => { ctx.eigenschaft._alle = null; };
+  ctx.console = { log: () => {}, error: () => {} };   // Berichte nicht mitdrucken
+
+  ok('Wert kommt aus den Eigenschaften', ctx.eigenschaft('SHEET_ID') === 'X');
+  ok('PWA-Adresse steht im Zugangsmail',
+     ctx.zugangText('Eva', 'Pass1234').includes('https://wareneingang.example/'));
+
+  // Fehlt ein Wert, muss die Meldung sagen, wo er hingehoert — sonst sucht
+  // man ihn im Code, wo er seit dieser Version nicht mehr steht.
+  ctx.__eigenschaften.SHEET_ID = '';
+  frisch();
+  let meldung = '';
+  try { ctx.blatt('Wareneingang'); } catch (e) { meldung = e.message; }
+  ok('fehlender Wert wird benannt',
+     meldung.includes('SHEET_ID') && meldung.includes('Skripteigenschaften'), meldung);
+  ok('leerer Wert darf leer sein, wenn erlaubt',
+     ctx.eigenschaft('SHEET_ID', true) === '');
+  ctx.__eigenschaften.SHEET_ID = 'X';
+  frisch();
+
+  // CSV-Ausgang haengt am Token aus den Eigenschaften
+  const csv = text(ctx.doGet({ parameter: { format: 'csv', token: 'geheimwort' } }));
+  ok('richtiges Token liefert die CSV', csv.split('\n')[0].startsWith('WeNr,'), csv.slice(0, 40));
+  ok('falsches Token wird abgewiesen',
+     text(ctx.doGet({ parameter: { format: 'csv', token: 'falsch' } })) === 'kein Zugriff');
+  ok('ohne Token wird abgewiesen',
+     text(ctx.doGet({ parameter: { format: 'csv' } })) === 'kein Zugriff');
+
+  ctx.__eigenschaften.TOKEN_READ = '';
+  frisch();
+  ok('ohne hinterlegtes Token bleibt der Ausgang zu',
+     text(ctx.doGet({ parameter: { format: 'csv', token: '' } })) === 'kein Zugriff');
+
+  // tokenErzeugen legt ein starkes Token ab und macht den Cache frei
+  const neu = ctx.tokenErzeugen();
+  ok('Token erzeugt und gespeichert',
+     neu.length === 24 && ctx.__eigenschaften.TOKEN_READ === neu, neu);
+  ok('neues Token gilt sofort',
+     text(ctx.doGet({ parameter: { format: 'csv', token: neu } })).startsWith('WeNr,'));
+
+  // Der Bericht sagt, was fehlt
+  ctx.__eigenschaften.PWA_URL = '';
+  const bericht = ctx.einrichtungPruefen();
+  ok('Bericht meldet die fehlende Adresse', bericht.includes('PWA_URL: FEHLT'), bericht);
+  ok('Bericht nennt die Tabelle', bericht.includes('Wareneingang (Test)'));
+  ok('Bericht nennt die CSV-Adresse', bericht.includes('&format=csv&tage=365'));
+  ok('Bericht meldet vollstaendige Blaetter', bericht.includes('alle sieben da'), bericht);
+
+  delete ss.blaetter.Sessions;
+  ok('Bericht meldet fehlende Blaetter',
+     ctx.einrichtungPruefen().includes('Blaetter FEHLEN: Sessions'));
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

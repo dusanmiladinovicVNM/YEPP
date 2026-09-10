@@ -11,12 +11,41 @@
  */
 
 /* ============================================================
-   1) Konfiguration — hier eintragen
+   1) Konfiguration — in den Skripteigenschaften, nicht hier
    ============================================================ */
 
-const SHEET_ID   = '';   // ID der Tabelle, aus der URL zwischen /d/ und /edit
-const PWA_URL    = '';   // Adresse der PWA, kommt in die Zugangsmails
-const TOKEN_READ = '';   // frei gewaehltes Wort, schuetzt den CSV-Export
+/**
+ * Die drei Werte, die eine Installation ausmachen, stehen NICHT im Code:
+ *
+ *   SHEET_ID     ID der Tabelle, aus der URL zwischen /d/ und /edit
+ *   PWA_URL      Adresse der PWA, kommt in die Zugangsmails
+ *   TOKEN_READ   schuetzt den CSV-Export
+ *
+ * Sie liegen in den Skripteigenschaften: **Projekteinstellungen →
+ * Skripteigenschaften → Skripteigenschaft hinzufuegen**. Einmal eintragen,
+ * danach nie wieder — auch nicht, wenn der ganze Code ersetzt wird. Das
+ * spart bei jeder Aktualisierung drei Felder, und ein oeffentliches Repo
+ * traegt kein Token.
+ *
+ * Zum Pruefen: einrichtungPruefen() im Editor ausfuehren.
+ * Fuer ein starkes Token: tokenErzeugen() ausfuehren.
+ *
+ * @param darfFehlen  true: ein leerer Wert ist in Ordnung und kommt als ''
+ *                    zurueck. Sonst gibt es eine Meldung, die sagt, wo der
+ *                    Wert hingehoert — statt eines stillen Fehlschlags.
+ */
+function eigenschaft(name, darfFehlen) {
+  // Einmal je Ausfuehrung lesen: blatt() ruft das hier bei jedem Zugriff.
+  if (!eigenschaft._alle) {
+    eigenschaft._alle = PropertiesService.getScriptProperties().getProperties();
+  }
+  const wert = String(eigenschaft._alle[name] || '').trim();
+  if (!wert && !darfFehlen) {
+    throw new Error('Skripteigenschaft «' + name + '» fehlt — ' +
+                    'Projekteinstellungen → Skripteigenschaften.');
+  }
+  return wert;
+}
 
 /* Blattnamen — nur aendern, wenn die Tabelle anders heisst. */
 const T = {
@@ -53,7 +82,8 @@ function doGet(e) {
 
   // CSV-Export fuer Excel / Power Query — nur mit Token, ohne Sitzung
   if (p.format === 'csv') {
-    if (!TOKEN_READ || p.token !== TOKEN_READ) {
+    const token = eigenschaft('TOKEN_READ', true);
+    if (!token || p.token !== token) {
       return ContentService.createTextOutput('kein Zugriff');
     }
     return ContentService.createTextOutput(csvExport(p))
@@ -1032,7 +1062,7 @@ function zugangText(name, pass) {
     '',
     'Der Wareneingang wird neu direkt am Gerät erfasst.',
     '',
-    'Adresse:  ' + PWA_URL,
+    'Adresse:  ' + eigenschaft('PWA_URL'),
     'Passwort: ' + pass,
     '',
     'Bitte auf dem iPad in Safari öffnen und anmelden. Beim ersten Mal',
@@ -1126,7 +1156,7 @@ function csvExport(p) {
    ============================================================ */
 
 function blatt(name) {
-  const bl = SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);
+  const bl = SpreadsheetApp.openById(eigenschaft('SHEET_ID')).getSheetByName(name);
   if (!bl) throw new Error('Blatt fehlt: ' + name);
   return bl;
 }
@@ -1219,7 +1249,7 @@ function json(obj) {
 
 /** Legt alle Blaetter mit den richtigen Kopfzeilen an. Einmalig. */
 function setupAnlegen() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = SpreadsheetApp.openById(eigenschaft('SHEET_ID'));
   const plan = {};
   plan[T.we] = ['WeNr', 'Zeitstempel', 'Erfasser', 'Email', 'Kunde', 'Lieferant',
                 'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
@@ -1296,6 +1326,54 @@ function textSpalten(ss, blattName, namen) {
   });
 }
 
+/**
+ * Sagt, wie es um die Einrichtung steht: welche Eigenschaft fehlt, ob sich
+ * die Tabelle oeffnen laesst, welche Blaetter da sind und wie die CSV-Adresse
+ * fuer die Excel-Vorlage lautet. Im Editor ausfuehren und ins Protokoll sehen.
+ */
+function einrichtungPruefen() {
+  eigenschaft._alle = null;                       // frisch lesen, nicht aus dem Cache
+  const zeilen = [];
+
+  ['SHEET_ID', 'PWA_URL', 'TOKEN_READ'].forEach(name => {
+    const wert = eigenschaft(name, true);
+    zeilen.push(name + ': ' + (wert || 'FEHLT'));
+  });
+
+  try {
+    const ss = SpreadsheetApp.openById(eigenschaft('SHEET_ID'));
+    zeilen.push('Tabelle: ' + ss.getName());
+    const fehlt = Object.keys(T).map(s => T[s]).filter(n => !ss.getSheetByName(n));
+    zeilen.push(fehlt.length ? 'Blaetter FEHLEN: ' + fehlt.join(', ') + ' — setupAnlegen()'
+                             : 'Blaetter: alle sieben da');
+  } catch (e) {
+    zeilen.push('Tabelle: ' + e.message);
+  }
+
+  const token = eigenschaft('TOKEN_READ', true);
+  if (token) {
+    zeilen.push('CSV fuer die Vorlage: <Web-App-URL>?token=' + token +
+                '&format=csv&tage=365');
+  }
+
+  const text = zeilen.join('\n');
+  console.log(text);
+  return text;
+}
+
+/**
+ * Legt ein starkes TOKEN_READ in den Skripteigenschaften ab und gibt es
+ * einmal zurueck. Der Wert gehoert von dort in das Makro
+ * `Vorlage-Aufbau.bas` — nicht in den Code und nicht ins Repo.
+ */
+function tokenErzeugen() {
+  const token = zufall(24);
+  PropertiesService.getScriptProperties().setProperty('TOKEN_READ', token);
+  eigenschaft._alle = null;
+  console.log('TOKEN_READ: ' + token);
+  return token;
+}
+
 /** Erstzugang: in «Benutzer» nur Email und Name eintragen, dann hier starten. */
 function zugangVerschicken() {
   const bl  = blatt(T.benutzer);
@@ -1332,7 +1410,7 @@ function zugangVerschicken() {
 function sicherung() {
   const wurzel = String(parameter('SicherungOrdner') || '').trim();
   if (!wurzel) return 'kein SicherungOrdner gesetzt — nichts gesichert';
-  DriveApp.getFileById(SHEET_ID).makeCopy(
+  DriveApp.getFileById(eigenschaft('SHEET_ID')).makeCopy(
     'Wareneingang ' + fmt(new Date(), 'yyyy-MM-dd'),
     DriveApp.getFolderById(wurzel));
   return 'gesichert';

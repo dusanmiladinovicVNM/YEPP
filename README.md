@@ -97,12 +97,32 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
 **Erweiterungen → Apps Script** iz same tabele.
 
 1. Obriši sadržaj i zalepi `apps-script/Code.gs`
-2. Na vrhu postavi `SHEET_ID`, `PWA_URL` i `TOKEN_READ`
+2. **Projekteinstellungen → Skripteigenschaften** → tri reda:
+
+   | Ime | Vrednost |
+   |---|---|
+   | `SHEET_ID` | ID tabele, iz URL-a između `/d/` i `/edit` |
+   | `PWA_URL` | adresa PWA, ide u pristupne mejlove |
+   | `TOKEN_READ` | štiti CSV izlaz — ili pokreni `tokenErzeugen()` |
+
 3. Pokreni **`setupAnlegen`** jednom — pravi sve listove i zaglavlja
 4. **Bereitstellen → Neue Bereitstellung → Web-App**
    *Ausführen als: Ich*, *Zugriff: Jeder*
 5. Prvi put traži odobrenje za tabelu, Drive i slanje pošte — potvrdi
 6. Zapiši **Web-App-URL**
+
+**U kodu nema nijedne od te tri vrednosti** — stoje u skripteigenschaften.
+To znači da se kod sme **ceo zameniti** kad stigne nova verzija, bez ponovnog
+unošenja ijednog polja; i da javni repo ne nosi token.
+
+Dve pomoćne funkcije za editor:
+
+| Funkcija | Šta radi |
+|---|---|
+| `einrichtungPruefen()` | javlja koja vrednost fali, da li se tabela otvara, koji listovi postoje i kako glasi CSV adresa za šablon |
+| `tokenErzeugen()` | napravi jak `TOKEN_READ`, upiše ga i ispiše jednom — odatle ide u `Vorlage-Aufbau.bas` |
+
+Ako nešto ne radi, prvo pokreni `einrichtungPruefen()` i pogledaj protokol.
 
 **`setupAnlegen` sme da se pokrene i kasnije, više puta.** Zaglavlja se ne
 diraju ako već postoje; ono što svaki put iznova postavlja jeste **tekstualni
@@ -136,6 +156,10 @@ Mora vratiti CSV sa zaglavljem. Ako vidiš Google login stranicu,
 *Bereitstellungen verwalten → Bearbeiten → Neue Version*.
 Bez toga URL i dalje servira stari kod. Ovo je najčešći uzrok
 „izmenio sam, a ništa se nije promenilo".
+
+Ažuriranje je time svedeno na tri koraka bez ijednog polja za popunjavanje:
+**zalepi `Code.gs` → Neue Version → `setupAnlegen`.** Skripteigenschaften
+preživljavaju zamenu koda; `setupAnlegen` dopiše kolone kojih još nema.
 
 ## Faza 3 — Parametri (~10 min)
 
@@ -327,7 +351,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **344 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **359 provera**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -388,6 +412,8 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 24 | Avionski režim usred *Speichern*, pa ponovo *Speichern* | jedan dokument, ne dva |
 | 25 | *Abmelden*, pa isti token ubačen ručno | odbijen sa `session` |
 | 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |
+| 27 | Zameniti ceo `Code.gs` novom verzijom | radi bez unošenja ijedne vrednosti |
+| 28 | Obrisati `TOKEN_READ` iz skripteigenschaften | CSV izlaz vraća `kein Zugriff` |
 | 13 | Devet pozicija | tabela naraste, podnožje se pomeri |
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |

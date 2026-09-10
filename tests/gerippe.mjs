@@ -87,6 +87,7 @@ class Spreadsheet {
   insertSheet(n) { return (this.blaetter[n] = new Sheet(n)); }
   getSheets() { return Object.values(this.blaetter); }
   getId() { return 'TMPID'; }
+  getName() { return 'Wareneingang (Test)'; }
 }
 
 function neueTabelle() {
@@ -110,8 +111,15 @@ function neueTabelle() {
 /* ---------- Code.gs laden ---------- */
 
 function laden(ss) {
-  const quelle = fs.readFileSync(process.cwd() + '/apps-script/Code.gs', 'utf8')
-    .replace("const SHEET_ID   = '';", "const SHEET_ID   = 'X';");
+  // Der Code wird unveraendert geladen — die Installation steckt in den
+  // Skripteigenschaften, nicht mehr in drei Konstanten, die der Test
+  // vorher im Quelltext ersetzen musste.
+  const quelle = fs.readFileSync(process.cwd() + '/apps-script/Code.gs', 'utf8');
+  const eigenschaften = {
+    SHEET_ID:   'X',
+    PWA_URL:    'https://wareneingang.example/',
+    TOKEN_READ: 'geheimwort'
+  };
   const ctx = {
     console,
     // Dasselbe Date wie im Test, sonst scheitert `instanceof Date` an der
@@ -142,6 +150,13 @@ function laden(ss) {
     },
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
     ScriptApp: { getOAuthToken: () => 'tok' },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperties: () => Object.assign({}, eigenschaften),
+        setProperty: (k, v) => { eigenschaften[k] = v; },
+        deleteProperty: k => { delete eigenschaften[k]; }
+      })
+    },
     MailApp: { sendEmail: (...a) => ctx.__mails.push(a) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'S' },
@@ -165,7 +180,8 @@ function laden(ss) {
       createTextOutput: t => ({ setMimeType: () => t, t })
     },
     __mails: [],
-    __sperren: []
+    __sperren: [],
+    __eigenschaften: eigenschaften
   };
   function ordner(id) {
     return { getName: () => 'Ordner ' + String(id || 'X'),

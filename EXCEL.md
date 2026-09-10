@@ -42,6 +42,10 @@ Bez ponovnog osvežavanja, bez čekanja.
 <Web-App-URL>?token=<TOKEN_READ>&format=csv
 ```
 
+`TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
+Ako ga nemaš pri ruci, pokreni `einrichtungPruefen()` u editoru — ispisuje
+gotovu adresu za ovaj upit. Za nov, jak token: `tokenErzeugen()`.
+
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
 Stornirani ispadaju. **23 kolone, fiksni redosled:**
 
