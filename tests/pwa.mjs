@@ -20,6 +20,8 @@ page.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.messag
 await page.addInitScript(() => {
   window.__gesendet = [];
   window.__methoden = [];
+  window.__gleichzeitig = 0;      // gerade unterwegs
+  window.__hoechstens = 0;        // hoechster je erreichter Stand
   const DB = { kopf: null, positionen: [] };
   // Der weiteste quittierte Schritt, wie statusAus() im Backend.
   const status = () => DB.ein ? 'eingelagert' : DB.gez ? 'gezaehlt'
@@ -31,6 +33,10 @@ await page.addInitScript(() => {
     else d = Object.fromEntries(new URL('http://x/' + url.replace(/^[^?]*/, '')).searchParams);
     window.__gesendet.push(d);
     window.__methoden.push(opt && opt.method ? opt.method : 'GET');
+    window.__gleichzeitig++;
+    window.__hoechstens = Math.max(window.__hoechstens, window.__gleichzeitig);
+    await new Promise(r => setTimeout(r, 5));      // eine Antwort dauert
+    window.__gleichzeitig--;
 
     const A = o => ({ text: async () => JSON.stringify(o), json: async () => o, status: 200 });
 
@@ -124,6 +130,11 @@ await page.click('#lg-senden');
 await page.waitForSelector('#scr-start.aktiv');
 ok('nach Login auf der Uebersicht', await sichtbar('#scr-start'));
 ok('Name im Kopf', (await page.textContent('#st-name')) === 'Anna Muster');
+// Apps Script ist mit zwei gleichzeitigen Aufrufen desselben Skripts nicht
+// zuverlaessig; der zweite kann eine Fehlerseite statt JSON zurueckgeben.
+ok('Aufrufe gehen nacheinander',
+   (await page.evaluate(() => window.__hoechstens)) === 1,
+   'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Adminknopf sichtbar fuer Admin', !(await page.$eval('#st-admin', e => e.hidden)));
 
 // --- 2) Formular ------------------------------------------------------------
@@ -275,6 +286,9 @@ await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
 await page.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
 
+ok('auch die Verwaltung ruft nacheinander',
+   (await page.evaluate(() => window.__hoechstens)) === 1,
+   'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
 ok('Empfaengeradresse geladen',
    (await page.inputValue('#adm-mailan')) === 'lager@firma.ch');
 ok('Ordner-ID geladen', (await page.inputValue('#adm-archiv')) === '1Arch');
@@ -408,6 +422,12 @@ ok('leeres Feld zeigt wieder die Uebersicht',
 
 await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
+// Erst weiter, wenn beide Aufrufe des Adminbereichs durch sind. Sonst
+// laeuft einer von ihnen noch, waehrend der naechste Abschnitt fetch
+// austauscht — und faellt dann in dessen «Sitzung abgelaufen».
+await page.waitForFunction(() =>
+  document.getElementById('adm-mailan').value !== '' &&
+  document.getElementById('adm-liste').textContent.includes('Anna Muster'));
 
 // --- 11) Abgelaufene Sitzung ------------------------------------------------
 console.log('\n11) Abgelaufene Sitzung');
@@ -453,6 +473,75 @@ ok('alle Aufrufe gehen als POST', methoden.every(m => m === 'POST'),
    JSON.stringify([...new Set(methoden)]));
 ok('kein Stylesheet von fremdem Host',
    (await page.$$('link[rel=stylesheet]')).length === 0);
+
+// --- 14) Wiederholt wird nur, was gefahrlos ist ----------------------------
+console.log('\n14) Wiederholung nur, wo sie gefahrlos ist');
+
+const lesen = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => {
+    n++;
+    if (n === 1) throw new TypeError('Failed to fetch');
+    return { status: 200, text: async () => JSON.stringify({ ok: true, liste: [] }) };
+  };
+  const r = await post({ action: 'we_liste', session: 'tok' });
+  return { n: n, ok: r.ok };
+});
+ok('Lesen ueberlebt einen Aussetzer', lesen.n === 2 && lesen.ok === true,
+   JSON.stringify(lesen));
+
+const erfassen = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  try { await post({ action: 'we_speichern', vorgang: 'v1' }); } catch (e) {}
+  return n;
+});
+ok('Erfassen darf wiederholt werden', erfassen === 2, String(erfassen));
+
+// Das ist der eigentliche Punkt: ein zweites Quittieren faende den Schritt
+// schon quittiert, ein zweites Senden schickte die Mail zweimal.
+const quittieren = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  let fehler = '';
+  try { await post({ action: 'we_schritt', session: 'tok' }); } catch (e) { fehler = e.message; }
+  return { n: n, fehler: fehler };
+});
+ok('Quittieren wird NICHT wiederholt', quittieren.n === 1, JSON.stringify(quittieren));
+ok('und meldet kein_netz', quittieren.fehler === 'kein_netz', quittieren.fehler);
+
+const senden = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new TypeError('Failed to fetch'); };
+  try { await post({ action: 'we_senden', session: 'tok' }); } catch (e) {}
+  return n;
+});
+ok('Senden wird NICHT wiederholt', senden === 1, String(senden));
+
+// Hat der Server geantwortet, nur nicht mit JSON, hilft kein zweiter Versuch
+const kein_json = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 200, text: async () => '<html>' }; };
+  let fehler = '';
+  try { await post({ action: 'we_liste', session: 'tok' }); } catch (e) { fehler = e.message; }
+  return { n: n, fehler: fehler };
+});
+ok('Antwort ohne JSON wird nicht wiederholt',
+   kein_json.n === 1 && kein_json.fehler === 'keine_antwort', JSON.stringify(kein_json));
+
+// Jede Flaeche muss denselben Klartext zeigen, nicht nur Anmeldung und
+// Speichern — sonst sieht eine falsche Bereitstellung aus wie ein Funkloch.
+const flaechen = await page.evaluate(async () => {
+  window.fetch = async () => ({ status: 200, text: async () => '<html>Anmelden</html>' });
+  localStorage.setItem('session', 'tok');
+  await ladeListe();
+  const liste = document.getElementById('st-liste').textContent;
+  await detailOeffnen('WE-2026-0001');
+  const detail = document.getElementById('dt-schritte').textContent;
+  return { liste: liste, detail: detail };
+});
+ok('Liste nennt die Bereitstellung', flaechen.liste.includes('Bereitstellung'), flaechen.liste);
+ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
 
 await browser.close();
 console.log('\n' + '='.repeat(46));

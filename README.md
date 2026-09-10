@@ -413,7 +413,7 @@ korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ## Testovi
 
-Tri suite, sve bez mreže i bez Google naloga — **422 provere**:
+Tri suite, sve bez mreže i bez Google naloga — **432 provere**:
 
 ```bash
 node   tests/backend.mjs   # Code.gs nad Sheets-om u memoriji
@@ -498,6 +498,29 @@ Test 1 zaključava nalog na 15 minuta — radi ga sa testnim nalogom.
 ---
 
 ## Šta ovaj model ne pokriva
+
+**Aplikacija nikad ne šalje dva poziva istovremeno.** Za Apps Script su to
+dva izvršavanja istog skripta, i drugo ume da se vrati sa HTML stranicom
+greške umesto sa JSON-om. Prijava je do sada radila baš to — `ladeListe()`
+bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
+jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
+da nikad nije više od jednog.
+
+**Prekinut poziv se ponavlja jednom — ali samo tamo gde drugi pokušaj ništa
+ne kvari:** čitanje (`stammdaten`, `we_liste`, `we_detail`, `admin_*`) i
+`we_speichern`, koje ionako spaja ključ vorganga. **Kvitiranje i slanje se ne
+ponavljaju** — drugi pokušaj bi našao korak već kvitiran, odnosno poslao mejl
+dvaput. Razmak je 700 ms.
+
+Ako je server **odgovorio** ali ne JSON-om, drugi pokušaj ne pomaže i ne
+dešava se. Tada poruka i kaže šta je: „Der Server hat kein JSON geliefert.
+Bereitstellung prüfen." Ista poruka stoji na **svim** ekranima — ranije su je
+imali samo prijava i čuvanje, pa je pogrešan deployment na listi izgledao kao
+nestala mreža.
+
+Pravi razlog prekida uvek ide u konzolu (`Aufruf «we_liste» Versuch 1 von 2
+gescheitert: TypeError / Failed to fetch`), jer na ekranu radniku ne znači
+ništa.
 
 **Nema offline unosa.** Aplikacija traži mrežu. U magacinu sa slabim
 signalom to se oseti. Ako se pokaže da je potrebno, dodaje se IndexedDB
