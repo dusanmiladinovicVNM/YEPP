@@ -70,7 +70,9 @@ const attrappe = () => {
         status: 'eingelagert', erfasser: 'Bob Meier',
         gesendet: '2026-09-01 08:00' };
       const s = String(d.suche || '').toLowerCase();
-      if (!s) return eigen;
+      // Ohne Suche: die Arbeitsliste, es sei denn «alle» ist gesetzt. Wer
+      // das darf, entscheidet im echten Code.gs die Rolle aus der Sitzung.
+      if (!s) return d.alle ? eigen.concat([fremd]) : eigen;
       const passt = x => (x.weNr + ' ' + x.kunde + ' ' + x.lieferant + ' ' +
                           x.erfasser).toLowerCase().includes(s);
       return eigen.concat([fremd]).filter(passt);
@@ -83,11 +85,14 @@ const attrappe = () => {
       case 'login':
         // Der Server gibt die Startdaten mit — sonst folgte auf das
         // Anmelden sofort ein zweiter Weg fuer genau diese Zeilen.
-        return A(window.__ohneStart
-          ? { ok: true, session: 'tok', name: 'Anna Muster',
-              rolle: 'admin', pwGeaendert: true }
-          : { ok: true, session: 'tok', name: 'Anna Muster',
-              rolle: 'admin', pwGeaendert: true, start: startDaten() });
+        {
+          const rolle = window.__nichtAdmin ? '' : 'admin';
+          return A(window.__ohneStart
+            ? { ok: true, session: 'tok', name: 'Anna Muster',
+                rolle: rolle, pwGeaendert: true }
+            : { ok: true, session: 'tok', name: 'Anna Muster',
+                rolle: rolle, pwGeaendert: true, start: startDaten() });
+        }
       case 'start':
         // Eine aeltere Bereitstellung kennt die Aktion nicht.
         if (window.__ohneStart) return A({ ok: false, error: 'unbekannte Aktion' });
@@ -758,6 +763,72 @@ ok('der vergebliche Aufruf wird nicht wiederholt',
      'we_liste,stammdaten',
    (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
 await alt.close();
+
+// --- 17) Alle Wareneingaenge, fuer den Admin --------------------------------
+// Die Uebersicht ist eine Arbeitsliste: fremde Eintraege verschwinden aus
+// ihr, sobald sie eingelagert sind. Fuer den Admin, der wissen will, was
+// das Team ueberhaupt erfasst hat, gibt es einen Umschalter.
+console.log('\n17) Alle Wareneingaenge, fuer den Admin');
+const adm = await browser.newPage();
+adm.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await adm.addInitScript(attrappe);
+await adm.goto(APP);
+await adm.fill('#lg-email', 'anna@firma.ch');
+await adm.fill('#lg-pass', 'geheim123');
+await adm.click('#lg-senden');
+await adm.waitForSelector('#scr-start.aktiv');
+
+ok('der Umschalter steht beim Admin', !(await adm.$eval('#st-alle', e => e.hidden)));
+ok('und heisst zuerst «Alle»', (await adm.textContent('#st-alle')) === 'Alle');
+ok('der fremde abgeschlossene Eintrag fehlt zunaechst',
+   !(await adm.textContent('#st-liste')).includes('WE-2026-0009'));
+
+await adm.click('#st-alle');
+await adm.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
+ok('nach dem Umschalten ist er da',
+   (await adm.textContent('#st-liste')).includes('WE-2026-0009'));
+ok('die Ansicht wird mitgeschickt',
+   (await adm.evaluate(() => window.__gesendet.filter(x => x.action === 'we_liste').pop()))
+     .alle === true);
+ok('die Ueberschrift sagt, welche Ansicht gilt',
+   (await adm.textContent('#st-titel')) === 'Alle Wareneingänge',
+   await adm.textContent('#st-titel'));
+ok('und der Knopf bietet den Rueckweg an',
+   (await adm.textContent('#st-alle')) === 'Nur offene');
+
+// Die Wahl ueberlebt das Neuladen — sonst waehlt der Admin sie jeden Morgen neu
+await adm.reload();
+await adm.waitForSelector('#scr-start.aktiv');
+await adm.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
+ok('die Wahl ueberlebt das Neuladen',
+   (await adm.textContent('#st-alle')) === 'Nur offene' &&
+   (await adm.textContent('#st-titel')) === 'Alle Wareneingänge');
+
+await adm.click('#st-alle');
+await adm.waitForFunction(() =>
+  !document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
+ok('und zurueck geht es auch',
+   (await adm.textContent('#st-titel')) === 'Offene und letzte');
+await adm.close();
+
+// Beim gewoehnlichen Benutzer gibt es den Knopf nicht. Das ist Bequemlichkeit,
+// keine Sicherung — die Rolle prueft der Server (siehe backend.mjs, 20).
+const bob = await browser.newPage();
+bob.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await bob.addInitScript(attrappe);
+await bob.addInitScript(() => { window.__nichtAdmin = true; });
+await bob.goto(APP);
+await bob.fill('#lg-email', 'bob@firma.ch');
+await bob.fill('#lg-pass', 'geheim123');
+await bob.click('#lg-senden');
+await bob.waitForSelector('#scr-start.aktiv');
+ok('gewoehnlicher Benutzer sieht den Umschalter nicht',
+   await bob.$eval('#st-alle', e => e.hidden));
+ok('und auch den Verwaltungsknopf nicht',
+   await bob.$eval('#st-admin', e => e.hidden));
+await bob.close();
 
 // --- 16) Die Liste steht sofort ---------------------------------------------
 // Der Weg zum Server dauert Sekunden. Solange auf «Wird geladen …» zu

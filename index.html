@@ -107,6 +107,8 @@ select{
 }
 .pos-kopf h2{margin:0;font-size:15px;font-weight:600}
 .pos-kopf .zahl{font-size:12px;color:var(--grau)}
+.kopf-rechts{display:flex;align-items:center;gap:10px}
+.klein[aria-pressed="true"]{border-color:var(--akzent);color:var(--akzent)}
 .pos{
   border:1px solid var(--rand);border-radius:4px;
   padding:12px;margin-top:10px;background:rgba(255,255,255,.02);
@@ -378,7 +380,10 @@ select{
 
     <div class="pos-kopf">
       <h2 id="st-titel">Offene und letzte</h2>
-      <span class="zahl" id="st-zahl"></span>
+      <span class="kopf-rechts">
+        <span class="zahl" id="st-zahl"></span>
+        <button id="st-alle" class="klein" hidden aria-pressed="false">Alle</button>
+      </span>
     </div>
 
     <input id="st-suche" type="search" autocapitalize="off" autocorrect="off"
@@ -643,6 +648,9 @@ const S = {
   vorgang:     '',       // Schluessel dieser Erfassung, gegen Doppeleintraege
   altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
   pwPflicht:   false,
+  // Adminansicht: auch fremde abgeschlossene Eintraege. Ueberlebt das
+  // Neuladen, damit der Admin die Ansicht nicht bei jedem Start neu waehlt.
+  alle:        localStorage.getItem('alle') === '1',
   detail:      null,
   laeuft:      false
 };
@@ -1000,6 +1008,7 @@ async function passwortSpeichern() {
 async function start(vorab) {
   $('st-name').textContent = S.name;
   $('st-admin').hidden = S.rolle !== 'admin';
+  alleKnopf();
   zeigeScreen('scr-start');
 
   // Zwischenspeicher zuerst, damit die Listen sofort stehen
@@ -1012,7 +1021,7 @@ async function start(vorab) {
   // einen Weg zum Server, der sicher mit «unbekannte Aktion» endet.
   if (!start._kennt) { await startEinzeln(cache); return; }
 
-  $('st-titel').textContent = 'Offene und letzte';
+  $('st-titel').textContent = listenTitel('');
 
   // Zuerst das, was das Geraet noch hat. Der Weg zum Server dauert
   // Sekunden; solange auf «Wird geladen …» zu starren ist die
@@ -1026,7 +1035,7 @@ async function start(vorab) {
     // zweimal, und der Weg ist hier das Teure — nicht das Lesen.
     // Alles ueber POST: in einer Adresse stuende der Sitzungstoken im
     // Ausfuehrungsprotokoll und im Verlauf des Browsers.
-    const r = await post({ action: 'start', session: S.session });
+    const r = await post({ action: 'start', session: S.session, alle: S.alle });
 
     // Eine aeltere Bereitstellung kennt «start» nicht. Dann eben auf dem
     // alten Weg: langsamer, aber die App startet. Sonst haenge das
@@ -1079,14 +1088,18 @@ start._kennt = true;
 function listeSpeichern(liste) {
   if ($('st-suche').value.trim()) return;
   try {
-    localStorage.setItem('liste', JSON.stringify({ liste: liste, zeit: Date.now() }));
+    localStorage.setItem('liste',
+      JSON.stringify({ liste: liste, zeit: Date.now(), alle: S.alle }));
   } catch (e) { /* voller Speicher — die Liste ist der falsche Ort zum Klagen */ }
 }
 
 function listeAusSpeicher() {
   try {
     const c = JSON.parse(localStorage.getItem('liste') || 'null');
-    return c && Array.isArray(c.liste) ? c : null;
+    // Nur der Stand DIESER Ansicht. Sonst zeigte «Alle» beim Start kurz
+    // die kurze Liste, und das saehe aus wie ein leerer Bestand.
+    if (!c || !Array.isArray(c.liste) || !!c.alle !== !!S.alle) return null;
+    return c;
   } catch (e) { return null; }
 }
 
@@ -1114,6 +1127,30 @@ function altZeigen(zeit) {
 }
 
 function altVerbergen() { $('st-alt').hidden = true; }
+
+/**
+ * Der Umschalter steht nur beim Admin — und das ist Bequemlichkeit, keine
+ * Sicherung: die Rolle wird auf dem Server aus der Sitzung geprueft.
+ */
+function alleKnopf() {
+  const admin = S.rolle === 'admin';
+  $('st-alle').hidden = !admin;
+  if (!admin) S.alle = false;
+  $('st-alle').setAttribute('aria-pressed', S.alle ? 'true' : 'false');
+  $('st-alle').textContent = S.alle ? 'Nur offene' : 'Alle';
+}
+
+function alleUmschalten() {
+  S.alle = !S.alle;
+  localStorage.setItem('alle', S.alle ? '1' : '0');
+  alleKnopf();
+  ladeListe();
+}
+
+/** Ueberschrift und Speicher haengen beide daran, welche Ansicht gilt. */
+function listenTitel(suche) {
+  return suche ? 'Suche' : (S.alle ? 'Alle Wareneingänge' : 'Offene und letzte');
+}
 
 function stammdatenAusSpeicher() {
   const roh = localStorage.getItem('stammdaten');
@@ -1178,11 +1215,12 @@ const STATUS_TEXT = {
 
 async function ladeListe() {
   const suche = $('st-suche').value.trim();
-  $('st-titel').textContent = suche ? 'Suche' : 'Offene und letzte';
+  $('st-titel').textContent = listenTitel(suche);
   altVerbergen();
   $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   try {
-    const r = await post({ action: 'we_liste', session: S.session, suche: suche });
+    const r = await post({ action: 'we_liste', session: S.session,
+                          suche: suche, alle: S.alle });
     if (!antwortOk(r)) {
       // Der Zaehler stammt sonst noch vom letzten geglueckten Aufruf und
       // behauptet Eintraege, die gerade niemand sehen kann.
@@ -1854,6 +1892,7 @@ $('st-suche').addEventListener('input', () => {
   ladeListe._t = setTimeout(ladeListe, 300);
 });
 $('st-neu').addEventListener('click', formularNeu);
+$('st-alle').addEventListener('click', alleUmschalten);
 $('st-admin').addEventListener('click', adminOeffnen);
 $('st-passwort').addEventListener('click', () => zeigePasswort(false));
 $('st-abmelden').addEventListener('click', abmelden);

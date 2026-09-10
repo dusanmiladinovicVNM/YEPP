@@ -667,12 +667,19 @@ function regalplaetzeSchreiben(weNr, werte) {
  * abgeschlossene Dokumente fremder Erfasser. Ohne das waere ein Beleg von
  * vorletztem Monat aus der App gar nicht mehr erreichbar — die Liste bricht
  * bei hundert Zeilen ab, und weDetail steht ohnehin jedem offen.
+ *
+ * `d.alle` hebt die Einschraenkung auch ohne Suche auf — fuer den Admin,
+ * der wissen will, was das Team ueberhaupt erfasst hat, und nicht nur, was
+ * noch offen ist. Ob jemand das darf, entscheidet der Server aus der Rolle
+ * in der Sitzung: dass der Knopf beim gewoehnlichen Benutzer fehlt, ist
+ * keine Sicherung — der Client kann alles schicken.
  */
 function weListe(d, u) {
   const dat = blatt(T.we).getDataRange().getValues();
   const k   = spalten(dat[0]);
   const aus = [];
   const suche = String(d.suche || '').trim().toLowerCase();
+  const alle  = !!d.alle && u.rolle === 'admin';
 
   for (let i = 1; i < dat.length; i++) {
     if (String(dat[i][k.Storniert]).toLowerCase() === 'true') continue;
@@ -681,7 +688,11 @@ function weListe(d, u) {
       const heuhaufen = [dat[i][k.WeNr], dat[i][k.Kunde], dat[i][k.Lieferant],
                          dat[i][k.Erfasser]].join(' ').toLowerCase();
       if (heuhaufen.indexOf(suche) < 0) continue;
-    } else if (!d.alle && String(dat[i][k.Email]).toLowerCase() !== u.email) {
+    } else if (!alle && String(dat[i][k.Email]).trim().toLowerCase() !== u.email) {
+      // trim(), weil die Adresse aus der Sitzung getrimmt ist und die aus
+      // der Tabelle nicht. Ein Leerzeichen am Ende — von Hand eingetragen
+      // oder mitkopiert — machte sonst aus dem eigenen abgeschlossenen
+      // Eintrag einen fremden, und er verschwand aus der eigenen Liste.
       if (String(dat[i][k.Status]) === 'eingelagert') continue;
     }
     aus.push({
