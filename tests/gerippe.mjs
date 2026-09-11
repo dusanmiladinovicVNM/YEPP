@@ -154,6 +154,14 @@ function laden(ss) {
     DriveApp: {
       getFileById: id => ({
         setTrashed() {}, makeCopy() {},
+        // Abgelegte Dateien lassen sich zurueckholen — daran haengt, ob das
+        // Foto ohne Drive-Zugriff des Benutzers auf den Schirm kommt.
+        getBlob: () => {
+          const datei = ctx.__dateien.filter(x => x && x.id === String(id))[0];
+          if (!datei) throw new Error('File not found: ' + id);
+          return { getContentType: () => datei.typ || 'image/jpeg',
+                   getBytes: () => datei.bytes || [1, 2, 3] };
+        },
         // Der Ordner, in dem die Tabelle liegt — daneben entsteht die Ablage.
         getParents: () => {
           let da = String(id).indexOf('ohne-ordner') < 0;
@@ -204,7 +212,7 @@ function laden(ss) {
       base64Encode: b => Buffer.from(b).toString('base64'),
       base64Decode: s => Buffer.from(s, 'base64'),
       // Name und Typ merken: daran haengt, ob die Endung zum Bild passt.
-      newBlob: (bytes, typ, name) => ({ typ: typ, name: name }),
+      newBlob: (bytes, typ, name) => ({ typ: typ, name: name, bytes: bytes }),
       getUuid: () => randomUUID(),
       formatDate: (d, _z, m) => {
         const p = x => String(x).padStart(2, '0');
@@ -253,8 +261,15 @@ function laden(ss) {
                return { hasNext: () => da, next: () => ordner(name) };
              },
              createFolder: name => { ctx.__ordner.push(name); return ordner(name); },
-             createFile: b => { ctx.__dateien.push(b && b.name); 
-                                return { getUrl: () => 'https://drive/x' }; } };
+             createFile: b => {
+               // Eine ID von mindestens 25 Wortzeichen, wie bei Google —
+               // driveId() faellt sonst auf die ganze Adresse zurueck und
+               // das Wiederholen der Datei waere nie geprueft.
+               const id = 'datei' + String(ctx.__dateien.length).padStart(21, '0');
+               ctx.__dateien.push({ id: id, name: b && b.name,
+                                    typ: b && b.typ, bytes: b && b.bytes });
+               return { getUrl: () => 'https://drive.google.com/file/d/' + id + '/view' };
+             } };
   }
   vm.createContext(ctx);
   vm.runInContext(quelle, ctx);

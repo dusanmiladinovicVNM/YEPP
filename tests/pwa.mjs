@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 
 // Playwright wird nicht mitgeliefert. createRequire findet sowohl eine
 // lokale als auch eine globale Installation (NODE_PATH), ohne dass das
@@ -116,6 +117,11 @@ const attrappe = () => {
         DB.status = status();
         return A({ ok: true, weNr: 'WE-2026-0001' });
       }
+      case 'we_foto':
+        window.__fotoAbrufe = (window.__fotoAbrufe || 0) + 1;
+        return A(window.__mitFoto
+          ? { ok: true, bild: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }
+          : { ok: false, error: 'kein_foto' });
       case 'we_detail':
         return A({ ok: true, positionen: DB.positionen, kopf: {
           // Das angefragte Dokument, nicht immer dasselbe: sonst faellt
@@ -127,7 +133,8 @@ const attrappe = () => {
           AngZeit: DB.ang ? '08:30' : '',
           GezNam: DB.gez || '', GezDat: DB.gez ? '2026-09-09' : '', GezZeit: DB.gez ? '09:00' : '',
           EinNam: DB.ein || '', EinDat: '', EinZeit: '',
-          FotoUrl: '', Gesendet: '', Storniert: 'false', Status: DB.status } });
+          FotoUrl: window.__mitFoto ? 'https://drive/x' : '',
+          Gesendet: '', Storniert: 'false', Status: DB.status } });
       case 'we_schritt':
         if (d.schritt === 'angenommen')  { DB.ang = 'Anna Muster'; }
         if (d.schritt === 'gezaehlt')    { DB.gez = 'Anna Muster'; }
@@ -1040,6 +1047,71 @@ await lok.evaluate(() => abmelden());
 ok('Abmelden vergisst die gemerkte Liste',
    (await lok.evaluate(() => localStorage.getItem('liste'))) === null);
 await lok.close();
+
+// --- 20) Das Foto kommt vom Server, nicht aus Drive -------------------------
+// Ein Lagermitarbeiter hat keinen Drive-Zugriff. Ein Link dorthin wird vom
+// BROWSER geholt, mit dem Google-Konto des Geraets — er sah «Zugriff
+// verweigert» auf einem Beleg, der ihm gehoert.
+console.log('\n20) Das Foto kommt vom Server, nicht aus Drive');
+
+// Erst die Quelle: es darf gar keinen Drive-Link mehr geben. Kommentare
+// vorher weg, sonst schlaegt die Pruefung auf der Erklaerung an, warum der
+// Link fort ist — und man muesste zwischen Erklaerung und Pruefung waehlen.
+{
+  const roh = fs.readFileSync('index.html', 'utf8');
+  const ohneKommentare = roh
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n').map(z => z.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+  ok('kein Drive-Link mehr im Client',
+     !/drive\.google\.com/.test(ohneKommentare),
+     (ohneKommentare.match(/.*drive\.google\.com.*/) || [''])[0].trim());
+  ok('und die Pruefung wuerde einen finden',
+     /drive\.google\.com/.test(ohneKommentare + 'href="https://drive.google.com/x"'));
+}
+
+const fot = await browser.newPage();
+fot.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await fot.addInitScript(attrappe);
+await fot.addInitScript(() => { window.__mitFoto = true; });
+await fot.goto(APP);
+await fot.fill('#lg-email', 'anna@firma.ch');
+await fot.fill('#lg-pass', 'geheim123');
+await fot.click('#lg-senden');
+await fot.waitForSelector('#scr-start.aktiv');
+await fot.click('#st-neu');
+await fot.waitForSelector('#scr-form.aktiv');
+await fot.fill('#fm-kunde', 'Kunde AG');
+await fot.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await fot.click('#fm-speichern');
+await fot.waitForSelector('#scr-detail.aktiv');
+await fot.waitForSelector('#dt-foto');
+
+ok('der Schauer liegt nicht ueber der App', await fot.$eval('#bild-schau', e => e.hidden));
+await fot.click('#dt-foto');
+await fot.waitForFunction(() => !document.getElementById('bild-schau').hidden);
+ok('nach dem Antippen steht das Bild da',
+   (await fot.$eval('#bild-schau-bild', e => e.getAttribute('src') || '')).startsWith('data:'),
+   await fot.$eval('#bild-schau-bild', e => (e.getAttribute('src') || '').slice(0, 20)));
+ok('geholt wurde es beim Server', (await fot.evaluate(() => window.__fotoAbrufe)) === 1);
+
+// Schliessen und noch einmal: kein zweiter Weg zum Server
+await fot.click('#bild-schau');
+await fot.waitForFunction(() => document.getElementById('bild-schau').hidden);
+ok('ein Tipp schliesst wieder', await fot.$eval('#bild-schau', e => e.hidden));
+ok('und die Quelle bleibt nicht im Speicher stehen',
+   !(await fot.$eval('#bild-schau-bild', e => e.getAttribute('src'))));
+
+await fot.click('#dt-foto');
+await fot.waitForFunction(() => !document.getElementById('bild-schau').hidden);
+ok('das zweite Mal kommt aus dem Speicher',
+   (await fot.evaluate(() => window.__fotoAbrufe)) === 1,
+   String(await fot.evaluate(() => window.__fotoAbrufe)));
+
+await fot.keyboard.press('Escape');
+await fot.waitForFunction(() => document.getElementById('bild-schau').hidden);
+ok('Escape schliesst auch', await fot.$eval('#bild-schau', e => e.hidden));
+await fot.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
