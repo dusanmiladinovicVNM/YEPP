@@ -9,9 +9,15 @@ nicht hier wiederholt. Aendert sich der Endpunkt, wird die Vorlage neu gebaut
 und kann nicht auseinanderlaufen — genau der Fehler, den eine von Hand
 gepflegte Vorlagendatei macht.
 
-Was NICHT hier entsteht: die Power-Query-Abfragen und das Workbook_Open-Makro.
-Beides legt `vorlage/Vorlage-Aufbau.bas` in Excel selbst an; von aussen
-erzeugte Query-Teile lehnt Excel gern wortlos ab.
+Was NICHT hier entsteht: die Power-Query-Teile IN der Datei. Die legt Excel
+selbst an — von aussen erzeugte lehnt es gern wortlos ab, und eine Datei,
+die ohne Meldung nichts tut, ist schlimmer als ein Handgriff.
+
+Was hier sehr wohl entsteht, ist der M-Code der beiden Abfragen, in
+`vorlage/Abfragen.m` und zugleich im Makro `Vorlage-Aufbau.bas`. Windows
+laesst ihn das Makro anlegen, der Mac fuegt ihn im erweiterten Editor ein —
+aber es ist derselbe Text aus derselben Quelle, und damit koennen die
+beiden Wege nicht auseinanderlaufen.
 """
 
 import re
@@ -87,6 +93,82 @@ def rahmen_um(bl, bereich):
     for reihe in bl[bereich]:
         for z in reihe:
             z.border = RAHMEN
+
+
+# Die vier Spalten, die wirklich Zahlen sind. Alles andere bleibt Text —
+# besonders die Datums- und Uhrzeitspalten: der Endpunkt liefert sie als
+# `GGGG-MM-TT` und `HH:MM`, und als Datum geladen verschieben sie sich um
+# die Zeitzone.
+ZAHLEN = {'Anzahl': 'type number', 'KG': 'type number',
+          'LagerM2': 'type number', 'Nr': 'Int64.Type'}
+
+M_ZIEL = WURZEL / 'vorlage' / 'Abfragen.m'
+BAS    = WURZEL / 'vorlage' / 'Vorlage-Aufbau.bas'
+
+
+def m_typen(namen):
+    """
+    JEDE Spalte wird ausdruecklich getypt, nicht nur die vier Zahlen.
+
+    Ohne das haengt es an Excel, was aus `AngDat` wird, und die Antwort
+    faellt je nach Fassung anders aus. Ausgeschrieben steht es fest — und
+    weil die Liste aus CSV_SPALTEN kommt, kann eine neue Spalte nicht
+    stillschweigend ungetypt bleiben.
+    """
+    teile = [f'{{"{n}", {ZAHLEN.get(n, "type text")}}}' for n in namen]
+    return ', '.join(teile)
+
+
+def m_abfragen(namen, quelle='<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365'):
+    daten = (
+        'let\n'
+        f'    Quelle = Csv.Document(Web.Contents("{quelle}"),'
+        '[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n'
+        '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),\n'
+        f'    Typen = Table.TransformColumnTypes(Kopf,{{{m_typen(namen)}}}, "en-US")\n'
+        'in\n'
+        '    Typen'
+    )
+    nummern = (
+        'let\n'
+        '    Quelle = Daten,\n'
+        '    NurNr = Table.SelectColumns(Quelle,{"WeNr"}),\n'
+        '    Eindeutig = Table.Distinct(NurNr),\n'
+        '    Sortiert = Table.Sort(Eindeutig,{{"WeNr", Order.Descending}})\n'
+        'in\n'
+        '    Sortiert'
+    )
+    return daten, nummern
+
+
+def m_schreiben(namen):
+    """Der M-Code zum Einfuegen — und derselbe Text ins Makro."""
+    daten, nummern = m_abfragen(namen)
+    M_ZIEL.write_text(
+        '// Power-Query-Abfragen fuer Wareneingang-Vorlage.xlsx\n'
+        '// ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.\n'
+        '//\n'
+        '// Mac: Daten -> Daten abrufen -> Leere Abfrage, dann\n'
+        '// Erweiterter Editor, alles ersetzen, Abfrage «Daten» nennen.\n'
+        '// Danach dasselbe mit «Nummern». Die Adresse unten eintragen —\n'
+        '// einrichtungPruefen() im Apps Script schreibt sie fertig hin.\n'
+        '//\n'
+        '// ============ Daten ============\n'
+        + daten +
+        '\n\n// ============ Nummern ============\n'
+        + nummern + '\n', encoding='utf-8')
+
+    # Dieselben Typen ins Makro, damit Windows und Mac nicht auseinanderlaufen.
+    text = BAS.read_text(encoding='utf-8')
+    neu = re.sub(
+        r'(MDaten = _.*?Table\.TransformColumnTypes\(Kopf,\{" & _\n)(.*?)(" & vbLf & _\n)',
+        lambda m: m.group(1) + '        "' + m_typen(namen).replace('"', '""') +
+                  '}, ""en-US"")' + m.group(3),
+        text, flags=re.S)
+    if neu == text:
+        sys.exit('Die M-Typen im Makro liessen sich nicht ersetzen — '
+                 'Vorlage-Aufbau.bas hat sich geaendert.')
+    BAS.write_text(neu, encoding='utf-8')
 
 
 def bauen():
@@ -287,8 +369,11 @@ def bauen():
 
     ZIEL.parent.mkdir(exist_ok=True)
     wb.save(ZIEL)
+    m_schreiben(namen)
     print(f'{ZIEL.relative_to(WURZEL)} gebaut — {len(namen)} Spalten, '
           f'{POS_ZEILEN} Positionszeilen, Warnzeile in A{warn}')
+    print(f'{M_ZIEL.relative_to(WURZEL)} geschrieben — '
+          f'{len(namen)} Spalten ausdruecklich getypt')
     return namen
 
 

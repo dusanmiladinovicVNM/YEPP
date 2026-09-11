@@ -96,8 +96,7 @@ Private Function MDaten(ByVal quelle As String) As String
         "[Delimiter="","", Encoding=65001, QuoteStyle=QuoteStyle.Csv])," & vbLf & _
         "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true])," & vbLf & _
         "    Typen = Table.TransformColumnTypes(Kopf,{" & _
-        "{""Anzahl"", type number}, {""KG"", type number}, " & _
-        "{""LagerM2"", type number}, {""Nr"", Int64.Type}}, ""en-US"")" & vbLf & _
+        "{""WeNr"", type text}, {""Kunde"", type text}, {""Lieferant"", type text}, {""LagerM2"", type number}, {""KopfBemerkung"", type text}, {""AngNam"", type text}, {""AngDat"", type text}, {""AngZeit"", type text}, {""GezNam"", type text}, {""GezDat"", type text}, {""GezZeit"", type text}, {""EinNam"", type text}, {""EinDat"", type text}, {""EinZeit"", type text}, {""Nr"", Int64.Type}, {""Artikel"", type text}, {""Anzahl"", type number}, {""KG"", type number}, {""MHD"", type text}, {""Regalplatz"", type text}, {""Bemerkung"", type text}, {""Bestehend"", type text}, {""Schluessel"", type text}}, ""en-US"")" & vbLf & _
         "in" & vbLf & _
         "    Typen"
 End Function
