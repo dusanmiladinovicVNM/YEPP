@@ -1034,6 +1034,62 @@ console.log('\n19) Bevor der Leseweg umgebaut wird');
      /min \d+  Median \d+  max \d+  — /.test(mess), mess);
 }
 
+console.log('\n20) Der Admin sieht auch, was schon erledigt ist');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const anna = mitBenutzer(ctx, ss);                    // Admin
+  const bob  = ctx.sitzungPruefen('tokB');              // gewoehnlicher Benutzer
+
+  // Bob erfasst zwei: einen offenen und einen fertig eingelagerten.
+  const offen = ctx.weSpeichern({ kunde: 'K1', positionen: POS,
+                                  schritte: ['angenommen'] }, bob).weNr;
+  const fertig = ctx.weSpeichern({ kunde: 'K2', positionen: POS,
+                                   schritte: ['angenommen', 'gezaehlt', 'eingelagert'] },
+                                 bob).weNr;
+
+  const nummern = r => r.liste.map(x => x.weNr);
+
+  // Die gewoehnliche Ansicht: Arbeitsliste, keine Ablage.
+  const normal = nummern(ctx.verteilen({ action: 'we_liste', session: 'tokA' }));
+  ok('offener Eintrag des Kollegen ist da', normal.indexOf(offen) >= 0, normal.join(','));
+  ok('sein abgeschlossener nicht', normal.indexOf(fertig) < 0, normal.join(','));
+
+  // Mit «alle» sieht der Admin beides.
+  const adminAlle = nummern(ctx.verteilen({ action: 'we_liste', session: 'tokA',
+                                            alle: true }));
+  ok('mit «alle» sieht der Admin auch den abgeschlossenen',
+     adminAlle.indexOf(fertig) >= 0 && adminAlle.indexOf(offen) >= 0,
+     adminAlle.join(','));
+
+  // Und ueber «start» genauso, sonst waere die Ansicht beim Oeffnen eine andere
+  ok('«start» richtet sich nach derselben Ansicht',
+     ctx.verteilen({ action: 'start', session: 'tokA', alle: true })
+        .liste.map(x => x.weNr).indexOf(fertig) >= 0);
+
+  // Wer nicht Admin ist, bekommt sie auch dann nicht, wenn er «alle»
+  // schickt. Der Knopf fehlt in der Oberflaeche, aber das ist keine
+  // Sicherung — der Client kann alles schicken. Geprueft an einem FREMDEN
+  // abgeschlossenen Eintrag: Bobs eigener stuende ihm ohnehin zu.
+  const annasFertig = ctx.weSpeichern(
+    { kunde: 'K3', positionen: POS,
+      schritte: ['angenommen', 'gezaehlt', 'eingelagert'] }, anna).weNr;
+  ok('fremder abgeschlossener bleibt ihm verborgen, auch mit «alle»',
+     nummern(ctx.verteilen({ action: 'we_liste', session: 'tokB', alle: true }))
+       .indexOf(annasFertig) < 0);
+  ok('dem Admin dagegen nicht',
+     nummern(ctx.verteilen({ action: 'we_liste', session: 'tokA', alle: true }))
+       .indexOf(annasFertig) >= 0);
+
+  // Ein Leerzeichen in der Tabelle darf den eigenen Eintrag nicht enteignen.
+  const wb = ss.blaetter.Wareneingang;
+  const wk = ctx.spalten(wb.getDataRange().getValues()[0]);
+  const zeile = ctx.zeileFinden(wb.getDataRange().getValues(), wk.WeNr, annasFertig);
+  wb.getRange(zeile + 1, wk.Email + 1).setValue('  anna@firma.ch ');
+  ok('Leerzeichen in der Mailspalte macht den eigenen Eintrag nicht fremd',
+     nummern(ctx.verteilen({ action: 'we_liste', session: 'tokA' }))
+       .indexOf(annasFertig) >= 0);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

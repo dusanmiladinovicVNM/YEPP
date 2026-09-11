@@ -282,11 +282,33 @@ Prazna polja ostaju prazna, kvitiranje ide svejedno.
 naknadno kvitiranje `Angenommen` ne vraća eingelagert dokument na početak.
 Dokument bez ijednog potpisa ima status `erfasst`.
 
+**Pregled je radni spisak, ne arhiva.** Bez pretrage lista pokazuje tvoje
+unose i sve što je timu **još otvoreno** — najnovijih sto. Tuđi unos ispada
+iz nje čim je `eingelagert`; posao je gotov i nikome više ne stoji na putu.
+
+| | |
+|---|---|
+| tvoji unosi | uvek |
+| tuđi | dok su otvoreni (status ≠ `eingelagert`) |
+| stornirani | nikad |
+
+**Admin ima uz naslov prekidač „Alle".** Njime pregled prelazi u ceo
+bestand, uključujući tuđe završene dokumente — za onoga ko hoće da vidi šta
+je tim uopšte uneo, a ne samo šta još traži ruku. Izbor preživi osvežavanje,
+i naslov kaže koja ansicht važi (`Alle Wareneingänge` / `Offene und letzte`).
+
+Da li neko sme da vidi sve **odlučuje server iz role u sesiji**, ne
+aplikacija. To što običan korisnik ne vidi taj prekidač nije zaštita —
+klijent može poslati `alle: true` i dobiće običnu listu.
+
 **Pretraga** iznad liste traži po broju, kupcu, dobavljaču i imenu onoga ko
-je uneo. Bez nje lista pokazuje tvoje unose i sve što je timu još otvoreno —
-najnovijih sto. Sa pretragom se gleda ceo bestand, uključujući tuđe završene
-dokumente: inače beleg od prošlog meseca iz aplikacije više ne bi bio
-dostupan. Stornirani ne izlaze ni tako.
+je uneo. Sa njom se gleda ceo bestand bez obzira na rolu, uključujući tuđe
+završene dokumente: inače beleg od prošlog meseca iz aplikacije više ne bi
+bio dostupan. Stornirani ne izlaze ni tako.
+
+Poređenje mejla ide preko `trim()` na obe strane. Bez toga bi razmak na
+kraju ćelije `Email` — otkucan rukom ili prekopiran — od tvog završenog
+unosa napravio tuđi, i on bi ti nestao iz sopstvene liste.
 
 U listi se ime onoga ko je uneo prikazuje **samo kad to nisi ti**, a već
 poslati dokument nosi oznaku `gesendet` — da se isti obrazac ne pošalje
@@ -600,6 +622,10 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 30 | Sačekati da blokada istekne, pa jednom pogrešiti | ne zaključava odmah |
 | 31 | Prijava naloga napravljenog pre ove verzije | prolazi; heš u tabeli dobija `v2$` |
 | 32 | Pretraga po imenu dobavljača od pre dva meseca | nađe i tuđ završen dokument |
+| 32b | Kolega kvitira *Eingelagert*, pa pogledaš pregled | njegov unos je nestao iz liste |
+| 32c | Isti slučaj, pa pritisneš **Alle** | vratio se, naslov `Alle Wareneingänge` |
+| 32d | Običan korisnik: ima li dugme **Alle** | nema ga |
+| 32e | Razmak na kraju u koloni `Email` tvog završenog unosa | i dalje ga vidiš u svojoj listi |
 | 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
 | 34 | Pokrenuti `setupAnlegen` dvaput | folderi se ne dupliraju, upisi ostaju |
 | 35 | Obrisati `FotoOrdner`, pa `setupAnlegen` | ostaje prazan — gašenje je namerno |
