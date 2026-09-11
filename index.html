@@ -119,6 +119,13 @@ select{
 #bild-schau[hidden]{display:none}
 #bild-schau img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain}
 .bild-hinweis{color:var(--grau);font-size:12px;padding:8px 0}
+#bild-schau-weg{margin-top:4px}
+/* Der Knopf nimmt einen Teil der Zeile, in der sonst nur der Regalplatz
+   stuende — die Ware steht dabei vor einem, das Feld daneben. */
+.regal-zeile{display:flex;gap:8px;align-items:stretch}
+.regal-zeile input{flex:1;min-width:0}
+.regal-zeile .klein{white-space:nowrap;flex:0 0 auto}
+.klein.hat-foto{border-color:var(--akzent);color:var(--akzent)}
 .pos{
   border:1px solid var(--rand);border-radius:4px;
   padding:12px;margin-top:10px;background:rgba(255,255,255,.02);
@@ -525,9 +532,13 @@ select{
 
 <!-- ============ BILDSCHAU ============ -->
 <div id="bild-schau" hidden>
-  <img id="bild-schau-bild" alt="Lieferschein">
+  <img id="bild-schau-bild" alt="Foto">
   <div class="bild-hinweis">Zum Schliessen tippen</div>
+  <button type="button" class="klein" id="bild-schau-weg" hidden>Foto entfernen</button>
 </div>
+
+<!-- Einer fuer alle Positionen: welche gemeint ist, merkt S.fotoZiel. -->
+<input id="pos-foto-datei" type="file" accept="image/*" capture="environment" hidden>
 
 <!-- ============ EINLAGERN ============ -->
 <section id="scr-regal" class="screen">
@@ -662,6 +673,8 @@ const S = {
   lieferanten: [],
   positionen:  [],
   bild:        null,
+  regalBilder: {},       // beim Einlagern geknipst, nach Positionsnummer
+  fotoZiel:    null,     // welche Position der Dateiwaehler gerade meint
   vorgang:     '',       // Schluessel dieser Erfassung, gegen Doppeleintraege
   altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
   pwPflicht:   false,
@@ -1336,7 +1349,7 @@ function formularNeu() {
 
 function leerePosition() {
   return { artikel: '', anzahl: '', kg: '', mhd: '', regalplatz: '',
-           bemerkung: '', bestehend: false };
+           bemerkung: '', bestehend: false, bild: null };
 }
 
 /**
@@ -1369,7 +1382,11 @@ function zeichnePositionen() {
       '</div>' +
 
       '<label>Regalplatznr. / shelf no.</label>' +
-      '<input type="text" data-f="regalplatz" value="' + esc(p.regalplatz) + '">' +
+      '<div class="regal-zeile">' +
+        '<input type="text" data-f="regalplatz" value="' + esc(p.regalplatz) + '">' +
+        '<button type="button" class="klein pos-foto' + (p.bild ? ' hat-foto' : '') +
+          '" data-i="' + i + '">' + (p.bild ? '✓ Foto' : 'Foto') + '</button>' +
+      '</div>' +
 
       '<label>Bemerkungen / Kontrolle</label>' +
       '<input type="text" data-f="bemerkung" value="' + esc(p.bemerkung) + '">' +
@@ -1458,7 +1475,8 @@ async function speichern() {
       mhd:        String(p.mhd).trim(),
       regalplatz: String(p.regalplatz).trim(),
       bemerkung:  String(p.bemerkung).trim(),
-      bestehend:  p.bestehend === true
+      bestehend:  p.bestehend === true,
+      bild:       p.bild || ''
     }))
   };
 
@@ -1536,6 +1554,45 @@ async function fotoGewaehlt(ereignis) {
   } finally {
     ereignis.target.value = '';
   }
+}
+
+/**
+ * Ein Foto je Position.
+ *
+ * Kleiner als der Lieferschein: der muss lesbar sein, ein Artikelfoto muss
+ * erkennbar sein. Bei zehn Positionen haengt an diesem Unterschied, ob das
+ * Speichern im Lagerfunkloch durchgeht.
+ */
+async function posFotoGewaehlt(ereignis) {
+  const datei = ereignis.target.files && ereignis.target.files[0];
+  const ziel = S.fotoZiel;
+  ereignis.target.value = '';
+  if (!datei || !ziel) return;
+  try {
+    const bild = await bildVerkleinern(datei, 1200, 0.68);
+    if (ziel.wo === 'form') { S.positionen[ziel.i].bild = bild; zeichnePositionen(); }
+    else { S.regalBilder[ziel.nr] = bild; regalOeffnen(); }
+  } catch (e) {
+    toast('Foto konnte nicht verarbeitet werden.', 'err');
+  }
+}
+
+/** Schon eines da: ansehen (und entfernen koennen). Sonst: Kamera. */
+function posFotoKlick(wo, schluessel) {
+  const vorhanden = wo === 'form'
+    ? (S.positionen[schluessel] || {}).bild
+    : S.regalBilder[schluessel];
+  S.fotoZiel = wo === 'form' ? { wo: wo, i: schluessel } : { wo: wo, nr: schluessel };
+  if (vorhanden) { bildSchau(vorhanden, true); return; }
+  $('pos-foto-datei').click();
+}
+
+function posFotoEntfernen() {
+  const ziel = S.fotoZiel;
+  if (!ziel) return;
+  if (ziel.wo === 'form') { S.positionen[ziel.i].bild = null; zeichnePositionen(); }
+  else { delete S.regalBilder[ziel.nr]; regalOeffnen(); }
+  bildSchauZu();
 }
 
 function fotoWeg() {
@@ -1714,6 +1771,8 @@ function zeichneDetail(kopf, pos) {
       '<div class="a"><span>' + p.nr + '. ' + esc(p.artikel) + '</span>' +
         '<span>' + menge + '</span></div>' +
       (zusatz ? '<div class="b">' + zusatz + '</div>' : '') +
+      (p.foto ? '<div class="b"><button type="button" class="klein dt-pos-foto"' +
+                ' data-nr="' + p.nr + '">Foto ansehen</button></div>' : '') +
     '</div>';
   }).join('') || '<div class="leer">Keine Positionen.</div>';
 }
@@ -1737,17 +1796,24 @@ function fotoMerken(weNr, bild) {
   while (FOTOS.size > FOTO_MERKEN) FOTOS.delete(FOTOS.keys().next().value);
 }
 
-async function fotoZeigen() {
+/** @param nr  Positionsnummer, oder nichts fuer den Lieferschein. */
+async function fotoZeigen(nr, knopf) {
   if (!S.detail) return;
   const weNr = S.detail.kopf.WeNr;
+  const schluessel = nr ? weNr + '#' + nr : weNr;
 
-  if (FOTOS.has(weNr)) { fotoMerken(weNr, FOTOS.get(weNr)); bildSchau(FOTOS.get(weNr)); return; }
+  if (FOTOS.has(schluessel)) {
+    fotoMerken(schluessel, FOTOS.get(schluessel));
+    bildSchau(FOTOS.get(schluessel));
+    return;
+  }
 
-  const btn = $('dt-foto');
+  const btn = knopf || $('dt-foto');
   const alt = btn.textContent;
   btn.disabled = true; btn.textContent = 'Wird geholt …';
   try {
-    const r = await post({ action: 'we_foto', session: S.session, weNr: weNr });
+    const r = await post({ action: 'we_foto', session: S.session,
+                          weNr: weNr, nr: nr || '' });
     if (!antwortOk(r)) {
       toast({
         kein_foto:     'Zu diesem Wareneingang wurde kein Foto erfasst.',
@@ -1756,7 +1822,7 @@ async function fotoZeigen() {
       }[r.error] || abgelehntText(r, 'Foto nicht geladen'), 'err');
       return;
     }
-    fotoMerken(weNr, r.bild);
+    fotoMerken(schluessel, r.bild);
     bildSchau(r.bild);
   } catch (e) {
     toast(verbindungText(e), 'err');
@@ -1765,13 +1831,15 @@ async function fotoZeigen() {
   }
 }
 
-function bildSchau(quelle) {
+function bildSchau(quelle, entfernbar) {
   $('bild-schau-bild').src = quelle;
+  $('bild-schau-weg').hidden = !entfernbar;
   $('bild-schau').hidden = false;
 }
 
 function bildSchauZu() {
   $('bild-schau').hidden = true;
+  $('bild-schau-weg').hidden = true;
   // Die Quelle stehen lassen waere ein Bild im Speicher, das niemand sieht.
   $('bild-schau-bild').removeAttribute('src');
 }
@@ -1782,7 +1850,7 @@ function schrittKlick(schritt, btn) {
   schrittSenden(schritt, null, btn);
 }
 
-async function schrittSenden(schritt, regalplaetze, btn) {
+async function schrittSenden(schritt, regalplaetze, btn, bilder) {
   if (!S.detail || S.laeuft) return;
   S.laeuft = true;
   const alt = btn ? btn.textContent : '';
@@ -1791,7 +1859,8 @@ async function schrittSenden(schritt, regalplaetze, btn) {
   try {
     const r = await post({
       action: 'we_schritt', session: S.session,
-      weNr: S.detail.kopf.WeNr, schritt: schritt, regalplaetze: regalplaetze
+      weNr: S.detail.kopf.WeNr, schritt: schritt, regalplaetze: regalplaetze,
+      bilder: bilder
     });
     if (r.ok) {
       toast('Quittiert.', 'ok');
@@ -1815,24 +1884,33 @@ async function schrittSenden(schritt, regalplaetze, btn) {
 
 function regalOeffnen() {
   if (!S.detail) return;
+  S.regalBilder = {};
   const pos = S.detail.positionen;
   $('rg-liste').innerHTML = pos.map(p =>
     '<div class="regal">' +
       '<div class="txt">' + p.nr + '. ' + esc(p.artikel) +
         '<small>' + esc(p.anzahl !== '' ? p.anzahl + ' Stk ' : '') +
         esc(p.kg !== '' ? p.kg + ' kg' : '') + '</small></div>' +
-      '<input type="text" data-nr="' + p.nr + '" placeholder="Regalplatz"' +
-        ' value="' + esc(p.regalplatz) + '">' +
+      '<div class="regal-zeile">' +
+        '<input type="text" data-nr="' + p.nr + '" placeholder="Regalplatz"' +
+          ' value="' + esc(p.regalplatz) + '">' +
+        '<button type="button" class="klein rg-foto' +
+          (S.regalBilder[p.nr] || p.foto ? ' hat-foto' : '') +
+          '" data-nr="' + p.nr + '">' +
+          (S.regalBilder[p.nr] || p.foto ? '✓ Foto' : 'Foto') + '</button>' +
+      '</div>' +
     '</div>').join('') || '<div class="leer">Keine Positionen.</div>';
   zeigeScreen('scr-regal');
 }
 
 function regalSenden() {
-  const werte = [];
+  const werte = [], bilder = [];
   $('rg-liste').querySelectorAll('input[data-nr]').forEach(feld => {
-    werte[Number(feld.dataset.nr) - 1] = feld.value.trim();
+    const nr = Number(feld.dataset.nr);
+    werte[nr - 1]  = feld.value.trim();
+    bilder[nr - 1] = S.regalBilder[nr] || '';
   });
-  schrittSenden('eingelagert', werte, $('rg-senden'));
+  schrittSenden('eingelagert', werte, $('rg-senden'), bilder);
 }
 
 /* ---------- Excel senden ---------- */
@@ -2119,6 +2197,27 @@ $('pw-kopieren').addEventListener('click', async () => {
   }
 });
 
+$('pos-foto-datei').addEventListener('change', posFotoGewaehlt);
+
+$('fm-positionen').addEventListener('click', e => {
+  const k = e.target.closest('.pos-foto');
+  if (k) posFotoKlick('form', Number(k.dataset.i));
+});
+$('rg-liste').addEventListener('click', e => {
+  const k = e.target.closest('.rg-foto');
+  if (k) posFotoKlick('regal', Number(k.dataset.nr));
+});
+$('dt-positionen').addEventListener('click', e => {
+  const k = e.target.closest('.dt-pos-foto');
+  if (k) fotoZeigen(Number(k.dataset.nr), k);
+});
+
+// Der Entfernen-Knopf liegt IM Schauer, der beim Antippen schliesst —
+// ohne dieses Stoppen faenge der Klick beides ab und das Foto bliebe.
+$('bild-schau-weg').addEventListener('click', e => {
+  e.stopPropagation();
+  posFotoEntfernen();
+});
 $('bild-schau').addEventListener('click', bildSchauZu);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('bild-schau').hidden) bildSchauZu();

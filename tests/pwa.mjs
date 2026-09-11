@@ -109,7 +109,8 @@ const attrappe = () => {
         }
         DB.vorgaenge[d.vorgang] = 'WE-2026-0001';
         DB.kopf = d;
-        DB.positionen = d.positionen.map((p, i) => Object.assign({ nr: i + 1, regalplatz: '' }, p));
+        DB.positionen = d.positionen.map((p, i) =>
+          Object.assign({ nr: i + 1, regalplatz: '' }, p, { foto: !!p.bild }));
         const s = d.schritte || [];
         DB.ang = s.includes('angenommen')  ? 'Anna Muster' : '';
         DB.gez = s.includes('gezaehlt')    ? 'Anna Muster' : '';
@@ -139,7 +140,9 @@ const attrappe = () => {
         if (d.schritt === 'angenommen')  { DB.ang = 'Anna Muster'; }
         if (d.schritt === 'gezaehlt')    { DB.gez = 'Anna Muster'; }
         if (d.schritt === 'eingelagert') { DB.ein = 'Anna Muster';
-          (d.regalplaetze || []).forEach((w, i) => { if (DB.positionen[i]) DB.positionen[i].regalplatz = w; }); }
+          (d.regalplaetze || []).forEach((w, i) => { if (DB.positionen[i]) DB.positionen[i].regalplatz = w; });
+          (d.bilder || []).forEach((b, i) => {
+            if (b && DB.positionen[i] && !DB.positionen[i].foto) DB.positionen[i].foto = true; }); }
         DB.status = status();
         return A({ ok: true });
       case 'we_senden':
@@ -1134,6 +1137,83 @@ await fot.keyboard.press('Escape');
 await fot.waitForFunction(() => document.getElementById('bild-schau').hidden);
 ok('Escape schliesst auch', await fot.$eval('#bild-schau', e => e.hidden));
 await fot.close();
+
+// --- 21) Ein Foto je Position ----------------------------------------------
+// Der Knopf sitzt in der Zeile des Regalplatzes — dort, wo die Ware vor
+// einem steht und das Feld daneben ohnehin ausgefuellt wird.
+console.log('\n21) Ein Foto je Position');
+const pf = await browser.newPage();
+pf.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+// Ein echtes, winziges PNG: bildVerkleinern laeuft ueber Image und canvas,
+// und ein erfundener Puffer kaeme dort nie an.
+const winzig = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFklEQVR42mNk+M/wn4EIwDiqkL' +
+  '4KAcT9A/0LrLLzAAAAAElFTkSuQmCC', 'base64');
+pf.on('filechooser', async fc => {
+  await fc.setFiles({ name: 'artikel.png', mimeType: 'image/png', buffer: winzig });
+});
+await pf.addInitScript(attrappe);
+await pf.goto(APP);
+await pf.fill('#lg-email', 'anna@firma.ch');
+await pf.fill('#lg-pass', 'geheim123');
+await pf.click('#lg-senden');
+await pf.waitForSelector('#scr-start.aktiv');
+await pf.click('#st-neu');
+await pf.waitForSelector('#scr-form.aktiv');
+
+ok('je Position ein Fotoknopf', (await pf.$$('.pos .pos-foto')).length === 5);
+ok('und er steht in der Regalplatzzeile',
+   (await pf.$$('.pos .regal-zeile [data-f="regalplatz"] ~ .pos-foto')).length === 5);
+
+await pf.fill('#fm-kunde', 'Kunde AG');
+await pf.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await pf.click('.pos[data-i="0"] .pos-foto');
+await pf.waitForFunction(() =>
+  document.querySelector('.pos[data-i="0"] .pos-foto').classList.contains('hat-foto'));
+ok('nach dem Knipsen ist der Knopf markiert',
+   (await pf.textContent('.pos[data-i="0"] .pos-foto')).includes('✓'));
+ok('und nur bei dieser Position',
+   !(await pf.$eval('.pos[data-i="1"] .pos-foto', e => e.className.includes('hat-foto'))));
+
+// Noch einmal antippen zeigt es — und laesst es entfernen
+await pf.click('.pos[data-i="0"] .pos-foto');
+await pf.waitForFunction(() => !document.getElementById('bild-schau').hidden);
+ok('ein zweiter Tipp zeigt das Foto',
+   (await pf.$eval('#bild-schau-bild', e => e.getAttribute('src') || '')).startsWith('data:'));
+ok('mit der Moeglichkeit, es zu entfernen',
+   !(await pf.$eval('#bild-schau-weg', e => e.hidden)));
+await pf.click('#bild-schau-weg');
+await pf.waitForFunction(() =>
+  !document.querySelector('.pos[data-i="0"] .pos-foto').classList.contains('hat-foto'));
+ok('entfernt ist entfernt', await pf.$eval('#bild-schau', e => e.hidden));
+
+// Noch einmal knipsen und speichern: das Bild geht mit
+await pf.click('.pos[data-i="0"] .pos-foto');
+await pf.waitForFunction(() =>
+  document.querySelector('.pos[data-i="0"] .pos-foto').classList.contains('hat-foto'));
+await pf.click('#fm-speichern');
+await pf.waitForSelector('#scr-detail.aktiv');
+const gespeichert = await pf.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_speichern').pop());
+ok('das Bild wird mitgeschickt',
+   String(gespeichert.positionen[0].bild).startsWith('data:image/jpeg'),
+   String(gespeichert.positionen[0].bild).slice(0, 24));
+ok('und nur bei der Position, die es hat',
+   !gespeichert.positionen[1] || !gespeichert.positionen[1].bild);
+
+// Im Detail bietet die Position ihr Foto an
+await pf.waitForSelector('.dt-pos-foto');
+ok('das Detail bietet das Foto der Position an',
+   (await pf.$$('.dt-pos-foto')).length === 1);
+
+// Beim Einlagern steht derselbe Knopf
+await pf.click('[data-schritt="eingelagert"]');
+await pf.waitForSelector('#scr-regal.aktiv');
+ok('auch beim Einlagern ein Knopf je Position',
+   (await pf.$$('#rg-liste .rg-foto')).length === (await pf.$$('#rg-liste input[data-nr]')).length);
+ok('die schon erfasste Position ist markiert',
+   await pf.$eval('#rg-liste .rg-foto', e => e.className.includes('hat-foto')));
+await pf.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));

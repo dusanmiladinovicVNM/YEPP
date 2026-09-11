@@ -92,7 +92,7 @@ Nastaju ovi, sa ovim kolonama:
 | List | Kolone |
 |---|---|
 | `Wareneingang` | `WeNr` `Zeitstempel` `Erfasser` `Email` `Kunde` `Lieferant` `AngNam` `AngDat` `AngZeit` `GezNam` `GezDat` `GezZeit` `EinNam` `EinDat` `EinZeit` `LagerM2` `Bemerkung` `Storniert` `Status` `FotoUrl` `DateiUrl` `Gesendet` `Vorgang` |
-| `Positionen` | `WeNr` `Nr` `Artikel` `Anzahl` `KG` `MHD` `Regalplatz` `Bemerkung` `Bestehend` |
+| `Positionen` | `WeNr` `Nr` `Artikel` `Anzahl` `KG` `MHD` `Regalplatz` `Bemerkung` `Bestehend` `FotoUrl` |
 | `Kunden` | `Name` `Aktiv` `Sortierung` |
 | `Lieferanten` | `Name` `Aktiv` `Sortierung` |
 | `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` |
@@ -371,6 +371,35 @@ jer šablon koji se odvoji od koda je izvor tihih grešaka.
 
 **Fajl na SharePointu se ne otvara iz browsera** — Excel for Web ne osvežava
 Power Query i to ne javlja. Sinhronizuj biblioteku i otvaraj ga iz Findera.
+
+## Foto po artiklu
+
+Pored polja **Regalplatznr.** stoji dugme **Foto** — i u obrascu i na ekranu
+za *Eingelagert*, jer je Regalplatz ono što se popunjava dok roba stoji pred
+tobom.
+
+| Stanje dugmeta | Šta radi dodir |
+|---|---|
+| `Foto` | otvara kameru |
+| `✓ Foto` | prikazuje sliku, sa dugmetom **Foto entfernen** |
+
+**Naziv datoteke je naziv artikla**, kako je traženo. Dve isporuke istog
+artikla time dobijaju isto ime u Drive-u — to ne smeta, jer se slika nalazi
+preko reda u tabeli, ne preko imena.
+
+**Pri *Eingelagert* se dopunjava, ne prepisuje.** Ako slika već stoji u
+redu, ostaje; ko slika pri odlaganju dodaje ono što pri unosu nije uhvaćeno.
+Prepisivanje bi značilo tiho zameniti beleg.
+
+Slika artikla se smanjuje na **1200 px / 68%** — otpremnica mora da bude
+čitljiva, artikal samo prepoznatljiv, a kod deset pozicija ta razlika odlučuje
+hoće li snimanje proći kroz slab signal.
+
+U detalju svaka pozicija sa slikom nosi **Foto ansehen**; slika ide istim
+putem kao otpremnica — sa servera, nikad linkom na Drive.
+
+Stara instalacija bez kolone `FotoUrl` radi dalje: snimanje prolazi,
+pozicija prosto javlja da slike nema. `setupAnlegen` dopisuje kolonu.
 
 ## Foto otpremnice
 
@@ -783,6 +812,9 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 16 | Fotografija otpremnice na slaboj vezi | dugme pokazuje napredak |
 | 16b | Nalog **bez** pristupa Driveu otvara *Foto ansehen* | slika se vidi |
 | 16c | Isti dokument drugi put | odmah, bez poziva servera |
+| 16d | Slika kod pozicije, pa *Speichern* | u detalju stoji `Foto ansehen` |
+| 16e | Kod *Eingelagert* slikati poziciju koja već ima sliku | stara ostaje |
+| 16f | Datoteka u Drive-u | zove se kao artikal |
 | 17 | Običan korisnik pošalje `admin_liste` ručno | odbijeno sa `keine Berechtigung` |
 | 18 | Admin pokuša da deaktivira sebe | odbijeno |
 | 19 | Zurückziehen tuđeg unosa bez admin prava | odbijeno |

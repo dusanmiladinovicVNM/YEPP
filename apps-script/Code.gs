@@ -590,7 +590,7 @@ function weSpeichern(d, u) {
     z[k.Bemerkung]   = String(d.bemerkung || '').trim();
     z[k.Storniert]   = false;
     z[k.Status]      = statusAus(z, k);
-    z[k.FotoUrl]     = d.foto ? fotoAblegen(d.foto, weNr, u) : '';
+    z[k.FotoUrl]     = d.foto ? fotoAblegen(d.foto, weNr + '_Lieferschein') : '';
     if (k.Vorgang != null) z[k.Vorgang] = String(d.vorgang || '').trim();
     bl.appendRow(z);
 
@@ -646,6 +646,11 @@ function positionenSchreiben(weNr, pos) {
     z[k.Regalplatz] = String(p.regalplatz || '').trim();
     z[k.Bemerkung]  = String(p.bemerkung || '').trim();
     z[k.Bestehend]  = p.bestehend === true;
+    // Der Dateiname ist die Artikelbezeichnung — so verlangt, und in Drive
+    // ist das auch das Einzige, was einem Menschen etwas sagt. Zwei
+    // Lieferungen desselben Artikels heissen dann gleich; gefunden wird ein
+    // Foto ohnehin ueber die Zeile, nicht ueber den Namen.
+    if (k.FotoUrl != null && p.bild) z[k.FotoUrl] = fotoAblegen(p.bild, artikel);
     zeilen.push(z);
   });
 
@@ -731,23 +736,34 @@ function schrittSchreiben(d, u, feld) {
   dat[i][k[feld.nam]] = u.name;
   bl.getRange(i + 1, k.Status + 1).setValue(statusAus(dat[i], k));
 
-  // Regalplaetze traegt das zweite Team beim Einlagern nach.
-  if (d.schritt === 'eingelagert' && Array.isArray(d.regalplaetze)) {
-    regalplaetzeSchreiben(d.weNr, d.regalplaetze);
+  // Regalplaetze und Fotos traegt das zweite Team beim Einlagern nach —
+  // dort steht die Ware vor einem, im Erfassungsbogen noch nicht.
+  if (d.schritt === 'eingelagert' &&
+      (Array.isArray(d.regalplaetze) || Array.isArray(d.bilder))) {
+    regalplaetzeSchreiben(d.weNr, d.regalplaetze || [], d.bilder || []);
   }
   return { ok: true, name: u.name, datum: fmt(jetzt, 'yyyy-MM-dd'), zeit: fmt(jetzt, 'HH:mm') };
 }
 
-function regalplaetzeSchreiben(weNr, werte) {
+function regalplaetzeSchreiben(weNr, werte, bilder) {
   const bl  = blatt(T.pos);
   const dat = bl.getDataRange().getValues();
   const k   = spalten(dat[0]);
   for (let i = 1; i < dat.length; i++) {
     if (String(dat[i][k.WeNr]) !== String(weNr)) continue;
     const nr = Number(dat[i][k.Nr]);
-    const w  = werte[nr - 1];
+    const w  = (werte || [])[nr - 1];
     if (w != null && String(w).trim()) {
       bl.getRange(i + 1, k.Regalplatz + 1).setValue(String(w).trim());
+    }
+
+    // Ein Foto ersetzt hier nichts: steht schon eines in der Zeile, bleibt
+    // es. Wer beim Einlagern knipst, ergaenzt, was beim Erfassen fehlte —
+    // ueberschreiben hiesse, einen Beleg stillschweigend auszutauschen.
+    const b = (bilder || [])[nr - 1];
+    if (k.FotoUrl != null && b && !String(dat[i][k.FotoUrl] || '').trim()) {
+      const url = fotoAblegen(b, String(dat[i][k.Artikel] || ''));
+      if (url) bl.getRange(i + 1, k.FotoUrl + 1).setValue(url);
     }
   }
 }
@@ -850,7 +866,11 @@ function positionenLesen(weNr, vorab) {
       mhd:        feldText('MHD', dat[i][k.MHD]),
       regalplatz: String(dat[i][k.Regalplatz] || ''),
       bemerkung:  String(dat[i][k.Bemerkung] || ''),
-      bestehend:  String(dat[i][k.Bestehend]).toLowerCase() === 'true'
+      bestehend:  String(dat[i][k.Bestehend]).toLowerCase() === 'true',
+      // Nur ob eines da ist. Die Adresse bleibt auf dem Server — im Browser
+      // waere sie ein Drive-Link, und den kann der Lagermitarbeiter nicht
+      // oeffnen (siehe weFoto).
+      foto:       k.FotoUrl != null && !!String(dat[i][k.FotoUrl] || '').trim()
     });
   }
   aus.sort((a, b) => a.nr - b.nr);
@@ -881,7 +901,22 @@ function weFoto(d, u) {
     return { ok: false, error: 'storniert' };
   }
 
-  const id = driveId(String(dat[i][k.FotoUrl] || ''));
+  // Ohne «nr» der Lieferschein, mit «nr» das Foto dieser Position. Beide
+  // Adressen kommen aus der Tabelle, nie aus dem Aufruf.
+  let quelle = String(dat[i][k.FotoUrl] || '');
+  if (d.nr != null && String(d.nr) !== '') {
+    quelle = '';
+    const pd = datenLesen([T.pos])[T.pos];
+    const pk = spalten(pd[0]);
+    for (let j = 1; j < pd.length; j++) {
+      if (String(pd[j][pk.WeNr]) !== String(d.weNr)) continue;
+      if (String(pd[j][pk.Nr]) !== String(d.nr)) continue;
+      quelle = pk.FotoUrl != null ? String(pd[j][pk.FotoUrl] || '') : '';
+      break;
+    }
+  }
+
+  const id = driveId(quelle);
   if (!id) return { ok: false, error: 'kein_foto' };
 
   try {
@@ -1144,7 +1179,16 @@ function unterordner(eltern, name) {
  * Legt das Bild in Drive ab und gibt den Link zurueck.
  * In die Zelle kaeme es nicht — Sheets begrenzt sie auf 50'000 Zeichen.
  */
-function fotoAblegen(dataUrl, weNr, u) {
+/**
+ * Ein Dateiname, der in Drive nicht stoert. Schraegstriche und Doppelpunkte
+ * fliegen raus, Umlaute bleiben — sie stehen in Artikelbezeichnungen.
+ */
+function dateiname(name) {
+  const sauber = String(name || '').replace(/[^\wÄÖÜäöüß .-]/g, '').trim();
+  return sauber || 'Foto';
+}
+
+function fotoAblegen(dataUrl, name) {
   try {
     const wurzel = String(parameter('FotoOrdner') || '').trim();
     if (!wurzel) return '';
@@ -1158,7 +1202,7 @@ function fotoAblegen(dataUrl, weNr, u) {
     const endung = (teile[1].split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const blob = Utilities.newBlob(
       Utilities.base64Decode(teile[2]), teile[1],
-      weNr + '_Lieferschein.' + endung
+      dateiname(name) + '.' + endung
     );
     return ordner.createFile(blob).getUrl();
   } catch (err) {
@@ -1625,7 +1669,7 @@ function setupAnlegen() {
                 'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet',
                 'Vorgang'];
   plan[T.pos] = ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
-                 'Regalplatz', 'Bemerkung', 'Bestehend'];
+                 'Regalplatz', 'Bemerkung', 'Bestehend', 'FotoUrl'];
   plan[T.kunden]      = ['Name', 'Aktiv', 'Sortierung'];
   plan[T.lieferanten] = ['Name', 'Aktiv', 'Sortierung'];
   plan[T.benutzer]    = ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',
