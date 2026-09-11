@@ -207,6 +207,17 @@ ok('5 Leerzeilen wie auf dem Papier', (await page.$$('.pos')).length === 5);
 ok('Regalplatzfeld je Position',
    (await page.$$('.pos [data-f="regalplatz"]')).length === 5);
 ok('Angenommen vorausgewaehlt', await page.isChecked('#fm-s-angenommen'));
+// Der Text ist geaendert worden; drei Pruefungen halten ihn fest, damit er
+// bei der naechsten Umformulierung nicht still zurueckfaellt.
+ok('quittiert wird auf den eigenen Namen, geduzt',
+   (await page.textContent('#scr-form')).includes('auf deinen Namen'));
+ok('der Hinweis duzt ebenfalls',
+   (await page.textContent('#scr-form')).includes('was du selbst erledigt hast'));
+// Leerraum zusammenziehen: im Quelltext bricht der Satz um, auf dem Schirm
+// nicht — sonst pruefte das hier die Zeilenlaenge statt den Text.
+ok('und nennt, wer spaeter quittiert',
+   (await page.textContent('#scr-form')).replace(/\s+/g, ' ')
+     .includes('von der Person, die es ausgeführt hat, quittiert'));
 ok('Gezaehlt nicht vorausgewaehlt', !(await page.isChecked('#fm-s-gezaehlt')));
 ok('Eingelagert nicht vorausgewaehlt', !(await page.isChecked('#fm-s-eingelagert')));
 

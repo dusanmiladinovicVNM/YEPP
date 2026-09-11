@@ -270,6 +270,11 @@ Eingelagert**. Čekira se ono što je onaj ko unosi **sam uradio**; podrazumevan
 je čekiran samo `Angenommen`, jer u najčešćem slučaju roba se prima i odmah
 unosi. Ko samo prekucava tuđi papir, skida sve tri.
 
+Tekst iznad kućica **persira ili ne** — od ove verzije aplikacija radnika
+oslovljava sa *du*: „Nur ankreuzen, was **du** selbst erledigt hast." Tri
+provere u `pwa.mjs` drže te rečenice, da pri sledećem preformulisanju ne
+skliznu nazad.
+
 **Ime se nikad ne bira** — dolazi iz sesije, a datum i vreme sa servera.
 Kućica kaže samo *koji red* se potpisuje, ne *ko* ga potpisuje.
 
