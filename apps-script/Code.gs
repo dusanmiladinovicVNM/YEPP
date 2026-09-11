@@ -470,15 +470,30 @@ function sitzungenLoeschen(email) {
    4) Stammdaten
    ============================================================ */
 
-function stammdaten() {
-  const daten = datenLesen([T.kunden, T.lieferanten, T.kontakte]);
+/** Die Blaetter, aus denen die Stammdaten kommen. */
+const STAMM_BLAETTER = [T.kunden, T.lieferanten, T.kontakte];
+
+/**
+ * EINE Stelle, die sagt, was Stammdaten sind.
+ *
+ * Es gab zwei: «stammdaten» und «startDaten» bauten ihre Antwort je fuer
+ * sich. Als die Kontakte dazukamen, bekam nur die erste sie — und die App
+ * ruft die zweite. Im Sendedialog stand dann «nichts hinterlegt», obwohl
+ * es in der Tabelle stand. Zwei Listen derselben Sache laufen auseinander,
+ * frueher oder spaeter.
+ */
+function stammdatenAus(daten) {
   return {
-    ok: true,
     kunden: listeAktiv(T.kunden, daten[T.kunden]),
     lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten]),
     kontakte: kontakteAktiv(daten[T.kontakte]),
     empfaenger: empfaengerJeKunde(daten[T.kunden])
   };
+}
+
+function stammdaten() {
+  const daten = datenLesen(STAMM_BLAETTER);
+  return Object.assign({ ok: true }, stammdatenAus(daten));
 }
 
 /** Aktive Kontakte als {name, email}. */
@@ -535,16 +550,12 @@ function empfaengerJeKunde(dat) {
  * und eine aeltere App muss sich weiter anmelden koennen.
  */
 function startDaten(d, u) {
-  // Drei Blaetter, EINE Anfrage. Getrennt gelesen waeren es drei.
-  const daten = datenLesen([T.we, T.kunden, T.lieferanten]);
+  // Alle Blaetter in EINER Anfrage. Getrennt gelesen waeren es vier.
+  const daten = datenLesen([T.we].concat(STAMM_BLAETTER));
   const liste = weListe(d, u, daten[T.we]);
   if (!liste.ok) return liste;
-  return {
-    ok: true,
-    liste: liste.liste,
-    kunden: listeAktiv(T.kunden, daten[T.kunden]),
-    lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten])
-  };
+  // Dieselbe Quelle wie «stammdaten» — nicht dieselben Zeilen noch einmal.
+  return Object.assign({ ok: true, liste: liste.liste }, stammdatenAus(daten));
 }
 
 function listeAktiv(name, vorab) {

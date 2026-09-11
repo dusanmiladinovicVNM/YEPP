@@ -117,6 +117,44 @@ select{
 /* display:flex oben schlaegt sonst das hidden-Attribut, und der Schauer
    liegt unsichtbar ueber der ganzen App — angeklickt wird dann nichts mehr. */
 #bild-schau[hidden]{display:none}
+
+/* ---------- Ruecckmeldung, dass etwas laeuft ---------- */
+/* Ein Aufruf dauert hier Sekunden. Ohne sichtbares Zeichen tippt ein
+   Mensch ein zweites und ein drittes Mal — zu Recht, denn nichts sagt ihm,
+   dass der erste angekommen ist. */
+#arbeit{
+  position:fixed;top:0;left:0;right:0;height:3px;z-index:80;
+  background:rgba(143,164,38,.2);overflow:hidden;
+}
+#arbeit[hidden]{display:none}
+#arbeit .laeuft{
+  height:100%;width:40%;background:var(--akzent);
+  animation:wandern 1.1s ease-in-out infinite;
+}
+@keyframes wandern{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(350%)}
+}
+
+/* Der Schirm wird gesperrt, solange GESCHRIEBEN wird — dort schadet der
+   zweite Tipp wirklich. Beim blossen Lesen genuegt der Balken oben. */
+#sperre{
+  position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.55);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+}
+#sperre[hidden]{display:none}
+#sperre .was{color:var(--text);font-size:14px;font-weight:600;text-align:center;padding:0 24px}
+.kreisel{
+  width:34px;height:34px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.18);border-top-color:var(--akzent);
+  animation:drehen .9s linear infinite;
+}
+@keyframes drehen{to{transform:rotate(360deg)}}
+
+@media (prefers-reduced-motion:reduce){
+  #arbeit .laeuft{animation:none;width:100%}
+  .kreisel{animation:none}
+}
 #bild-schau img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain}
 .bild-hinweis{color:var(--grau);font-size:12px;padding:8px 0}
 #bild-schau-weg{margin-top:4px}
@@ -539,6 +577,14 @@ select{
   </div>
 </section>
 
+<!-- ============ ES ARBEITET ============ -->
+<div id="arbeit" hidden><div class="laeuft"></div></div>
+
+<div id="sperre" hidden>
+  <div class="kreisel" aria-hidden="true"></div>
+  <div class="was" id="sperre-text">Bitte warten …</div>
+</div>
+
 <!-- ============ BILDSCHAU ============ -->
 <div id="bild-schau" hidden>
   <img id="bild-schau-bild" alt="Foto">
@@ -832,6 +878,79 @@ const WIEDERHOLBAR = ['start', 'stammdaten', 'we_liste', 'we_detail',
 
 const warten = ms => new Promise(r => setTimeout(r, ms));
 
+/* ---------- Zeigen, dass etwas laeuft ---------- */
+
+/**
+ * Ein Aufruf dauert hier Sekunden. Ohne ein sichtbares Zeichen tippt ein
+ * Mensch ein zweites und ein drittes Mal — zu Recht, denn nichts sagt ihm,
+ * dass der erste angekommen ist.
+ *
+ * Das steht in post() und nicht an den einzelnen Knoepfen: so kann keine
+ * neue Aktion es vergessen. Die Knoepfe beschriften sich weiterhin selbst,
+ * das ist die feinere Auskunft; dies hier ist die, die nie fehlt.
+ *
+ * Zwei Staerken, und der Unterschied ist nicht Geschmack:
+ *
+ *   LESEN     Balken oben. Der Schirm bleibt bedienbar — wer waehrend des
+ *             Ladens zurueckgeht, soll zurueckgehen duerfen.
+ *   SCHREIBEN Balken UND Sperre ueber dem ganzen Schirm. Hier richtet der
+ *             zweite Tipp wirklich etwas an.
+ */
+const ARBEIT_TEXT = {
+  login:            'Anmelden …',
+  passwort:         'Passwort wird gesetzt …',
+  abmelden:         'Abmelden …',
+  we_speichern:     'Wird gespeichert …',
+  we_schritt:       'Wird quittiert …',
+  we_senden:        'Wird gesendet …',
+  we_storno:        'Wird zurückgezogen …',
+  admin_neu:        'Benutzer wird angelegt …',
+  admin_aktion:     'Wird gespeichert …',
+  admin_parameter:  'Wird gespeichert …',
+  admin_kontakt:    'Wird gespeichert …',
+  admin_kunde:      'Wird gespeichert …'
+};
+
+/**
+ * «admin_parameter» liest ohne `werte` und schreibt mit — an der Aktion
+ * allein ist das nicht zu erkennen.
+ */
+function schreibt(payload) {
+  if (payload.action === 'admin_parameter') return !!payload.werte;
+  return ARBEIT_TEXT[payload.action] !== undefined;
+}
+
+const ARBEIT = { offen: 0, schreibend: 0 };
+
+function arbeitAn(payload) {
+  ARBEIT.offen++;
+  $('arbeit').hidden = false;
+  if (!schreibt(payload)) return false;
+  ARBEIT.schreibend++;
+  $('sperre-text').textContent = ARBEIT_TEXT[payload.action] || 'Bitte warten …';
+  $('sperre').hidden = false;
+  return true;
+}
+
+function arbeitAus(gesperrt) {
+  ARBEIT.offen = Math.max(0, ARBEIT.offen - 1);
+  if (!ARBEIT.offen) $('arbeit').hidden = true;
+  if (!gesperrt) return;
+  ARBEIT.schreibend = Math.max(0, ARBEIT.schreibend - 1);
+  if (!ARBEIT.schreibend) $('sperre').hidden = true;
+}
+
+/**
+ * Nach dieser Zeit gilt ein Aufruf als tot.
+ *
+ * fetch wartet von sich aus ewig. Ohne Abbruch bliebe die Sperre bei einem
+ * haengenden Aufruf fuer immer stehen — und eine App, die sich nicht mehr
+ * bedienen laesst, ist schlimmer als eine, die einen Fehler meldet. Der
+ * Abbruch sieht fuer den Rest des Codes aus wie ein Verbindungsabriss, und
+ * der ist ueberall schon behandelt.
+ */
+const GEDULD_MS = 45000;
+
 /**
  * Ein abgerissener Aufruf ist im Lager der Normalfall, nicht die Ausnahme.
  * Wo ein zweiter Versuch gefahrlos ist, geschieht er hier — der Benutzer
@@ -854,6 +973,15 @@ const NICHT_ANGEKOMMEN = [404, 429, 502, 503, 504];
 
 async function post(payload) {
   if (!CONFIG.url) throw new Error('nicht_verbunden');
+  const gesperrt = arbeitAn(payload);
+  try {
+    return await postRoh(payload);
+  } finally {
+    arbeitAus(gesperrt);
+  }
+}
+
+async function postRoh(payload) {
   const sicher = WIEDERHOLBAR.indexOf(payload.action) >= 0;
   let letzter = null;
 
@@ -865,12 +993,19 @@ async function post(payload) {
     try {
       // text/plain vermeidet den CORS-Vorabruf, den Apps Script nicht
       // beantwortet.
-      res  = await fetch(CONFIG.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      text = await res.text();
+      const abbruch = new AbortController();
+      const wecker = setTimeout(() => abbruch.abort(), GEDULD_MS);
+      try {
+        res  = await fetch(CONFIG.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+          signal: abbruch.signal
+        });
+        text = await res.text();
+      } finally {
+        clearTimeout(wecker);
+      }
     } catch (e) {
       // Unterwegs abgerissen. Ob der Aufruf angekommen ist, weiss hier
       // niemand — also nur wiederholen, wo ein zweites Mal nichts anrichtet.
@@ -1292,9 +1427,7 @@ function startUebernehmen(r) {
   if (r.kunden || r.lieferanten) {
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
-    localStorage.setItem('stammdaten', JSON.stringify({
-      kunden: S.kunden, lieferanten: S.lieferanten,
-      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+    stammdatenMerken();
     fuelleStammdaten();
   }
   altVerbergen('st-alt');
@@ -1315,9 +1448,7 @@ async function startEinzeln(cache) {
     if (!antwortOk(r)) return;
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
-    localStorage.setItem('stammdaten', JSON.stringify({
-      kunden: S.kunden, lieferanten: S.lieferanten,
-      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+    stammdatenMerken();
     fuelleStammdaten();
   } catch (e) {
     if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
@@ -1701,7 +1832,25 @@ function fotoWeg() {
  * Zwei Listen, eine Antwort. Jede Aenderung gibt den neuen Stand gleich
  * zurueck, damit der Schirm nicht raet, was daraus geworden ist.
  */
+function stammdatenMerken() {
+  try {
+    localStorage.setItem('stammdaten', JSON.stringify({
+      kunden: S.kunden, lieferanten: S.lieferanten,
+      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+  } catch (e) { /* voller Speicher — der naechste «start» bringt es wieder */ }
+}
+
 function zeichneStamm(r) {
+  // Was hier geaendert wurde, gilt sofort — auch im Sendedialog. Ohne das
+  // muesste man die Seite neu laden, damit «start» die neuen Adressen
+  // bringt, und bis dahin behauptete der Dialog, es sei nichts hinterlegt.
+  if (r.kunden) {
+    const vor = {};
+    r.kunden.forEach(k => {
+      if (k.haupt || k.vertretung) vor[k.name] = { an: k.haupt, kopie: k.vertretung };
+    });
+    S.empfaenger = vor;
+  }
   if (r.kontakte) {
     S.kontakte = r.kontakte.filter(k => k.aktiv).map(k => ({ name: k.name, email: k.email }));
     fuelleStammdaten();
@@ -1744,6 +1893,7 @@ function zeichneStamm(r) {
           '</div>').join('')
       : '<div class="leer">Noch keine Kunden.</div>';
   }
+  stammdatenMerken();
 }
 
 async function stammAktion(daten, meldungsId) {

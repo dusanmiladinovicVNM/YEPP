@@ -1515,6 +1515,37 @@ console.log('\n30) Gesendet wird an die Vorgabe des Kunden');
      eigen.kopie === '' && !ctx.__mails[0][0].cc, JSON.stringify(ctx.__mails[0][0].cc));
 }
 
+console.log('\n31) «start» und «stammdaten» sagen dasselbe');
+{
+  // Aus dem Betrieb: im Sendedialog stand «für Test Firma ist nichts
+  // hinterlegt», obwohl es in der Tabelle stand. Grund: die beiden
+  // Antworten wurden getrennt gebaut, und als die Kontakte dazukamen,
+  // bekam nur eine von beiden sie — die, welche die App NICHT ruft.
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  ss.blaetter.Kunden.appendRow(['Test Firma', true, 10, 'dmi@cpmh.ch', '']);
+  ss.blaetter.Lieferanten.appendRow(['Lieferant GmbH', true, 10]);
+  ss.blaetter.Kontakte.appendRow(['Dusan', 'dmi@cpmh.ch', true]);
+
+  const st    = ctx.verteilen({ action: 'stammdaten', session: 'tokA' });
+  const start = ctx.verteilen({ action: 'start', session: 'tokA' });
+
+  // Jedes Feld, nicht nur die, an die ich gerade denke: so faellt auch das
+  // naechste auf, das nur einer der beiden Antworten beigelegt wird.
+  const fehlend = Object.keys(st)
+    .filter(f => f !== 'ok' && f !== 'ms' && f !== 'teile')
+    .filter(f => JSON.stringify(start[f]) !== JSON.stringify(st[f]));
+  ok('«start» traegt jedes Feld der Stammdaten', fehlend.length === 0,
+     fehlend.map(f => f + ': ' + JSON.stringify(start[f]) + ' statt ' +
+                 JSON.stringify(st[f])).join(' | '));
+
+  ok('und die Vorgabe des Kunden ist wirklich dabei',
+     start.empfaenger['Test Firma'].an === 'dmi@cpmh.ch',
+     JSON.stringify(start.empfaenger));
+  ok('die Kontakte ebenso', start.kontakte.length === 1);
+  ok('«start» bringt zusaetzlich die Liste', Array.isArray(start.liste));
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);
