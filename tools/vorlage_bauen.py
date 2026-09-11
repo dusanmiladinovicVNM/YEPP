@@ -138,25 +138,37 @@ def m_abfragen(namen, quelle='<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=3
         'in\n'
         '    Sortiert'
     )
-    return daten, nummern
+    # Auf dem Mac laedt eine Abfrage in EIN Ziel. Das Makro haengt unter
+    # Windows dieselbe Abfrage zweimal ein (Daten und Liste); durch die
+    # Oberflaeche geht das nicht, also bekommt `Liste` eine eigene Abfrage,
+    # die nichts weiter tut als auf `Daten` zu zeigen. In der Arbeitsmappe
+    # steht danach dasselbe — nur der Weg dorthin unterscheidet sich, weil
+    # die beiden Excel-Fassungen sich unterscheiden.
+    liste = 'let\n    Quelle = Daten\nin\n    Quelle'
+    return daten, nummern, liste
 
 
 def m_schreiben(namen):
     """Der M-Code zum Einfuegen — und derselbe Text ins Makro."""
-    daten, nummern = m_abfragen(namen)
+    daten, nummern, liste = m_abfragen(namen)
     M_ZIEL.write_text(
         '// Power-Query-Abfragen fuer Wareneingang-Vorlage.xlsx\n'
         '// ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.\n'
         '//\n'
         '// Mac: Daten -> Daten abrufen -> Leere Abfrage, dann\n'
-        '// Erweiterter Editor, alles ersetzen, Abfrage «Daten» nennen.\n'
-        '// Danach dasselbe mit «Nummern». Die Adresse unten eintragen —\n'
-        '// einrichtungPruefen() im Apps Script schreibt sie fertig hin.\n'
+        '// Erweiterter Editor, alles ersetzen, Abfrage genau so nennen wie\n'
+        '// die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern\n'
+        '// und Liste bauen auf Daten auf.\n'
+        '//\n'
+        '// Die Adresse unten eintragen: einrichtungPruefen() im Apps Script\n'
+        '// schreibt sie fertig hin.\n'
         '//\n'
         '// ============ Daten ============\n'
         + daten +
         '\n\n// ============ Nummern ============\n'
-        + nummern + '\n', encoding='utf-8')
+        + nummern +
+        '\n\n// ============ Liste ============\n'
+        + liste + '\n', encoding='utf-8')
 
     # Die GANZE Funktion neu schreiben, nicht ein Stueck darin ersetzen.
     #

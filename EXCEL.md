@@ -154,19 +154,27 @@ upita**, i to je isti tekst koji makro upisuje na Windowsu.
 python3 tools/vorlage_bauen.py   # ako se CSV_SPALTEN promeni
 ```
 
-Postupak, dvaput (jednom za `Daten`, jednom za `Nummern`):
+**Tri upita, ne dva.** Na Macu jedan upit se učitava u **jedno** odredište;
+makro pod Windowsom isti upit zakači dvaput (`Daten` i `Liste`), a kroz
+korisnički interfejs to ne ide. Zato `Liste` ima sopstveni upit koji ne radi
+ništa osim što pokazuje na `Daten`. U arbeitsmappi posle toga stoji isto —
+razlikuje se samo put, jer se razlikuju i dve verzije Excela.
+
+Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
+`Daten`):
 
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
 3. u bloku `Daten` zameni `<Web-App-URL>` i `<TOKEN_READ>` —
    **`einrichtungPruefen()`** u Apps Scriptu ispisuje celu adresu gotovu
-4. upit nazvati tačno **`Daten`** odnosno **`Nummern`**
+4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
+   `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje
 5. prvi put pita za pristup izvoru → **Anonym**, i za nivoe privatnosti →
    **Ignorieren** ili sve na *Öffentlich*
 
-Zatim učitati: `Daten` u list **`Daten`** (ćelija `A1`) i još jednom u list
-**`Liste`**, a `Nummern` u list **`Nummern`**.
+Zatim učitati svaki u istoimeni list, ćelija `A1`: `Daten` → `Daten`,
+`Nummern` → `Nummern`, `Liste` → `Liste`.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:

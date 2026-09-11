@@ -327,6 +327,12 @@ def main():
     ok('die Nummernabfrage baut auf Daten auf',
        'Quelle = Daten' in m_text and 'Table.Distinct' in m_text)
     ok('und sortiert absteigend', 'Order.Descending' in m_text)
+    # Auf dem Mac laedt eine Abfrage in ein Ziel; «Liste» braucht darum eine
+    # eigene, die auf «Daten» zeigt. Windows haengt dieselbe Abfrage zweimal
+    # ein — in der Arbeitsmappe steht danach dasselbe.
+    for name in ('Daten', 'Nummern', 'Liste'):
+        ok(f'der Block «{name}» steht in der Datei',
+           f'============ {name} ============' in m_text)
 
     # Windows (Makro) und Mac (eingefuegt) muessen denselben Text laden.
     # VBA: 1024 Zeichen und 24 Fortsetzungen je LOGISCHER Zeile. Die alte

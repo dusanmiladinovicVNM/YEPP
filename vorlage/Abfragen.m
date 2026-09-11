@@ -2,9 +2,12 @@
 // ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.
 //
 // Mac: Daten -> Daten abrufen -> Leere Abfrage, dann
-// Erweiterter Editor, alles ersetzen, Abfrage «Daten» nennen.
-// Danach dasselbe mit «Nummern». Die Adresse unten eintragen —
-// einrichtungPruefen() im Apps Script schreibt sie fertig hin.
+// Erweiterter Editor, alles ersetzen, Abfrage genau so nennen wie
+// die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern
+// und Liste bauen auf Daten auf.
+//
+// Die Adresse unten eintragen: einrichtungPruefen() im Apps Script
+// schreibt sie fertig hin.
 //
 // ============ Daten ============
 let
@@ -22,3 +25,9 @@ let
     Sortiert = Table.Sort(Eindeutig,{{"WeNr", Order.Descending}})
 in
     Sortiert
+
+// ============ Liste ============
+let
+    Quelle = Daten
+in
+    Quelle
