@@ -405,6 +405,12 @@ putem kao otpremnica — sa servera, nikad linkom na Drive.
 Stara instalacija bez kolone `FotoUrl` radi dalje: snimanje prolazi,
 pozicija prosto javlja da slike nema. `setupAnlegen` dopisuje kolonu.
 
+**Isto važi i za list koji nedostaje.** Ko nalepi novi `Code.gs` a ne
+pokrene `setupAnlegen`, nema list `Kontakte` — i pošto `start` visi o
+prijavi, to bi oborilo **ekran za prijavu**, ne samo novu funkciju. Zato se
+list kog nema čita kao **prazan**, uz upozorenje u protokolu;
+`einrichtungPruefen()` je mesto koje ga imenuje.
+
 ## Foto otpremnice
 
 Slika ide u **Google Drive**, u tabelu samo link. Ćelija u Sheetsu ima

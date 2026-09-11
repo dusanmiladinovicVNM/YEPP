@@ -158,17 +158,83 @@ def m_schreiben(namen):
         '\n\n// ============ Nummern ============\n'
         + nummern + '\n', encoding='utf-8')
 
-    # Dieselben Typen ins Makro, damit Windows und Mac nicht auseinanderlaufen.
+    # Die GANZE Funktion neu schreiben, nicht ein Stueck darin ersetzen.
+    #
+    # VBA laesst je LOGISCHER Zeile — Fortsetzungen zusammengerechnet —
+    # 1024 Zeichen zu. Mit einem Typ je CSV-Spalte stand die alte Fassung
+    # bei 1003: einundzwanzig Zeichen vor der Grenze. Die naechste Spalte
+    # haette den Import unter Windows zerbrochen, waehrend der Mac-Weg
+    # (Abfragen.m, ohne diese Grenze) weitergelaufen waere — genau das
+    # Auseinanderlaufen, das hier nicht passieren soll.
+    #
+    # Mehr Fortsetzungen helfen dagegen nicht: sie gehoeren zu derselben
+    # logischen Zeile. Also mehrere ANWEISUNGEN, jede fuer sich kurz.
+    zitat = lambda t: '"' + t.replace('"', '""') + '"'
+
+    teile = [f'{{"{n}", {ZAHLEN.get(n, "type text")}}}' for n in namen]
+    stuecke, zeile = [], ''
+    for t in teile:
+        kandidat = (zeile + ', ' + t) if zeile else t
+        if len(kandidat) > 120:
+            stuecke.append(zeile + ', ')
+            zeile = t
+        else:
+            zeile = kandidat
+    stuecke.append(zeile)
+
+    zeilen = [
+        'Private Function MDaten(ByVal quelle As String) As String',
+        "    ' ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.",
+        "    ' Mehrere Anweisungen statt einer langen: VBA laesst je logischer",
+        "    ' Zeile nur 1024 Zeichen zu, und die Typenliste waechst mit den",
+        "    ' Spalten. Derselbe Text steht in vorlage/Abfragen.m.",
+        '    Dim m As String',
+        '    m = "let" & vbLf',
+        '    m = m & "    Quelle = Csv.Document(Web.Contents(""" & quelle & """),"',
+        '    m = m & "[Delimiter="","", Encoding=65001, '
+        'QuoteStyle=QuoteStyle.Csv])," & vbLf',
+        '    m = m & "    Kopf = Table.PromoteHeaders(Quelle, '
+        '[PromoteAllScalars=true])," & vbLf',
+        '    m = m & "    Typen = Table.TransformColumnTypes(Kopf,{"',
+    ]
+    zeilen += [f'    m = m & {zitat(st)}' for st in stuecke]
+    zeilen += [
+        '    m = m & "}, ""en-US"")" & vbLf',
+        '    m = m & "in" & vbLf & "    Typen"',
+        '    MDaten = m',
+        'End Function',
+    ]
+
     text = BAS.read_text(encoding='utf-8')
-    neu = re.sub(
-        r'(MDaten = _.*?Table\.TransformColumnTypes\(Kopf,\{" & _\n)(.*?)(" & vbLf & _\n)',
-        lambda m: m.group(1) + '        "' + m_typen(namen).replace('"', '""') +
-                  '}, ""en-US"")' + m.group(3),
-        text, flags=re.S)
+    neu = re.sub(r'Private Function MDaten\(.*?End Function',
+                 lambda _: '\r\n'.join(zeilen), text, flags=re.S)
     if neu == text:
-        sys.exit('Die M-Typen im Makro liessen sich nicht ersetzen — '
+        sys.exit('MDaten liess sich nicht ersetzen — '
                  'Vorlage-Aufbau.bas hat sich geaendert.')
     BAS.write_text(neu, encoding='utf-8')
+    vba_grenzen_pruefen(neu)
+
+
+def vba_grenzen_pruefen(text):
+    """
+    VBA: hoechstens 1024 Zeichen und 24 Fortsetzungen je logischer Zeile.
+
+    Ohne diese Pruefung faellt das Ueberschreiten erst beim Importieren in
+    den VBA-Editor auf — auf einem Rechner, der hier gar nicht steht.
+    """
+    logisch, fort = '', 0
+    for roh in text.replace('\r\n', '\n').split('\n'):
+        if roh.rstrip().endswith(' _'):
+            logisch += roh.rstrip()[:-1]
+            fort += 1
+            continue
+        logisch += roh
+        if len(logisch) > 1000:
+            sys.exit(f'VBA-Zeile zu lang ({len(logisch)} Zeichen, Grenze 1024): '
+                     f'{logisch[:80]}…')
+        if fort > 24:
+            sys.exit(f'Zu viele Fortsetzungen ({fort}, Grenze 24)')
+        logisch, fort = '', 0
 
 
 def bauen():

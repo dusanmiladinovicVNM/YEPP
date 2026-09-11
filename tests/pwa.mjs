@@ -1155,6 +1155,13 @@ ok('nach dem Antippen steht das Bild da',
    (await fot.$eval('#bild-schau-bild', e => e.getAttribute('src') || '')).startsWith('data:'),
    await fot.$eval('#bild-schau-bild', e => (e.getAttribute('src') || '').slice(0, 20)));
 ok('geholt wurde es beim Server', (await fot.evaluate(() => window.__fotoAbrufe)) === 1);
+// Der Knopf war direkt als Handler gebunden — dann landet sein PointerEvent
+// in `nr`, der Server sucht eine Position und findet nie eine.
+const fotoAuftrag = await fot.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_foto').pop());
+ok('der Lieferschein fragt ohne Positionsnummer',
+   !fotoAuftrag.nr && typeof fotoAuftrag.nr !== 'object',
+   JSON.stringify(fotoAuftrag.nr));
 
 // Schliessen und noch einmal: kein zweiter Weg zum Server
 await fot.click('#bild-schau');
@@ -1260,6 +1267,29 @@ ok('auch beim Einlagern ein Knopf je Position',
    (await pf.$$('#rg-liste .rg-foto')).length === (await pf.$$('#rg-liste input[data-nr]')).length);
 ok('die schon erfasste Position ist markiert',
    await pf.$eval('#rg-liste .rg-foto', e => e.className.includes('hat-foto')));
+
+// Hier lag der Fehler: das Neuzeichnen nach dem Knipsen leerte S.regalBilder
+// und baute die Felder aus dem alten Stand neu — Bild und Tippen waren weg,
+// bevor sie abgeschickt werden konnten.
+await pf.fill('#rg-liste input[data-nr="1"]', 'B-77');
+await pf.click('#rg-liste .rg-foto');
+await pf.waitForFunction(() => Object.keys(S.regalBilder).length > 0);
+ok('das eben geknipste Bild bleibt',
+   (await pf.evaluate(() => Object.keys(S.regalBilder).length)) === 1,
+   JSON.stringify(await pf.evaluate(() => Object.keys(S.regalBilder))));
+ok('und der getippte Regalplatz ueberlebt das Neuzeichnen',
+   (await pf.inputValue('#rg-liste input[data-nr="1"]')) === 'B-77',
+   await pf.inputValue('#rg-liste input[data-nr="1"]'));
+
+await pf.click('#rg-senden');
+await pf.waitForFunction(() => window.__gesendet.some(x => x.action === 'we_schritt'));
+const einl = await pf.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_schritt').pop());
+ok('das Bild geht mit',
+   String(einl.bilder && einl.bilder[0]).startsWith('data:image/jpeg'),
+   JSON.stringify(String(einl.bilder && einl.bilder[0]).slice(0, 20)));
+ok('und der Regalplatz auch', einl.regalplaetze[0] === 'B-77',
+   JSON.stringify(einl.regalplaetze));
 await pf.close();
 
 // --- 22) Kontakte, Kunden und der Sendedialog -------------------------------
@@ -1325,6 +1355,9 @@ await kt.waitForFunction(() =>
   document.getElementById('adm-kunden').textContent.includes('Zweite AG'));
 ok('ein neuer Kunde erscheint sofort',
    (await kt.textContent('#adm-kunden')).includes('Zweite AG'));
+ok('und steht sofort im Formular zur Auswahl',
+   (await kt.$$eval('#dl-kunden option', o => o.map(x => x.value))).includes('Zweite AG'),
+   JSON.stringify(await kt.$$eval('#dl-kunden option', o => o.map(x => x.value))));
 
 // Und jetzt der Sendedialog
 await kt.click('#adm-zurueck');
@@ -1366,6 +1399,30 @@ ok('was getippt wurde, geht hinaus',
    auftrag.mailAn === 'chef@firma.ch' && auftrag.kopie === '',
    JSON.stringify([auftrag.mailAn, auftrag.kopie]));
 await kt.close();
+
+// --- 24) Die Adminansicht ueberlebt das Anmelden ----------------------------
+// Das Anmelden bringt die Liste gleich mit. Wird dabei nicht gesagt, dass
+// «Alle» eingeschaltet ist, kaeme die kurze Liste zurueck — gezeigt und
+// gemerkt, als waere es die ganze.
+console.log('\n24) Die Adminansicht ueberlebt das Anmelden');
+const av = await browser.newPage();
+av.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await av.addInitScript(attrappe);
+await av.addInitScript(() => { localStorage.setItem('alle', '1'); });
+await av.goto(APP);
+await av.fill('#lg-email', 'anna@firma.ch');
+await av.fill('#lg-pass', 'geheim123');
+await av.click('#lg-senden');
+await av.waitForSelector('#scr-start.aktiv');
+const anmeldung = await av.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'login').pop());
+ok('die Ansicht wird beim Anmelden mitgeschickt', anmeldung.alle === true,
+   JSON.stringify(anmeldung.alle));
+ok('und die Ueberschrift sagt dasselbe wie der Knopf',
+   (await av.textContent('#st-titel')) === 'Alle Wareneingänge' &&
+   (await av.textContent('#st-alle')) === 'Nur offene',
+   (await av.textContent('#st-titel')) + ' / ' + (await av.textContent('#st-alle')));
+await av.close();
 
 // --- 23) Man sieht, dass etwas laeuft ---------------------------------------
 // Aus dem Betrieb: nichts sagt dem Benutzer, dass seine Handlung unterwegs

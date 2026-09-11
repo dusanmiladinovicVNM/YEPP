@@ -1546,6 +1546,82 @@ console.log('\n31) «start» und «stammdaten» sagen dasselbe');
   ok('«start» bringt zusaetzlich die Liste', Array.isArray(start.liste));
 }
 
+console.log('\n32) Eine halb eingespielte Tabelle toetet die App nicht');
+{
+  // Wer die neue Fassung einspielt und setupAnlegen noch nicht laufen
+  // liess, dem fehlt «Kontakte». Weil startDaten am Anmelden mit dranhaengt,
+  // waere der Anmeldeschirm tot — nicht bloss die neue Funktion.
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  ss.blaetter.Kunden.appendRow(['Test Firma', true, 10, '', '']);
+  delete ss.blaetter.Kontakte;
+
+  const r = ctx.verteilen({ action: 'start', session: 'tokA' });
+  ok('«start» geht trotzdem durch', r.ok === true, JSON.stringify(r.error));
+  ok('die Kunden sind da', JSON.stringify(r.kunden) === '["Test Firma"]');
+  ok('die Kontakte sind einfach leer', JSON.stringify(r.kontakte) === '[]');
+  ok('und das Anmelden ebenso',
+     ctx.verteilen({ action: 'stammdaten', session: 'tokA' }).ok === true);
+
+  // Leere Blaetter (statt fehlender) werfen auch nicht
+  const ss2 = neueTabelle(), ctx2 = laden(ss2);
+  mitBenutzer(ctx2, ss2);
+  ss2.blaetter.Kunden.daten = [];
+  ss2.blaetter.Wareneingang.daten = [];
+  const r2 = ctx2.verteilen({ action: 'start', session: 'tokA' });
+  ok('ein leeres Blatt gibt eine leere Liste, keinen TypeError',
+     r2.ok === true && JSON.stringify(r2.liste) === '[]' &&
+     JSON.stringify(r2.kunden) === '[]', JSON.stringify(r2.error));
+}
+
+console.log('\n33) Ein Kontakt geht nach Spaltennamen ins Blatt');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  // Umgestellte Reihenfolge — spalten() sagt ausdruecklich, dass das erlaubt ist
+  ss.blaetter.Kontakte.daten[0] = ['Aktiv', 'Email', 'Name'];
+  ctx.verteilen({ action: 'admin_kontakt', session: 'tokA',
+                  was: 'neu', name: 'Eva Muster', email: 'eva@firma.ch' });
+  const dat = ss.blaetter.Kontakte.getDataRange().getValues();
+  const k = ctx.spalten(dat[0]);
+  ok('der Name steht unter Name', String(dat[1][k.Name]) === 'Eva Muster',
+     JSON.stringify(dat[1]));
+  ok('die Adresse unter Email', String(dat[1][k.Email]) === 'eva@firma.ch');
+  ok('und wiedergefunden wird er auch',
+     ctx.verteilen({ action: 'admin_kontakt', session: 'tokA',
+                     was: 'aus', email: 'eva@firma.ch' })
+        .kontakte[0].aktiv === false);
+}
+
+console.log('\n34) «&tage=» schneidet wirklich ab');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+
+  // feldText() heilt nur Date-Werte. Ueber batchGet kommt der ANGEZEIGTE
+  // Text an — und der ist je nach Zellformat amerikanisch. Genau daran
+  // scheiterte der Vergleich vorher, nur eine Etage tiefer als beim
+  // urspruenglichen String(Date).
+  ok('ein Datum wird zu yyyy-MM-dd',
+     ctx.alsDatum(new Date(2026, 8, 10)) === '2026-09-10', ctx.alsDatum(new Date(2026, 8, 10)));
+  ok('ISO-Text bleibt', ctx.alsDatum('2026-09-10') === '2026-09-10');
+  ok('ISO-Text mit Uhrzeit wird gekuerzt', ctx.alsDatum('2026-09-10 13:53') === '2026-09-10');
+  ok('amerikanischer Text wird gedreht',
+     ctx.alsDatum('9/10/2026') === '2026-09-10', ctx.alsDatum('9/10/2026'));
+  ok('auch mit Uhrzeit', ctx.alsDatum('9/9/2026 17:03:05') === '2026-09-09');
+  ok('Leeres bleibt leer', ctx.alsDatum('') === '' && ctx.alsDatum(null) === '');
+
+  // Und der Filter schneidet damit wirklich ab, in beiden Schreibweisen
+  const u = mitBenutzer(ctx, ss);
+  const alt_ = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u).weNr;
+  const wb = ss.blaetter.Wareneingang;
+  const wk = ctx.spalten(wb.getDataRange().getValues()[0]);
+  const zeile = ctx.zeileFinden(wb.getDataRange().getValues(), wk.WeNr, alt_);
+  wb.getRange(zeile + 1, wk.AngDat + 1).setValue('1/2/2020');   // laengst vorbei
+  const csv = ctx.csvExport({ tage: 365 });
+  ok('ein alter Eintrag im US-Format faellt heraus',
+     csv.indexOf(alt_) < 0, csv.split('\n')[1]);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);
