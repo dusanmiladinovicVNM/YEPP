@@ -268,6 +268,10 @@ console.log('\n8) Sitzung');
   // Vor dem Passwortwechsel ist alles ausser dem Wechsel gesperrt
   const b = ss.blaetter.Benutzer, k = ctx.spalten(b.daten[0]);
   b.daten[1][k.PwGeaendert] = false;
+  // Von Hand in der Tabelle geaendert — das sieht die gemerkte Sitzung
+  // erst, wenn sie abgelaufen ist. Was die App selbst aendert, raeumt den
+  // Eintrag sofort weg (Abschnitt 21).
+  ctx.__cache.leeren();
   ok('erzwungener Passwortwechsel blockiert',
      ctx.verteilen({ session: 'tokA', action: 'we_liste' }).error === 'passwort_noetig');
   ok('der Wechsel selbst geht durch',
@@ -896,21 +900,22 @@ console.log('\n17) Ein Aufruf statt zwei beim Oeffnen');
      ctx.verteilen({ action: 'start', session: 'tokA', suche: 'gibtsnicht' })
         .liste.length === 0);
 
-  // Der eigentliche Gewinn: die Sitzung wird einmal geprueft, nicht zweimal.
-  // Jede Pruefung liest Sessions UND Benutzer — auf zwei Aufrufe verteilt
-  // sind das vier Gaenge zum Dienst statt zweien.
+  // Der eigentliche Gewinn: die Sitzung wird EINMAL gelesen, danach nicht
+  // mehr. Jede Pruefung liest sonst Sessions UND Benutzer — zwei Gaenge
+  // zum Dienst auf jedem einzelnen Aufruf, immer mit derselben Antwort.
   const zaehlen = () => [ss.blaetter.Sessions.gelesen, ss.blaetter.Benutzer.gelesen];
+  ctx.__cache.leeren();
   ss.blaetter.Sessions.gelesen = 0; ss.blaetter.Benutzer.gelesen = 0;
   ctx.verteilen({ action: 'start', session: 'tokA' });
-  const einmal = zaehlen();
+  const erste = zaehlen();
   ss.blaetter.Sessions.gelesen = 0; ss.blaetter.Benutzer.gelesen = 0;
   ctx.verteilen({ action: 'we_liste', session: 'tokA' });
   ctx.verteilen({ action: 'stammdaten', session: 'tokA' });
-  const zweimal = zaehlen();
-  ok('ein Aufruf prueft die Sitzung einmal',
-     einmal[0] === 1 && einmal[1] === 1, einmal.join('/'));
-  ok('zwei Aufrufe pruefen sie zweimal',
-     zweimal[0] === 2 && zweimal[1] === 2, zweimal.join('/'));
+  const weitere = zaehlen();
+  ok('der erste Aufruf liest die Sitzung',
+     erste[0] === 1 && erste[1] === 1, erste.join('/'));
+  ok('die naechsten lesen sie gar nicht mehr',
+     weitere[0] === 0 && weitere[1] === 0, weitere.join('/'));
 
   // Das Anmelden bringt sie gleich mit
   ss.blaetter.Benutzer.getRange(2, 3).setValue(ctx.hash('geheim123', 'salz'));
@@ -1088,6 +1093,68 @@ console.log('\n20) Der Admin sieht auch, was schon erledigt ist');
   ok('Leerzeichen in der Mailspalte macht den eigenen Eintrag nicht fremd',
      nummern(ctx.verteilen({ action: 'we_liste', session: 'tokA' }))
        .indexOf(annasFertig) >= 0);
+}
+
+console.log('\n21) Die gemerkte Sitzung haengt nicht nach');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  const b = ss.blaetter.Benutzer, k = ctx.spalten(b.daten[0]);
+
+  // Einmal lesen, damit etwas gemerkt ist
+  ok('Anna ist Admin', ctx.verteilen({ action: 'admin_liste', session: 'tokA' }).ok === true);
+
+  // Rechte entziehen: die Rolle steht in der gemerkten Sitzung, also muss
+  // der Eintrag weg — sonst behielte der Betroffene sie noch eine Minute,
+  // und das ist genau die Minute, auf die es ankommt.
+  ctx.verteilen({ action: 'admin_aktion', session: 'tokA',
+                  email: 'bob@firma.ch', was: 'admin' });
+  ok('Bob ist jetzt Admin',
+     ctx.verteilen({ action: 'admin_liste', session: 'tokB' }).ok === true);
+  ctx.verteilen({ action: 'admin_aktion', session: 'tokA',
+                  email: 'bob@firma.ch', was: 'kein_admin' });
+  ok('und sofort wieder nicht',
+     ctx.verteilen({ action: 'admin_liste', session: 'tokB' })
+        .error === 'keine Berechtigung');
+
+  // Deaktivieren wirkt ebenso sofort
+  ctx.verteilen({ action: 'admin_aktion', session: 'tokA',
+                  email: 'bob@firma.ch', was: 'aus' });
+  ok('deaktiviert heisst sofort draussen',
+     ctx.verteilen({ action: 'we_liste', session: 'tokB' }).error === 'session');
+
+  // Abmelden auch: sonst waere der Knopf auf einem geteilten iPad eine Geste
+  ok('Anna arbeitet noch', ctx.verteilen({ action: 'we_liste', session: 'tokA' }).ok === true);
+  ctx.verteilen({ action: 'abmelden', session: 'tokA' });
+  ok('nach dem Abmelden ist der Token wertlos',
+     ctx.verteilen({ action: 'we_liste', session: 'tokA' }).error === 'session');
+}
+
+console.log('\n22) Ein gemerkter Benutzer schreibt nicht in die falsche Zeile');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  const b = ss.blaetter.Benutzer, k = ctx.spalten(b.daten[0]);
+  b.daten[1][k.Salt] = 'salz';
+  b.daten[1][k.PassHash] = ctx.hash('geheim123', 'salz');
+
+  // Die Sitzung merken, dann die Zeilen unter ihr umordnen. «zeile» aus
+  // dem Cache zeigt danach auf jemand anderen; passwortSetzen sucht die
+  // Zeile selbst, sonst bekaeme Bob Annas neues Passwort.
+  ctx.sitzungPruefen('tokA');
+  const annas = b.daten[1].slice();
+  b.daten[1] = b.daten[2].slice();
+  b.daten[2] = annas;
+
+  const r = ctx.verteilen({ action: 'passwort', session: 'tokA',
+                            alt: 'geheim123', neu: 'neuesPasswort1' });
+  ok('der Wechsel findet die richtige Zeile', r.ok === true, JSON.stringify(r));
+  const kk = ctx.spalten(b.daten[0]);
+  ok('und schreibt sie auch dort hin',
+     ctx.hashPasst('neuesPasswort1', String(b.daten[2][kk.Salt]), b.daten[2][kk.PassHash]),
+     JSON.stringify(b.daten[2][kk.Email]));
+  ok('Bobs Zeile bleibt unberuehrt',
+     String(b.daten[1][kk.PassHash] || '') === '', JSON.stringify(b.daten[1][kk.PassHash]));
 }
 
 console.log('\n' + '='.repeat(46));

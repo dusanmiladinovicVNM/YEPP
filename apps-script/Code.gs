@@ -298,6 +298,7 @@ function sitzungAnlegen(email) {
  * lang gueltig, und «Abmelden» auf einem geteilten iPad waere eine Geste.
  */
 function abmelden(d, u) {
+  CacheService.getScriptCache().remove(sitzungCacheSchluessel(d.session));
   const bl  = blatt(T.sessions);
   const dat = bl.getDataRange().getValues();
   for (let i = dat.length - 1; i >= 1; i--) {
@@ -306,9 +307,53 @@ function abmelden(d, u) {
   return { ok: true };
 }
 
+/**
+ * Wie lange eine gepruefte Sitzung gemerkt wird.
+ *
+ * Jeder einzelne Aufruf las bisher ZWEI Blaetter — «Sessions» und
+ * «Benutzer» — nur um zu erfahren, wer da schreibt. Gemessen an der
+ * lebenden Tabelle kostet ein Lesevorgang rund 330 ms; das waren zwei
+ * Drittel einer Sekunde auf jedem Aufruf, immer mit derselben Antwort.
+ *
+ * Eine Minute ist kurz genug, dass eine von Hand in der Tabelle
+ * vorgenommene Aenderung nicht lange nachhaengt, und lang genug, dass
+ * eine Arbeitsstrecke sie nicht staendig neu bezahlt. Alles, was die App
+ * SELBST an einem Benutzer aendert — abmelden, deaktivieren, Rolle,
+ * Passwort — raeumt den Eintrag sofort weg, sodass dort nichts
+ * nachhaengt.
+ */
+const SITZUNG_CACHE_SEK = 60;
+
+function sitzungCacheSchluessel(token) { return 'sitz_' + String(token); }
+
+/**
+ * Vergisst die gemerkten Sitzungen dieses Benutzers.
+ *
+ * Muss laufen, BEVOR die Zeilen aus «Sessions» verschwinden — danach ist
+ * nicht mehr zu finden, welche Token ihm gehoerten.
+ */
+function sitzungCacheLeeren(email) {
+  const gesucht = String(email || '').trim().toLowerCase();
+  if (!gesucht) return;
+  const dat = blatt(T.sessions).getDataRange().getValues();
+  const weg = [];
+  for (let i = 1; i < dat.length; i++) {
+    if (String(dat[i][1]).trim().toLowerCase() === gesucht) {
+      weg.push(sitzungCacheSchluessel(dat[i][0]));
+    }
+  }
+  if (weg.length) CacheService.getScriptCache().removeAll(weg);
+}
+
 /** Gibt den Benutzer zurueck oder null. Einzige Quelle fuer die Identitaet. */
 function sitzungPruefen(token) {
   if (!token) return null;
+
+  const cache = CacheService.getScriptCache();
+  const gemerkt = cache.get(sitzungCacheSchluessel(token));
+  if (gemerkt) {
+    try { return JSON.parse(gemerkt); } catch (e) { /* beschaedigt, neu lesen */ }
+  }
 
   const sd = blatt(T.sessions).getDataRange().getValues();
   let email = '';
@@ -326,13 +371,15 @@ function sitzungPruefen(token) {
     if (String(bd[i][k.Email]).trim().toLowerCase() !== email) continue;
     // Deaktivierung wirkt sofort, auch auf laufende Sitzungen.
     if (String(bd[i][k.Aktiv]).toLowerCase() === 'false') return null;
-    return {
+    const u = {
       email: email,
       name: String(bd[i][k.Name] || ''),
       rolle: String(bd[i][k.Rolle] || ''),
       pwGeaendert: String(bd[i][k.PwGeaendert]).toLowerCase() === 'true',
       zeile: i + 1
     };
+    cache.put(sitzungCacheSchluessel(token), JSON.stringify(u), SITZUNG_CACHE_SEK);
+    return u;
   }
   return null;
 }
@@ -345,16 +392,22 @@ function passwortSetzen(d, u) {
   const bl  = blatt(T.benutzer);
   const dat = bl.getDataRange().getValues();
   const k   = spalten(dat[0]);
-  const i   = u.zeile - 1;
+
+  // Die Zeile hier suchen statt der gemerkten Nummer zu glauben: seit die
+  // Sitzung aus dem Cache kommen kann, ist «zeile» ein Wert von vorhin.
+  // Eine falsche Zeilennummer schriebe ein fremdes Passwort.
+  const i = zeileFinden(dat, k.Email, u.email, true);
+  if (i < 0) return { ok: false, error: 'nicht_gefunden' };
+  const zeile = i + 1;
 
   if (!hashPasst(alt, String(dat[i][k.Salt] || ''), dat[i][k.PassHash])) {
     return { ok: false, error: 'alt_falsch' };
   }
 
   const salt = zufall(16);
-  bl.getRange(u.zeile, k.Salt + 1).setValue(salt);
-  bl.getRange(u.zeile, k.PassHash + 1).setValue(hash(neu, salt));
-  bl.getRange(u.zeile, k.PwGeaendert + 1).setValue(true);
+  bl.getRange(zeile, k.Salt + 1).setValue(salt);
+  bl.getRange(zeile, k.PassHash + 1).setValue(hash(neu, salt));
+  bl.getRange(zeile, k.PwGeaendert + 1).setValue(true);
 
   // Ein Passwortwechsel meldet alle Geraete ab — auch ein verlorenes.
   sitzungenLoeschen(u.email);
@@ -362,6 +415,7 @@ function passwortSetzen(d, u) {
 }
 
 function sitzungenLoeschen(email) {
+  sitzungCacheLeeren(email);          // zuerst: danach sind die Token weg
   const bl  = blatt(T.sessions);
   const dat = bl.getDataRange().getValues();
   for (let i = dat.length - 1; i >= 1; i--) {
@@ -1107,11 +1161,16 @@ function adminAktion(d, u) {
       bl.getRange(zeile, k.Fehler + 1).setValue(0);
       bl.getRange(zeile, k.GesperrtBis + 1).setValue('');
       return { ok: true };
+    // Die Rolle steht in der gemerkten Sitzung. Ohne das Leeren haette der
+    // Betroffene bis zu einer Minute lang noch die alten Rechte — und bei
+    // «kein_admin» ist das genau die Minute, auf die es ankommt.
     case 'admin':
       bl.getRange(zeile, k.Rolle + 1).setValue('admin');
+      sitzungCacheLeeren(email);
       return { ok: true };
     case 'kein_admin':
       bl.getRange(zeile, k.Rolle + 1).setValue('');
+      sitzungCacheLeeren(email);
       return { ok: true };
     case 'passwort': {
       const pass = zufall(10);
@@ -1618,7 +1677,7 @@ function einrichtungPruefen() {
    ------------------------------------------------------------------ */
 
 /** Die Blaetter, die ein «start» liest. */
-const MESS_BLAETTER = [T.sessions, T.benutzer, T.we, T.kunden, T.lieferanten];
+const MESS_BLAETTER = [T.sessions, T.benutzer, T.we, T.pos, T.kunden, T.lieferanten];
 
 /**
  * Liest dieselben Blaetter auf beiden Wegen und stellt die Zeiten

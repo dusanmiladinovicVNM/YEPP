@@ -526,6 +526,32 @@ pogrešna strana. Ista zamka je u ovom projektu već jednom odradila svoje:
 pretpostavka da `openById` u jednom izvršavanju košta svaki put bila je
 netačna — platforma ga posle prvog puta servira iz sopstvenog keša.
 
+### Provera sesije se pamti minut
+
+Merenje na živoj tabeli (`geschwindigkeitMessen()`):
+
+```
+Tabelle oeffnen (nur eine Probe): 317 ms
+SpreadsheetApp, 5 Lesevorgaenge:  min 1073  Median 1631  max 1914
+Sheets batchGet, eine Anfrage:    min 161   Median 209   max 350
+```
+
+Dakle **jedno čitanje ≈ 330 ms**, a `doPost` u Ausführungen traje 2–5 s. Server
+jeste uzrok, nije put.
+
+Od pet čitanja, **dva su išla samo na to da se sazna ko šalje zahtev** —
+`Sessions` i `Benutzer`, na svakom pozivu, uvek sa istim odgovorom. Sada se
+provera pamti u `CacheService` **60 sekundi** (`SITZUNG_CACHE_SEK`).
+
+**Sve što aplikacija sama promeni briše zapis odmah** — odjava,
+deaktivacija, dodela i oduzimanje admin prava, nova lozinka. Zaostaje samo
+izmena rađena **rukom u tabeli**, i to najviše minut.
+
+Uz keš je jedna stvar morala da se popravi: `passwortSetzen` je verovao
+broju reda iz sesije. Otkad sesija može da dođe iz keša, taj broj je
+vrednost od malopre — pa se red sada traži po mejlu. Pogrešan broj bi
+upisao tuđu lozinku.
+
 ### Sledeći korak — i zašto još nije urađen
 
 Ono što **nije** dirano: `SpreadsheetApp` kao put do podataka. Ostaju dve
@@ -565,6 +591,37 @@ gleda u živu tabelu.
 
 Prepravka ide **samo ako oba izveštaja to opravdaju**: razlika preko pola
 sekunde i nula odstupanja.
+
+**Prvi je prošao ubedljivo** (1948 ms → 209 ms), **drugi nije**:
+`treueVergleichen()` je na živoj tabeli našao **30 razlika, sve datumi i
+vremena**. `batchGet` ih vraća kao tekst u formatu prikaza te kolone, a taj
+format nije isti svuda:
+
+```
+Sessions «GueltigBis»: Date 2026-10-10 19:11  →  "10/10/2026 19:11:27"
+Wareneingang «AngDat»: Date 2026-09-10 00:00  →  "2026-09-10"
+Wareneingang «AngZeit»: Date 1899-12-30 12:40 →  "12:40"
+```
+
+Pogledaj šta to zapravo znači: za `AngDat` i `AngZeit` je tekst koji
+`batchGet` vraća **već tačan** — bolji od `Date` koji `feldText()` mora da
+leči. Opasne su samo tri tačke u kodu koje datum **porede**, i sve tri su
+u `Sessions` i `Benutzer`:
+
+```js
+new Date(sd[i][2]) < new Date()                    // GueltigBis
+new Date(dat[i][k.GesperrtBis]) > new Date()       // dvaput
+```
+
+`"10/10/2026"` se parsira po američkom čitanju — radi, dok jednog dana ne
+proradi drugačije. Zato podela: **`Sessions` i `Benutzer` ostaju na
+`SpreadsheetApp`** (keš ih ionako čini retkim), a `Wareneingang`,
+`Positionen`, `Kunden` i `Lieferanten` idu na `batchGet`.
+
+Pre toga se mora zatvoriti rupa u samoj dijagnostici: **`Positionen` nije
+bio u `MESS_BLAETTER`**, pa kolona `MHD` — ona koja odlučuje šta stiže u
+Excel šablon — nikad nije ni upoređena. Sada jeste; `treueVergleichen()`
+treba pokrenuti ponovo.
 
 ---
 
