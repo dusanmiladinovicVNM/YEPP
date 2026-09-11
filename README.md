@@ -377,9 +377,28 @@ oko 250 KB. Otpremnica mora ostati čitljiva, pa je ivica veća nego što bi
 bila za običan račun. Bez tog koraka fotografija sa iPada je 4–8 MB,
 u base64 preko 10 MB, i pada i Apps Script i mobilna veza.
 
+**Slika se gleda kroz aplikaciju, ne kroz Drive.** U detalju stoji dugme
+**Foto ansehen**; server pročita datoteku i pošalje same bajtove, a browser
+sa Drive-om ne razgovara nikad.
+
+Ranije je tu stajao link. Link **browser** otvara — sa onim Google nalogom
+na kom je uređaj — pa je radnik na sopstvenom belegu dobijao *Zugriff
+verweigert*. Prava u ovoj aplikaciji nisu prava u Drive-u, a radnik tamo
+najčešće nema ni nalog.
+
+Radi zato što web-app stoji na **Ausführen als: Ich**: skripta čita datoteku
+pravima vlasnika. **ID datoteke uzima se iz reda u tabeli, nikad iz
+zahteva** — inače bi ovo bilo dugme za čitanje bilo koje datoteke do koje
+vlasnik dopire.
+
+Slika se pamti u memoriji za poslednjih pet pregledanih dokumenata; drugi
+dodir ne ide više na server. Ne u `localStorage` — tamo stoje lista i
+stammdaten, koje lieferschein od par stotina kilobajta ne sme da istisne.
+
 **Dozvole.** Podeli **korenski folder** sa nalogom računovodstva — pristup
 se nasleđuje na sve podfoldere, i to je jedina postavka koju treba dirati.
-Radnicima ne treba pristup Driveu; oni šalju kroz aplikaciju.
+**Radnicima ne treba pristup Driveu ni za slike** — folder sme da ostane
+potpuno zatvoren.
 
 ## Verwaltung
 
@@ -757,6 +776,8 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 14 | Avionski režim, pa Speichern | jasna poruka, bez tihog gubitka |
 | 15 | Ikona na home screenu, ponovno otvaranje | prijava se ne traži |
 | 16 | Fotografija otpremnice na slaboj vezi | dugme pokazuje napredak |
+| 16b | Nalog **bez** pristupa Driveu otvara *Foto ansehen* | slika se vidi |
+| 16c | Isti dokument drugi put | odmah, bez poziva servera |
 | 17 | Običan korisnik pošalje `admin_liste` ručno | odbijeno sa `keine Berechtigung` |
 | 18 | Admin pokuša da deaktivira sebe | odbijeno |
 | 19 | Zurückziehen tuđeg unosa bez admin prava | odbijeno |

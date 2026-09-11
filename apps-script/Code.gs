@@ -171,6 +171,7 @@ function ausfuehren(aktion, d, u) {
     case 'we_schritt':    return weSchritt(d, u);
     case 'we_liste':      return weListe(d, u);
     case 'we_detail':     return weDetail(d, u);
+    case 'we_foto':       return weFoto(d, u);
     case 'we_storno':     return weStorno(d, u);
     case 'we_senden':     return weSenden(d, u);
   }
@@ -854,6 +855,48 @@ function positionenLesen(weNr, vorab) {
   }
   aus.sort((a, b) => a.nr - b.nr);
   return aus;
+}
+
+/**
+ * Gibt das Lieferscheinfoto zurueck, statt auf Drive zu verlinken.
+ *
+ * Der Link tat es nicht: er wird vom BROWSER geholt, mit dem Google-Konto,
+ * an dem das Geraet gerade haengt. Rechte in dieser App sind keine Rechte
+ * in Drive, und ein Lagermitarbeiter hat dort gar nichts zu suchen — er
+ * sah «Zugriff verweigert» auf einem Beleg, der ihm gehoert.
+ *
+ * Die Web-App laeuft als «Ausfuehren als: Ich». Also liest das Skript die
+ * Datei mit den Rechten des Eigentuemers und reicht die Bytes weiter; der
+ * Browser spricht nie mit Drive. Damit kann der Ordner geschlossen bleiben.
+ *
+ * Die Datei-ID kommt AUS DER ZEILE, nie aus dem Aufruf. Sonst waere dies
+ * ein Leseknopf fuer jede Datei, an die der Eigentuemer herankommt.
+ */
+function weFoto(d, u) {
+  const dat = datenLesen([T.we])[T.we];
+  const k   = spalten(dat[0]);
+  const i   = zeileFinden(dat, k.WeNr, d.weNr);
+  if (i < 0) return { ok: false, error: 'nicht_gefunden' };
+  if (String(dat[i][k.Storniert]).toLowerCase() === 'true') {
+    return { ok: false, error: 'storniert' };
+  }
+
+  const id = driveId(String(dat[i][k.FotoUrl] || ''));
+  if (!id) return { ok: false, error: 'kein_foto' };
+
+  try {
+    const blob = DriveApp.getFileById(id).getBlob();
+    return {
+      ok: true,
+      bild: 'data:' + blob.getContentType() + ';base64,' +
+            Utilities.base64Encode(blob.getBytes())
+    };
+  } catch (e) {
+    // Datei geloescht oder verschoben. Das ist etwas anderes als «kein
+    // Foto erfasst», und der Unterschied gehoert auf den Schirm.
+    console.error('Foto nicht lesbar (' + id + '): ' + e);
+    return { ok: false, error: 'foto_unlesbar' };
+  }
 }
 
 /** Zuruecknehmen statt loeschen — die Zeile bleibt, nur markiert. */

@@ -805,12 +805,12 @@ console.log('\n19) Suche, GET, Foto, Versandvermerk');
   ctx.weSpeichern({ kunde: 'Mit Bild', positionen: POS,
                     foto: 'data:image/png;base64,QUJD' }, u);
   ok('PNG bekommt die Endung png',
-     String(ctx.__dateien[0]).endsWith('_Lieferschein.png'), String(ctx.__dateien[0]));
+     String(ctx.__dateien[0] && ctx.__dateien[0].name).endsWith('_Lieferschein.png'), String(ctx.__dateien[0] && ctx.__dateien[0].name));
   ctx.__dateien.length = 0;
   ctx.weSpeichern({ kunde: 'Mit Bild', positionen: POS,
                     foto: 'data:image/jpeg;base64,QUJD' }, u);
   ok('JPEG bleibt jpg',
-     String(ctx.__dateien[0]).endsWith('_Lieferschein.jpg'), String(ctx.__dateien[0]));
+     String(ctx.__dateien[0] && ctx.__dateien[0].name).endsWith('_Lieferschein.jpg'), String(ctx.__dateien[0] && ctx.__dateien[0].name));
 
   // Versandvermerk landet in der richtigen Zeile
   ctx.parameterSetzen('MailAn', 'lager@firma.ch');
@@ -1252,6 +1252,59 @@ console.log('\n24) Welches Blatt ueber welchen Weg gelesen wird');
                   weNr: 'WE-' + new Date().getFullYear() + '-0001', schritt: 'eingelagert' });
   ok('Quittieren liest die Zeile dort, wo es sie gleich aendert',
      ss.blaetter.Wareneingang.gelesen > 0, String(ss.blaetter.Wareneingang.gelesen));
+}
+
+console.log('\n25) Das Foto kommt vom Server, nicht aus Drive');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  ss.blaetter.Parameter.appendRow(['FotoOrdner', 'ordner-id', '']);
+
+  const bild = 'data:image/jpeg;base64,' + Buffer.from('bild-bytes').toString('base64');
+  const mitFoto = ctx.weSpeichern({ kunde: 'K', positionen: POS, foto: bild }, u).weNr;
+  const ohneFoto = ctx.weSpeichern({ kunde: 'K2', positionen: POS }, u).weNr;
+
+  const r = ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: mitFoto });
+  ok('das Bild kommt als Datenstrom zurueck',
+     r.ok === true && /^data:image\/jpeg;base64,/.test(String(r.bild)),
+     JSON.stringify(String(r.bild).slice(0, 40)));
+
+  // Der entscheidende Punkt: die Datei-ID kommt aus der ZEILE. Eine im
+  // Aufruf mitgeschickte aendert nichts — sonst waere das hier ein
+  // Leseknopf fuer jede Datei, an die der Eigentuemer herankommt.
+  const gefaelscht = ctx.verteilen({ action: 'we_foto', session: 'tokA',
+                                     weNr: mitFoto, fotoId: 'fremde-datei',
+                                     id: 'fremde-datei' });
+  ok('eine mitgeschickte Datei-ID aendert nichts',
+     JSON.stringify(gefaelscht) === JSON.stringify(r));
+
+  ok('ohne Foto sagt es das',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: ohneFoto })
+        .error === 'kein_foto');
+  ok('eine unbekannte Nummer auch',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: 'WE-1999-0001' })
+        .error === 'nicht_gefunden');
+
+  // Zurueckgezogen heisst zurueckgezogen, auch fuers Bild
+  ctx.verteilen({ action: 'we_storno', session: 'tokA', weNr: mitFoto });
+  ok('ein zurueckgezogener Beleg gibt sein Foto nicht her',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: mitFoto })
+        .error === 'storniert');
+
+  // Datei in Drive geloescht: das ist etwas anderes als «kein Foto»
+  const wb = ss.blaetter.Wareneingang;
+  const wk = ctx.spalten(wb.getDataRange().getValues()[0]);
+  const zeile = ctx.zeileFinden(wb.getDataRange().getValues(), wk.WeNr, ohneFoto);
+  wb.getRange(zeile + 1, wk.FotoUrl + 1)
+    .setValue('https://drive.google.com/file/d/gibtsnichtgibtsnichtgibtsnicht/view');
+  ok('eine verschwundene Datei ist nicht dasselbe wie kein Foto',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: ohneFoto })
+        .error === 'foto_unlesbar');
+
+  // Ohne Sitzung gar nichts
+  ok('ohne Sitzung kein Bild',
+     ctx.verteilen({ action: 'we_foto', session: 'nix', weNr: ohneFoto })
+        .error === 'session');
 }
 
 console.log('\n' + '='.repeat(46));

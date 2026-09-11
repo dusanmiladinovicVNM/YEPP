@@ -109,6 +109,16 @@ select{
 .pos-kopf .zahl{font-size:12px;color:var(--grau)}
 .kopf-rechts{display:flex;align-items:center;gap:10px}
 .klein[aria-pressed="true"]{border-color:var(--akzent);color:var(--akzent)}
+#bild-schau{
+  position:fixed;inset:0;z-index:60;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px;cursor:zoom-out;
+}
+/* display:flex oben schlaegt sonst das hidden-Attribut, und der Schauer
+   liegt unsichtbar ueber der ganzen App — angeklickt wird dann nichts mehr. */
+#bild-schau[hidden]{display:none}
+#bild-schau img{max-width:100%;max-height:calc(100% - 28px);object-fit:contain}
+.bild-hinweis{color:var(--grau);font-size:12px;padding:8px 0}
 .pos{
   border:1px solid var(--rand);border-radius:4px;
   padding:12px;margin-top:10px;background:rgba(255,255,255,.02);
@@ -513,6 +523,12 @@ select{
   </div>
 </section>
 
+<!-- ============ BILDSCHAU ============ -->
+<div id="bild-schau" hidden>
+  <img id="bild-schau-bild" alt="Lieferschein">
+  <div class="bild-hinweis">Zum Schliessen tippen</div>
+</div>
+
 <!-- ============ EINLAGERN ============ -->
 <section id="scr-regal" class="screen">
   <header class="kopf-liste">
@@ -715,7 +731,7 @@ function datumText(wert) {
  * ein zweites «Senden» schickte die Mail zweimal.
  */
 const WIEDERHOLBAR = ['start', 'stammdaten', 'we_liste', 'we_detail',
-                      'we_speichern', 'admin_liste', 'admin_parameter'];
+                      'we_foto', 'we_speichern', 'admin_liste', 'admin_parameter'];
 
 const warten = ms => new Promise(r => setTimeout(r, ms));
 
@@ -1624,12 +1640,19 @@ function zeichneDetail(kopf, pos) {
     zeile('Lieferant / Supplier', kopf.Lieferant) +
     zeile('Lagerfläche m2', kopf.LagerM2) +
     zeile('Bemerkung', kopf.Bemerkung) +
+    // KEIN Link nach Drive: den holt der Browser mit dem Google-Konto des
+    // Geraets, und in dieser App angemeldet zu sein heisst dort gar nichts.
+    // Das Bild kommt ueber «we_foto» vom Server, der es mit den Rechten des
+    // Eigentuemers liest.
     (kopf.FotoUrl
       ? '<div class="zeile"><span>Lieferschein</span><span>' +
-        '<a href="' + esc(kopf.FotoUrl) + '" target="_blank" rel="noopener"' +
-        ' style="color:var(--akzent)">Foto öffnen</a></span></div>'
+        '<button type="button" class="klein" id="dt-foto">Foto ansehen</button>' +
+        '</span></div>'
       : '') +
     zeile('Versandt', kopf.Gesendet);
+
+  // Der Knopf entsteht eben erst mit dem innerHTML darueber.
+  if ($('dt-foto')) $('dt-foto').addEventListener('click', fotoZeigen);
 
   const schritte = [
     { s: 'angenommen',  t: 'Angenommen / Accepted',
@@ -1679,6 +1702,64 @@ function zeichneDetail(kopf, pos) {
       (zusatz ? '<div class="b">' + zusatz + '</div>' : '') +
     '</div>';
   }).join('') || '<div class="leer">Keine Positionen.</div>';
+}
+
+/**
+ * Geholte Fotos, nur im Arbeitsspeicher.
+ *
+ * Nicht in den localStorage: ein Lieferschein ist ein paar hundert
+ * Kilobyte, und dort liegen die Liste und die Stammdaten, die keiner von
+ * ihnen verdraengen darf. Und begrenzt, weil eine Schicht viele Belege
+ * oeffnet — fuenf reichen, um zwischen zwei Dokumenten hin und her zu
+ * springen, ohne jedes Mal zu warten. Beim Abmelden ist ohnehin alles weg,
+ * denn die Seite wird dabei neu geladen.
+ */
+const FOTO_MERKEN = 5;
+const FOTOS = new Map();
+
+function fotoMerken(weNr, bild) {
+  FOTOS.delete(weNr);                 // ans Ende, nach zuletzt angesehen
+  FOTOS.set(weNr, bild);
+  while (FOTOS.size > FOTO_MERKEN) FOTOS.delete(FOTOS.keys().next().value);
+}
+
+async function fotoZeigen() {
+  if (!S.detail) return;
+  const weNr = S.detail.kopf.WeNr;
+
+  if (FOTOS.has(weNr)) { fotoMerken(weNr, FOTOS.get(weNr)); bildSchau(FOTOS.get(weNr)); return; }
+
+  const btn = $('dt-foto');
+  const alt = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Wird geholt …';
+  try {
+    const r = await post({ action: 'we_foto', session: S.session, weNr: weNr });
+    if (!antwortOk(r)) {
+      toast({
+        kein_foto:     'Zu diesem Wareneingang wurde kein Foto erfasst.',
+        foto_unlesbar: 'Das Foto ist in Drive nicht mehr auffindbar.',
+        storniert:     'Der Wareneingang wurde zurückgezogen.'
+      }[r.error] || abgelehntText(r), 'err');
+      return;
+    }
+    fotoMerken(weNr, r.bild);
+    bildSchau(r.bild);
+  } catch (e) {
+    toast(verbindungText(e), 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = alt;
+  }
+}
+
+function bildSchau(quelle) {
+  $('bild-schau-bild').src = quelle;
+  $('bild-schau').hidden = false;
+}
+
+function bildSchauZu() {
+  $('bild-schau').hidden = true;
+  // Die Quelle stehen lassen waere ein Bild im Speicher, das niemand sieht.
+  $('bild-schau-bild').removeAttribute('src');
 }
 
 function schrittKlick(schritt, btn) {
@@ -2022,6 +2103,11 @@ $('pw-kopieren').addEventListener('click', async () => {
     document.execCommand('copy');
     toast('Nachricht kopiert.', 'ok');
   }
+});
+
+$('bild-schau').addEventListener('click', bildSchauZu);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('bild-schau').hidden) bildSchauZu();
 });
 
 $('frage-nein').addEventListener('click', () => $('dlg-frage').classList.remove('zeigen'));
