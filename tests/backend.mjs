@@ -2,7 +2,8 @@
  * Prueft Code.gs gegen das Tabellen-Gerippe. Ziel sind die Stellen, an denen
  * Spalten- und Zeilenindizes verrutschen.
  */
-import { Sheet, neueTabelle, laden, mitBenutzer, felder, POS } from './gerippe.mjs';
+import { Sheet, neueTabelle, laden, mitBenutzer, sheetsAttrappe, felder, POS }
+  from './gerippe.mjs';
 
 let pass = 0, fail = 0;
 const ok = (n, c, extra) => {
@@ -1155,6 +1156,102 @@ console.log('\n22) Ein gemerkter Benutzer schreibt nicht in die falsche Zeile');
      JSON.stringify(b.daten[2][kk.Email]));
   ok('Bobs Zeile bleibt unberuehrt',
      String(b.daten[1][kk.PassHash] || '') === '', JSON.stringify(b.daten[1][kk.PassHash]));
+}
+
+console.log('\n23) Beide Lesewege liefern dasselbe');
+{
+  // Der eine Test, an dem diese Umstellung haengt. Nicht «ist batchGet
+  // schneller» — das ist gemessen —, sondern: kommt hinten dasselbe
+  // heraus, obwohl vorne etwas anderes hereinkommt. Die Attrappe gibt
+  // Datumswerte als Text zurueck, wie der echte Dienst; die ROHEN Werte
+  // unterscheiden sich also wirklich.
+  const bauen = () => {
+    const ss = neueTabelle(), ctx = laden(ss);
+    const u = mitBenutzer(ctx, ss);
+    ss.blaetter.Kunden.appendRow(['Kunde AG', true, 10]);
+    ss.blaetter.Kunden.appendRow(['Weg AG', false, 20]);
+    ss.blaetter.Lieferanten.appendRow(['Lieferant GmbH', true, 10]);
+    ctx.weSpeichern({ kunde: 'Kunde AG', lieferant: 'Lieferant GmbH',
+                      lagerM2: 12.5, positionen: POS,
+                      schritte: ['angenommen', 'gezaehlt'] }, u);
+    ctx.weSpeichern({ kunde: 'Zweiter AG', positionen: POS,
+                      schritte: [] }, u);
+    return { ss: ss, ctx: ctx };
+  };
+
+  const ernten = ctx => JSON.stringify({
+    liste:  ctx.verteilen({ action: 'we_liste',  session: 'tokA' }),
+    detail: ctx.verteilen({ action: 'we_detail', session: 'tokA',
+                            weNr: ctx.naechsteNummer().replace(/(\d+)$/,
+                              m => String(Number(m) - 1).padStart(4, '0')) }),
+    start:  ctx.verteilen({ action: 'start', session: 'tokA' }),
+    stamm:  ctx.verteilen({ action: 'stammdaten', session: 'tokA' }),
+    csv:    ctx.csvExport({})
+  });
+
+  const ohne = bauen();
+  const alt = ernten(ohne.ctx);
+
+  const mit = bauen();
+  mit.ctx.Sheets = sheetsAttrappe(mit.ss);
+  const neu = ernten(mit.ctx);
+
+  ok('Liste, Detail, Start, Stammdaten und CSV sind Zeichen fuer Zeichen gleich',
+     alt === neu,
+     alt === neu ? '' : 'ohne:\n' + alt.slice(0, 400) + '\n\nmit:\n' + neu.slice(0, 400));
+
+  // Und die rohen Werte unterscheiden sich wirklich — sonst hiesse der
+  // Vergleich oben nichts.
+  const roh = mit.ctx.Sheets.Spreadsheets.Values.batchGet('x',
+    { ranges: ["'Wareneingang'"] }).valueRanges[0].values;
+  const wk = mit.ctx.spalten(roh[0]);
+  ok('die Attrappe gibt Datum wirklich als Text zurueck',
+     typeof roh[1][wk.AngDat] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(roh[1][wk.AngDat]),
+     JSON.stringify(roh[1][wk.AngDat]));
+  ok('und die Uhrzeit als HH:mm',
+     /^\d{2}:\d{2}$/.test(String(roh[1][wk.AngZeit])), JSON.stringify(roh[1][wk.AngZeit]));
+
+  // Verdrehte Reihenfolge und kurze Zeilen aendern nichts
+  const dreh = bauen();
+  dreh.ctx.Sheets = sheetsAttrappe(dreh.ss, { verdrehen: true, kuerzen: true });
+  ok('auch bei verdrehten Bereichen und kurzen Zeilen', ernten(dreh.ctx) === alt);
+}
+
+console.log('\n24) Welches Blatt ueber welchen Weg gelesen wird');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  ctx.Sheets = sheetsAttrappe(ss);
+  ctx.weSpeichern({ kunde: 'K', positionen: POS }, ctx.sitzungPruefen('tokA'));
+
+  const null_ = () => Object.keys(ss.blaetter).forEach(n => { ss.blaetter[n].gelesen = 0; });
+
+  // Warmer Cache: die Sitzung kostet nichts mehr
+  ctx.verteilen({ action: 'start', session: 'tokA' });
+  null_();
+  ctx.verteilen({ action: 'start', session: 'tokA' });
+  ok('«start» liest kein einziges Blatt mehr ueber SpreadsheetApp',
+     Object.keys(ss.blaetter).every(n => ss.blaetter[n].gelesen === 0),
+     Object.keys(ss.blaetter).map(n => n + '=' + ss.blaetter[n].gelesen).join(' '));
+
+  // Kalter Cache: Sessions und Benutzer bleiben bewusst beim alten Weg,
+  // weil an ihnen die Datumsvergleiche haengen.
+  ctx.__cache.leeren();
+  null_();
+  ctx.verteilen({ action: 'we_detail', session: 'tokA', weNr: 'WE-' + new Date().getFullYear() + '-0001' });
+  ok('Sessions und Benutzer weiter ueber SpreadsheetApp',
+     ss.blaetter.Sessions.gelesen === 1 && ss.blaetter.Benutzer.gelesen === 1,
+     ss.blaetter.Sessions.gelesen + '/' + ss.blaetter.Benutzer.gelesen);
+  ok('Wareneingang und Positionen nicht mehr',
+     ss.blaetter.Wareneingang.gelesen === 0 && ss.blaetter.Positionen.gelesen === 0,
+     ss.blaetter.Wareneingang.gelesen + '/' + ss.blaetter.Positionen.gelesen);
+
+  // Schreibende Wege lesen weiter dort, wo sie gleich schreiben
+  null_();
+  ctx.verteilen({ action: 'we_schritt', session: 'tokA',
+                  weNr: 'WE-' + new Date().getFullYear() + '-0001', schritt: 'eingelagert' });
+  ok('Quittieren liest die Zeile dort, wo es sie gleich aendert',
+     ss.blaetter.Wareneingang.gelesen > 0, String(ss.blaetter.Wareneingang.gelesen));
 }
 
 console.log('\n' + '='.repeat(46));

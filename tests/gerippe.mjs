@@ -273,6 +273,68 @@ function mitBenutzer(ctx, ss) {
   return ctx.sitzungPruefen('tokA');
 }
 
+/**
+ * Der erweiterte Sheets-Dienst, so wie er sich an der lebenden Tabelle
+ * verhalten hat — und das ist der Punkt: eine Attrappe, die einfach
+ * getValues() durchreicht, wuerde die eine Frage, um die es geht, gar
+ * nicht stellen.
+ *
+ * `batchGet` gibt Datum und Uhrzeit als TEXT im Anzeigeformat der Spalte
+ * zurueck, nicht als Date. Am 11.09.2026 an der echten Tabelle gemessen:
+ *
+ *   «AngDat»      Date 2026-09-10 00:00   →  "2026-09-10"
+ *   «AngZeit»     Date 1899-12-30 12:40   →  "12:40"
+ *   «Zeitstempel» Date 2026-09-09 17:03   →  "9/9/2026 17:03:05"
+ *
+ * Dazu die beiden anderen Eigenheiten: leere Endzellen fallen weg, und
+ * die Bereiche kommen in der Reihenfolge zurueck, in der gefragt wurde —
+ * worauf sich niemand verlassen soll.
+ *
+ * opt.verdrehen  Bereiche in umgekehrter Reihenfolge zurueckgeben
+ * opt.kuerzen    leere Endzellen abschneiden, wie es der Dienst tut
+ * opt.roh        Datumswerte NICHT zu Text machen (fuer Gegenproben)
+ */
+function sheetsAttrappe(ss, opt) {
+  opt = opt || {};
+  const zwei = n => String(n).padStart(2, '0');
+  const alsText = (name, w) => {
+    if (opt.roh || !(w instanceof Date)) return w;
+    if (/Zeit$/.test(name)) return zwei(w.getHours()) + ':' + zwei(w.getMinutes());
+    if (/Dat$/.test(name) || name === 'MHD') {
+      return w.getFullYear() + '-' + zwei(w.getMonth() + 1) + '-' + zwei(w.getDate());
+    }
+    return (w.getMonth() + 1) + '/' + w.getDate() + '/' + w.getFullYear() + ' ' +
+           zwei(w.getHours()) + ':' + zwei(w.getMinutes()) + ':' + zwei(w.getSeconds());
+  };
+
+  return { Spreadsheets: { Values: { batchGet: (id, o) => {
+    const namen = o.ranges.map(r => r.replace(/^'|'$/g, '').replace(/''/g, "'"));
+    const bereiche = namen.map(n => {
+      // Bewusst an getDataRange() vorbei: der erweiterte Dienst geht nicht
+      // ueber SpreadsheetApp, und der Lesezaehler des Blattes darf davon
+      // nichts mitbekommen — sonst liesse sich nicht mehr pruefen, welcher
+      // Weg wirklich benutzt wurde.
+      const sh = ss.blaetter[n];
+      const roh = sh.daten.map(z => {
+        const voll = [];
+        for (let j = 0; j < z.length; j++) voll.push(z[j] === undefined ? '' : z[j]);
+        return voll;
+      });
+      const kopf = roh.length ? roh[0].map(x => String(x || '')) : [];
+      const werte = roh.map((z, i) =>
+        i === 0 ? z.slice() : z.map((w, j) => alsText(kopf[j], w)));
+      if (opt.kuerzen) werte.forEach((z, i) => {
+        let n2 = z.length;
+        while (n2 > 0 && (z[n2 - 1] === '' || z[n2 - 1] === null)) n2--;
+        werte[i] = z.slice(0, n2);
+      });
+      return { range: "'" + n + "'!A1:Z", values: werte };
+    });
+    if (opt.verdrehen) bereiche.reverse();
+    return { valueRanges: bereiche };
+  } } } };
+}
+
 /** Zerlegt eine CSV-Zeile; naives split(',') bricht bei gequoteten Feldern. */
 function felder(zeile) {
   const aus = [];
@@ -298,4 +360,5 @@ const POS = [
 ];
 
 
-export { Range, Sheet, Spreadsheet, neueTabelle, laden, mitBenutzer, felder, POS };
+export { Range, Sheet, Spreadsheet, neueTabelle, laden, mitBenutzer,
+         sheetsAttrappe, felder, POS };

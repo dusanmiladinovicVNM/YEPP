@@ -121,6 +121,10 @@ koje nije na listi, jer novi dobavljač ne sme da čeka na admina.
    | `PWA_URL` | adresa PWA, ide u pristupne mejlove |
    | `TOKEN_READ` | štiti CSV izlaz — ili pokreni `tokenErzeugen()` |
 
+   Zatim u editoru levo **Services `+` → Google Sheets API** (identifier
+   `Sheets`). Bez njega aplikacija radi, samo sporije — čitanje tada ide
+   preko `SpreadsheetApp`. Vidi **Brzina**.
+
 3. Pokreni **`setupAnlegen`** jednom — pravi listove, zaglavlja i tri
    Drive foldera pored tabele
 4. **Bereitstellen → Neue Bereitstellung → Web-App**
@@ -618,10 +622,52 @@ proradi drugačije. Zato podela: **`Sessions` i `Benutzer` ostaju na
 `SpreadsheetApp`** (keš ih ionako čini retkim), a `Wareneingang`,
 `Positionen`, `Kunden` i `Lieferanten` idu na `batchGet`.
 
-Pre toga se mora zatvoriti rupa u samoj dijagnostici: **`Positionen` nije
-bio u `MESS_BLAETTER`**, pa kolona `MHD` — ona koja odlučuje šta stiže u
-Excel šablon — nikad nije ni upoređena. Sada jeste; `treueVergleichen()`
-treba pokrenuti ponovo.
+Rupa u samoj dijagnostici je zatvorena: `Positionen` nije bio u
+`MESS_BLAETTER`, pa kolona `MHD` — ona koja odlučuje šta stiže u Excel
+šablon — nikad nije ni upoređena. Ponovljeno merenje: **280 ćelija umesto
+199, i dalje istih 30 razlika.** `Positionen` nije doneo nijednu; `MHD` je
+čist. Podela je urađena.
+
+### Kako je podeljeno
+
+| List | Put | Zašto |
+|---|---|---|
+| `Sessions`, `Benutzer` | `SpreadsheetApp` | tu su sva tri poređenja datuma; keš ih ionako čini retkim |
+| `Wareneingang`, `Positionen`, `Kunden`, `Lieferanten` | `batchGet` | sve odatle izlazi kao tekst kroz `feldText()` |
+| bilo šta pre upisa | `SpreadsheetApp` | ko traži red da bi ga izmenio, čita ga iz istog izvora u koji piše |
+
+Bez uključenog servisa sve pada nazad na `SpreadsheetApp` — sporije i
+tačno, umesto aplikacije koja ne startuje zbog jednog podešavanja.
+
+**Test koji nosi odluku nije brzina nego jednakost:** isti pozivi se voze
+oba puta i rezultat mora biti **znak za znak isti**, iako sirove vrednosti
+nisu (`Date` naspram `"2026-09-10"`). Attrapa u testu namerno vraća datume
+kao tekst, tačno onako kako ih vraća pravi servis — inače bi taj test
+prolazio bez ičega da dokaže.
+
+Jedna stvar je pri tome morala da se ispravi. `Zeitstempel` se upisivao kao
+`Date`, pa mu je izgled zavisio od formata prikaza kolone — a time i od
+toga kojim putem se čita:
+
+```
+SpreadsheetApp  →  "2026-09-11 08:41"
+batchGet        →  "9/11/2026 08:41:10"
+```
+
+Sada se upisuje kao tekst, i kolona je u `setupAnlegen` tekstualna, kao i
+sve ostale vremenske. Isto i `Gesendet`: upisivao se kao tekst, ali ga je
+Sheets bez tog formata vraćao natrag u datum.
+
+**Zaostatak, pošteno rečeno:** redovi upisani pre ove izmene i dalje nose
+`Date` u `Zeitstempel`, i preko `batchGet` se čitaju kao `9/11/2026 …`. To
+polje se nigde ne prikazuje, nije u CSV-u i nije u Excelu — ali nije
+identično. `setupAnlegen` pokrenut ponovo postavlja format; već upisane
+vrednosti time se ne menjaju.
+
+Usput popravljeno: `&tage=` je poredio `String(AngDat)` sa `yyyy-MM-dd`.
+Gde je `AngDat` ostao datum, to je poredilo `"Thu Sep 10 2026 …"` i ništa
+nije odsecalo. Sada ide kroz `feldText()`, pa oba slučaja stižu kao
+`yyyy-MM-dd`.
 
 ---
 
