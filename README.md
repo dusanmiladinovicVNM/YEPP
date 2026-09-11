@@ -270,10 +270,12 @@ Eingelagert**. Čekira se ono što je onaj ko unosi **sam uradio**; podrazumevan
 je čekiran samo `Angenommen`, jer u najčešćem slučaju roba se prima i odmah
 unosi. Ko samo prekucava tuđi papir, skida sve tri.
 
-Tekst iznad kućica **persira ili ne** — od ove verzije aplikacija radnika
-oslovljava sa *du*: „Nur ankreuzen, was **du** selbst erledigt hast." Tri
-provere u `pwa.mjs` drže te rečenice, da pri sledećem preformulisanju ne
-skliznu nazad.
+**Nigde se ne persira.** Aplikacija, pristupni mejl i `Wareneingang -
+Kurzanleitung.md` — svuda *du*. Četiri provere u `backend.mjs` skeniraju ta
+tri teksta i padaju čim se `Sie`, `Ihr` ili `Ihnen` vrati; peta pokazuje da
+skener to uopšte ume da nađe. U klijentu se prvo uklanjaju komentari, jer u
+nemačkom „Sie" u opisnom tekstu znači i prosto „one/oni" — pa bi provera
+pucala na objašnjenju umesto na kopiji.
 
 **Ime se nikad ne bira** — dolazi iz sesije, a datum i vreme sa servera.
 Kućica kaže samo *koji red* se potpisuje, ne *ko* ga potpisuje.

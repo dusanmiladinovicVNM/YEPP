@@ -2,6 +2,7 @@
  * Prueft Code.gs gegen das Tabellen-Gerippe. Ziel sind die Stellen, an denen
  * Spalten- und Zeilenindizes verrutschen.
  */
+import fs from 'node:fs';
 import { Sheet, neueTabelle, laden, mitBenutzer, sheetsAttrappe, felder, POS }
   from './gerippe.mjs';
 
@@ -1381,6 +1382,36 @@ console.log('\n27) Eine Tabelle ohne die neue Spalte bricht nicht');
      ctx.verteilen({ action: 'we_schritt', session: 'tokA', weNr: weNr,
                      schritt: 'eingelagert', regalplaetze: ['A-1'],
                      bilder: ['data:image/jpeg;base64,eA=='] }).ok === true);
+}
+
+console.log('\n28) Geduzt wird ueberall');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  // «Sie», «Ihr», «Ihnen» in ihrer hoeflichen Bedeutung. Im Fliesstext von
+  // Kommentaren heisst «Sie» auch mal schlicht «diese da» — geprueft wird
+  // deshalb nur, was ein Benutzer wirklich zu lesen bekommt.
+  const hoeflich = /\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b/;
+
+  const mail = ctx.zugangText('Eva', 'Pass1234');
+  ok('die Zugangsmail duzt', !hoeflich.test(mail),
+     (mail.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0]);
+
+  const anleitung = fs.readFileSync('Wareneingang - Kurzanleitung.md', 'utf8');
+  ok('die Kurzanleitung duzt', !hoeflich.test(anleitung),
+     (anleitung.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0]);
+
+  // Im Client Kommentare weg, sonst schlaegt es dort an, wo erklaert wird,
+  // warum etwas so heisst — und man muesste zwischen Erklaerung und
+  // Pruefung waehlen.
+  const client = fs.readFileSync('index.html', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n').map(z => z.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+  ok('die App duzt', !hoeflich.test(client),
+     (client.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0].trim());
+
+  ok('und die Pruefung wuerde ein «Sie» finden',
+     hoeflich.test(client + '\nBitte melden Sie sich an.'));
 }
 
 console.log('\n' + '='.repeat(46));

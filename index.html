@@ -914,7 +914,7 @@ function abgelehntText(r, was) {
 function sessionWeg() {
   localStorage.clear();
   S.session = '';
-  toast('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.', 'err');
+  toast('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.', 'err');
   zeigeScreen('scr-login');
 }
 
@@ -963,7 +963,7 @@ async function anmelden() {
       m.textContent = {
         login:    'E-Mail oder Passwort ist falsch.',
         gesperrt: 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.',
-        inaktiv:  'Dieser Zugang ist deaktiviert. Bitte melden Sie sich bei uns.'
+        inaktiv:  'Dieser Zugang ist deaktiviert. Bitte melde dich bei uns.'
       }[r.error] || 'Anmeldung nicht möglich.';
       m.classList.add('zeigen');
     }
@@ -992,7 +992,7 @@ function zeigePasswort(pflicht) {
   S.pwPflicht = !!pflicht;
   $('pw-titel').textContent = pflicht ? 'Eigenes Passwort setzen' : 'Passwort ändern';
   $('pw-sub').textContent = pflicht
-    ? 'Das zugestellte Passwort stand im Mail. Bitte ersetzen Sie es jetzt.'
+    ? 'Das zugestellte Passwort stand im Mail. Bitte ersetze es jetzt.'
     : 'Alle angemeldeten Geräte werden dabei abgemeldet.';
   $('pw-alt-feld').hidden = pflicht && !!S.altPass;
   $('pw-zurueck').hidden  = pflicht;
