@@ -1342,6 +1342,13 @@ await kt.waitForSelector('#scr-senden.aktiv');
 ok('der Sendedialog ist mit der Vorgabe gefuellt',
    (await kt.inputValue('#sd-an')) === 'eva@firma.ch',
    await kt.inputValue('#sd-an'));
+// Die Vertretung wurde in DIESER Sitzung in der Verwaltung gesetzt. Ohne
+// dass die Aenderung dort auch S.empfaenger nachfuehrt, stuende hier leer
+// und der Dialog behauptete, es sei nichts hinterlegt — genau der Fall aus
+// dem Betrieb, nur eine Etage weiter.
+ok('auch die eben gesetzte Vertretung steht da, ohne Neuladen',
+   (await kt.inputValue('#sd-kopie')) === 'urs@firma.ch',
+   await kt.inputValue('#sd-kopie'));
 ok('und nennt, woher sie kommt',
    (await kt.textContent('#sd-hinweis')).includes('Kunde AG'),
    await kt.textContent('#sd-hinweis'));

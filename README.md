@@ -482,6 +482,15 @@ su podrazumevani primaoci pri slanju — glavni u `An`, zamena u `Kopie`.
 kontakta iz padajuće liste ili da prosto upiše adresu. Šta stoji u tom
 ekranu, to i ide.
 
+**`start` i `stammdaten` grade odgovor iz istog izvora** (`stammdatenAus`).
+Ranije su bila dva mesta — i kad su stigli kontakti, dobilo ih je samo
+`stammdaten`, a aplikacija zove `start`. U ekranu za slanje je tada pisalo
+„nichts hinterlegt" iako je u tabeli stajalo. Provera sada poredi **svako
+polje** jednog odgovora sa drugim, ne samo ona kojih se setim.
+
+Izmena u admin oblasti deluje **odmah**, bez osvežavanja: svaki odgovor
+vraća nov spisak kupaca, pa se iz njega osvežava i vrednost za slanje.
+
 Redosled kojim server bira primaoca:
 
 | | |

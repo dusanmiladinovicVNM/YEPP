@@ -1427,9 +1427,7 @@ function startUebernehmen(r) {
   if (r.kunden || r.lieferanten) {
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
-    localStorage.setItem('stammdaten', JSON.stringify({
-      kunden: S.kunden, lieferanten: S.lieferanten,
-      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+    stammdatenMerken();
     fuelleStammdaten();
   }
   altVerbergen('st-alt');
@@ -1450,9 +1448,7 @@ async function startEinzeln(cache) {
     if (!antwortOk(r)) return;
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
-    localStorage.setItem('stammdaten', JSON.stringify({
-      kunden: S.kunden, lieferanten: S.lieferanten,
-      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+    stammdatenMerken();
     fuelleStammdaten();
   } catch (e) {
     if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
@@ -1836,7 +1832,25 @@ function fotoWeg() {
  * Zwei Listen, eine Antwort. Jede Aenderung gibt den neuen Stand gleich
  * zurueck, damit der Schirm nicht raet, was daraus geworden ist.
  */
+function stammdatenMerken() {
+  try {
+    localStorage.setItem('stammdaten', JSON.stringify({
+      kunden: S.kunden, lieferanten: S.lieferanten,
+      kontakte: S.kontakte, empfaenger: S.empfaenger }));
+  } catch (e) { /* voller Speicher — der naechste «start» bringt es wieder */ }
+}
+
 function zeichneStamm(r) {
+  // Was hier geaendert wurde, gilt sofort — auch im Sendedialog. Ohne das
+  // muesste man die Seite neu laden, damit «start» die neuen Adressen
+  // bringt, und bis dahin behauptete der Dialog, es sei nichts hinterlegt.
+  if (r.kunden) {
+    const vor = {};
+    r.kunden.forEach(k => {
+      if (k.haupt || k.vertretung) vor[k.name] = { an: k.haupt, kopie: k.vertretung };
+    });
+    S.empfaenger = vor;
+  }
   if (r.kontakte) {
     S.kontakte = r.kontakte.filter(k => k.aktiv).map(k => ({ name: k.name, email: k.email }));
     fuelleStammdaten();
@@ -1879,6 +1893,7 @@ function zeichneStamm(r) {
           '</div>').join('')
       : '<div class="leer">Noch keine Kunden.</div>';
   }
+  stammdatenMerken();
 }
 
 async function stammAktion(daten, meldungsId) {
