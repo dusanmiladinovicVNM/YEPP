@@ -216,10 +216,26 @@ function laden(ss) {
           .replace('mm', p(d.getMinutes()));
       }
     },
+    // Der Cache von Apps Script, so weit der Code ihn benutzt. Ablaufen
+    // laesst er sich hier von Hand (__cache.leeren()) — der Ablauf nach
+    // einer Minute ist sonst nicht pruefbar, und genau daran haengt, ob
+    // eine Aenderung in der Tabelle jemals ankommt.
+    CacheService: { getScriptCache: () => ctx.__cache },
     ContentService: {
       MimeType: { JSON: 'json', CSV: 'csv' },
       createTextOutput: t => ({ setMimeType: () => t, t })
     },
+    __cache: (() => {
+      const m = new Map();
+      return {
+        get: k => (m.has(k) ? m.get(k) : null),
+        put: (k, v) => { m.set(k, v); },
+        remove: k => { m.delete(k); },
+        removeAll: ks => { (ks || []).forEach(k => m.delete(k)); },
+        leeren: () => m.clear(),
+        anzahl: () => m.size
+      };
+    })(),
     __mails: [],
     __sperren: [],
     __eigenschaften: eigenschaften,
