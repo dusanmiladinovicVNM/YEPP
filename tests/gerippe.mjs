@@ -104,7 +104,7 @@ function neueTabelle() {
     'EinNam', 'EinDat', 'EinZeit', 'LagerM2', 'Bemerkung',
     'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet', 'Vorgang']);
   B('Positionen', ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
-    'Regalplatz', 'Bemerkung', 'Bestehend']);
+    'Regalplatz', 'Bemerkung', 'Bestehend', 'FotoUrl']);
   B('Kunden', ['Name', 'Aktiv', 'Sortierung']);
   B('Lieferanten', ['Name', 'Aktiv', 'Sortierung']);
   B('Benutzer', ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',

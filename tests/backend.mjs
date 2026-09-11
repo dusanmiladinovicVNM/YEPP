@@ -2,6 +2,7 @@
  * Prueft Code.gs gegen das Tabellen-Gerippe. Ziel sind die Stellen, an denen
  * Spalten- und Zeilenindizes verrutschen.
  */
+import fs from 'node:fs';
 import { Sheet, neueTabelle, laden, mitBenutzer, sheetsAttrappe, felder, POS }
   from './gerippe.mjs';
 
@@ -1305,6 +1306,112 @@ console.log('\n25) Das Foto kommt vom Server, nicht aus Drive');
   ok('ohne Sitzung kein Bild',
      ctx.verteilen({ action: 'we_foto', session: 'nix', weNr: ohneFoto })
         .error === 'session');
+}
+
+console.log('\n26) Ein Foto je Position');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  ss.blaetter.Parameter.appendRow(['FotoOrdner', 'ordner-id', '']);
+  const bild = n => 'data:image/jpeg;base64,' + Buffer.from('bild' + n).toString('base64');
+
+  const weNr = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Schrauben M6', anzahl: 1, bild: bild(1) },
+    { artikel: 'Kartonage',    anzahl: 2 }
+  ] }, u).weNr;
+
+  // Der Dateiname ist die Artikelbezeichnung, so verlangt
+  ok('die Datei heisst wie der Artikel',
+     ctx.__dateien.some(x => x && x.name === 'Schrauben M6.jpg'),
+     ctx.__dateien.map(x => x && x.name).join(', '));
+
+  const pos = ctx.positionenLesen(weNr);
+  ok('die Position meldet, dass ein Foto da ist', pos[0].foto === true);
+  ok('die ohne meldet es nicht', pos[1].foto === false);
+  ok('die Adresse verlaesst den Server nicht',
+     JSON.stringify(pos).indexOf('drive.google.com') < 0, JSON.stringify(pos[0]));
+
+  const r = ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: weNr, nr: 1 });
+  ok('das Foto der Position kommt zurueck',
+     r.ok === true && /^data:image\/jpeg;base64,/.test(String(r.bild)));
+  ok('eine Position ohne Foto sagt es',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: weNr, nr: 2 })
+        .error === 'kein_foto');
+
+  // Ohne «nr» weiterhin der Lieferschein, nicht die erste Position
+  ok('ohne nr bleibt es der Lieferschein',
+     ctx.verteilen({ action: 'we_foto', session: 'tokA', weNr: weNr })
+        .error === 'kein_foto');
+
+  // Beim Einlagern nachgetragen — und Vorhandenes nicht ueberschrieben
+  ctx.verteilen({ action: 'we_schritt', session: 'tokA', weNr: weNr,
+                  schritt: 'eingelagert', regalplaetze: ['A-1', 'B-2'],
+                  bilder: [bild(9), bild(2)] });
+  const nachher = ctx.positionenLesen(weNr);
+  ok('der Regalplatz ist da', nachher[0].regalplatz === 'A-1');
+  ok('die Position ohne Foto hat jetzt eines', nachher[1].foto === true);
+  ok('und sie heisst wie ihr Artikel',
+     ctx.__dateien.some(x => x && x.name === 'Kartonage.jpg'),
+     ctx.__dateien.map(x => x && x.name).join(', '));
+
+  const nachEinlagern = ctx.verteilen({ action: 'we_foto', session: 'tokA',
+                                        weNr: weNr, nr: 1 });
+  ok('das zuerst erfasste Foto wurde nicht ersetzt',
+     nachEinlagern.bild === r.bild,
+     JSON.stringify(String(nachEinlagern.bild).slice(-12)) + ' vs ' +
+     JSON.stringify(String(r.bild).slice(-12)));
+}
+
+console.log('\n27) Eine Tabelle ohne die neue Spalte bricht nicht');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  // Wie eine Installation, die setupAnlegen noch nicht erneut gelaufen ist
+  const bl = ss.blaetter.Positionen;
+  bl.daten[0] = bl.daten[0].filter(n => n !== 'FotoUrl');
+  const u = mitBenutzer(ctx, ss);
+  ss.blaetter.Parameter.appendRow(['FotoOrdner', 'ordner-id', '']);
+
+  const weNr = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Schrauben M6', anzahl: 1,
+      bild: 'data:image/jpeg;base64,' + Buffer.from('x').toString('base64') }
+  ] }, u).weNr;
+  ok('gespeichert wird trotzdem', !!weNr);
+  ok('und die Position meldet einfach kein Foto',
+     ctx.positionenLesen(weNr)[0].foto === false);
+  ok('das Einlagern laeuft auch durch',
+     ctx.verteilen({ action: 'we_schritt', session: 'tokA', weNr: weNr,
+                     schritt: 'eingelagert', regalplaetze: ['A-1'],
+                     bilder: ['data:image/jpeg;base64,eA=='] }).ok === true);
+}
+
+console.log('\n28) Geduzt wird ueberall');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  // «Sie», «Ihr», «Ihnen» in ihrer hoeflichen Bedeutung. Im Fliesstext von
+  // Kommentaren heisst «Sie» auch mal schlicht «diese da» — geprueft wird
+  // deshalb nur, was ein Benutzer wirklich zu lesen bekommt.
+  const hoeflich = /\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b/;
+
+  const mail = ctx.zugangText('Eva', 'Pass1234');
+  ok('die Zugangsmail duzt', !hoeflich.test(mail),
+     (mail.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0]);
+
+  const anleitung = fs.readFileSync('Wareneingang - Kurzanleitung.md', 'utf8');
+  ok('die Kurzanleitung duzt', !hoeflich.test(anleitung),
+     (anleitung.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0]);
+
+  // Im Client Kommentare weg, sonst schlaegt es dort an, wo erklaert wird,
+  // warum etwas so heisst — und man muesste zwischen Erklaerung und
+  // Pruefung waehlen.
+  const client = fs.readFileSync('index.html', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n').map(z => z.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+  ok('die App duzt', !hoeflich.test(client),
+     (client.match(/.*(\bSie\b|\bIhre?[nmrs]?\b|\bIhnen\b).*/) || [''])[0].trim());
+
+  ok('und die Pruefung wuerde ein «Sie» finden',
+     hoeflich.test(client + '\nBitte melden Sie sich an.'));
 }
 
 console.log('\n' + '='.repeat(46));
