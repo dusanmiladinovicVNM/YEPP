@@ -118,7 +118,10 @@ const attrappe = () => {
       }
       case 'we_detail':
         return A({ ok: true, positionen: DB.positionen, kopf: {
-          WeNr: 'WE-2026-0001', Kunde: DB.kopf.kunde, Lieferant: DB.kopf.lieferant,
+          // Das angefragte Dokument, nicht immer dasselbe: sonst faellt
+          // nie auf, wenn der Schirm ein anderes zeigt, als er geladen hat.
+          WeNr: d.weNr || 'WE-2026-0001',
+          Kunde: DB.kopf.kunde, Lieferant: DB.kopf.lieferant,
           LagerM2: String(DB.kopf.lagerM2), Bemerkung: DB.kopf.bemerkung,
           AngNam: DB.ang || '', AngDat: DB.ang ? '2026-09-09' : '',
           AngZeit: DB.ang ? '08:30' : '',
@@ -763,6 +766,140 @@ ok('der vergebliche Aufruf wird nicht wiederholt',
      'we_liste,stammdaten',
    (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
 await alt.close();
+
+// --- 19) Nichts wegwerfen, was schon richtig dasteht ------------------------
+// Aus dem Betrieb: acht Sekunden fuer die Liste, acht fuers Detail, und noch
+// einmal acht beim Zurueckgehen — obwohl die Liste da schon fertig auf dem
+// Schirm stand und nur vom Ladehinweis zugedeckt wurde.
+console.log('\n19) Nichts wegwerfen, was schon richtig dasteht');
+const flott = await browser.newPage();
+flott.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await flott.addInitScript(attrappe);
+await flott.goto(APP);
+await flott.fill('#lg-email', 'anna@firma.ch');
+await flott.fill('#lg-pass', 'geheim123');
+await flott.click('#lg-senden');
+await flott.waitForSelector('#scr-start.aktiv');
+
+await flott.click('#st-neu');
+await flott.waitForSelector('#scr-form.aktiv');
+await flott.fill('#fm-kunde', 'Kunde AG');
+await flott.fill('#fm-lieferant', 'Lieferant GmbH');
+await flott.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await flott.click('#fm-speichern');
+await flott.waitForSelector('#scr-detail.aktiv');
+await flott.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('das Detail merkt sich sein Dokument',
+   !!(await flott.evaluate(() =>
+     JSON.parse(localStorage.getItem('details') || '{}')['WE-2026-0001'])));
+
+// Ab hier dauert jede Antwort lange — was der Schirm VORHER zeigt, zaehlt.
+await flott.evaluate(() => { window.__langsam = 900; });
+
+await flott.click('#dt-zurueck');
+ok('die Liste steht beim Zurueckgehen sofort',
+   (await flott.textContent('#st-liste')).includes('WE-2026-0001'),
+   await flott.textContent('#st-liste'));
+ok('und kein Ladehinweis deckt sie zu',
+   !(await flott.textContent('#st-liste')).includes('Wird geladen'),
+   await flott.textContent('#st-liste'));
+await flott.waitForFunction(() =>
+  window.__gesendet.filter(x => x.action === 'we_liste').length > 0);
+ok('frisch geholt wird trotzdem, nur unsichtbar',
+   (await flott.evaluate(() =>
+     window.__gesendet.filter(x => x.action === 'we_liste').length)) > 0);
+
+// Dasselbe Dokument ein zweites Mal: es steht sofort da.
+await flott.click('#st-liste .eintrag');
+ok('das Detail steht beim zweiten Mal sofort',
+   (await flott.textContent('#dt-positionen')).includes('Schrauben M6'),
+   await flott.textContent('#dt-positionen'));
+ok('und sagt, dass der Stand vom Geraet ist',
+   !(await flott.$eval('#dt-alt', e => e.hidden)) &&
+   (await flott.textContent('#dt-alt')).includes('Gerät'),
+   await flott.textContent('#dt-alt'));
+await flott.waitForFunction(() => document.getElementById('dt-alt').hidden);
+ok('frische Daten loeschen den Hinweis',
+   await flott.$eval('#dt-alt', e => e.hidden));
+
+// Eine Suche dagegen LEERT: die Zeilen gehoeren zu einer anderen Frage.
+await flott.click('#dt-zurueck');
+await flott.fill('#st-suche', 'nordwind');
+await flott.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('Wird gesucht'));
+ok('eine Suche raeumt die alten Zeilen weg',
+   !(await flott.textContent('#st-liste')).includes('WE-2026-0001'),
+   await flott.textContent('#st-liste'));
+await flott.close();
+
+// --- 18) Ein Detail, das nicht geladen hat, ist kein Detail ----------------
+// Aus dem Betrieb: der Kopf zeigte WE-2026-0005, darunter stand die Meldung
+// ueber die verlorene Anfrage — und beide Knoepfe waren da. S.detail hielt
+// dabei noch das ZUVOR geoeffnete Dokument, und «Zurueckziehen» haette
+// genau dieses zurueckgezogen.
+console.log('\n18) Ein Detail, das nicht geladen hat, ist kein Detail');
+const det = await browser.newPage();
+det.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await det.addInitScript(attrappe);
+await det.goto(APP);
+await det.fill('#lg-email', 'anna@firma.ch');
+await det.fill('#lg-pass', 'geheim123');
+await det.click('#lg-senden');
+await det.waitForSelector('#scr-start.aktiv');
+
+// Ein Dokument anlegen und oeffnen — das ist der Stand, der spaeter nicht
+// weiterwirken darf.
+await det.click('#st-neu');
+await det.waitForSelector('#scr-form.aktiv');
+await det.fill('#fm-kunde', 'Kunde AG');
+await det.fill('#fm-lieferant', 'Lieferant GmbH');
+await det.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await det.click('#fm-speichern');
+// Nach dem Speichern steht das Detail schon offen.
+await det.waitForSelector('#scr-detail.aktiv');
+await det.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('geladenes Detail zeigt seine Knoepfe',
+   !(await det.$eval('#dt-aktionen', e => e.hidden)));
+ok('und haelt sein Dokument',
+   (await det.evaluate(() => S.detail && S.detail.kopf.WeNr)) === 'WE-2026-0001');
+
+// Jetzt geht die Anfrage unterwegs verloren — zweimal, wie im Betrieb.
+await det.evaluate(() => {
+  window.__echt = window.fetch;
+  window.fetch = async (url, opt) => {
+    const d = JSON.parse(opt.body);
+    if (d.action === 'we_detail') {
+      return { status: 200, text: async () => '{"ok":false,"error":"nur_post"}' };
+    }
+    return window.__echt(url, opt);
+  };
+});
+await det.evaluate(() => detailOeffnen('WE-2026-0009'));
+await det.waitForSelector('#dt-nochmal');
+
+ok('der Kopf zeigt das angefragte Dokument',
+   (await det.textContent('#dt-titel')) === 'WE-2026-0009');
+ok('das vorige Dokument wirkt nicht weiter',
+   (await det.evaluate(() => S.detail)) === null,
+   JSON.stringify(await det.evaluate(() => S.detail && S.detail.kopf.WeNr)));
+ok('keine Knoepfe auf einem Dokument, das nicht da ist',
+   await det.$eval('#dt-aktionen', e => e.hidden));
+ok('der Positionszaehler behauptet nichts',
+   (await det.textContent('#dt-poszahl')) === '');
+ok('die Meldung nennt den Grund',
+   (await det.textContent('#dt-schritte')).includes('ohne Inhalt'),
+   await det.textContent('#dt-schritte'));
+
+// Und ein Druck genuegt, statt zurueck in die Liste und wieder hinein.
+await det.evaluate(() => { window.fetch = window.__echt; });
+await det.click('#dt-nochmal');
+await det.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('«Nochmal versuchen» laedt dasselbe Dokument',
+   (await det.evaluate(() => S.detail && S.detail.kopf.WeNr)) === 'WE-2026-0009',
+   await det.evaluate(() => S.detail && S.detail.kopf.WeNr));
+ok('und die Knoepfe sind wieder da',
+   !(await det.$eval('#dt-aktionen', e => e.hidden)));
+await det.close();
 
 // --- 17) Alle Wareneingaenge, fuer den Admin --------------------------------
 // Die Uebersicht ist eine Arbeitsliste: fremde Eintraege verschwinden aus

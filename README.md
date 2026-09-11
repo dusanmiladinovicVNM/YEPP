@@ -488,6 +488,21 @@ Gerät, geladen vor 12 Minuten. Wird aktualisiert …`** — bez te rečenice bi
 nedelju dana star red izgledao kao onaj od malopre, a u magacinu neko po
 njemu postupa. Čim stignu sveži redovi, natpis nestaje.
 
+**Ekran nikad ne baca ono što je već tačno.** „Wird geladen …" preko redova
+koji su ispravni pretvara nevidljiv poziv u osam sekundi čekanja. Baš to se
+dešavalo pri povratku iz detalja: lista je stajala gotova, pa je bila
+prekrivena natpisom o učitavanju. Sada:
+
+| Situacija | Šta se vidi |
+|---|---|
+| povratak iz detalja | lista odmah, osvežavanje nevidljivo iza nje |
+| dokument otvoren ranije | detalj odmah sa uređaja, pa se ispravi |
+| prvi put, bez keša | `Wird geladen …` — jedini slučaj u kom je istinit |
+| **pretraga** | prazni se — ti redovi su odgovor na **drugo** pitanje |
+
+Detalji se pamte za **poslednjih 20** dokumenata i brišu pri odjavi, iz istog
+razloga kao lista.
+
 **Ništa zapamćeno ne odlučuje ništa.** Keširana lista određuje samo šta
 stoji na ekranu dok sveža ne stigne. Svaka radnja i dalje ide na server,
 koji red čita iznova: kvitiranje, slanje i storniranje tamo proveravaju
@@ -626,6 +641,11 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 32c | Isti slučaj, pa pritisneš **Alle** | vratio se, naslov `Alle Wareneingänge` |
 | 32d | Običan korisnik: ima li dugme **Alle** | nema ga |
 | 32e | Razmak na kraju u koloni `Email` tvog završenog unosa | i dalje ga vidiš u svojoj listi |
+| 37 | Otvoriti jedan unos, nazad, pa drugi kod kog učitavanje padne | nema dugmadi, `Nochmal versuchen` stoji |
+| 37b | Pritisnuti `Nochmal versuchen` | učitava **taj** dokument, dugmad se vrate |
+| 38 | Otvoriti detalj, pa nazad | lista odmah, bez `Wird geladen` |
+| 38b | Otvoriti isti dokument drugi put | odmah, uz natpis `Stand vom Gerät` |
+| 38c | Ukucati pojam u pretragu | stari redovi nestaju, stoji `Wird gesucht …` |
 | 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
 | 34 | Pokrenuti `setupAnlegen` dvaput | folderi se ne dupliraju, upisi ostaju |
 | 35 | Obrisati `FotoOrdner`, pa `setupAnlegen` | ostaje prazan — gašenje je namerno |
@@ -658,6 +678,19 @@ Server meldet: …`. Golo „Nicht geladen." je krilo baš ono što treba znati 
 slalo čoveka da traži problem u mreži, koje nema. Brojač unosa se pri tom
 briše: inače stoji od prethodnog uspešnog učitavanja i tvrdi da ima unosa
 koje niko ne vidi.
+
+**Detalj koji se nije učitao nije detalj.** Ako `we_detail` padne, ekran ne
+sme da ostane kao da je sve na mestu. Ranije jeste: u zaglavlju je pisao
+novi broj, ispod poruka o grešci — a **`S.detail` je i dalje držao prethodno
+otvoreni dokument**. Šest mesta u aplikaciji čita baš njega, pa bi
+*Zurückziehen* povuklo **pogrešan wareneingang**, sa potvrdnim pitanjem koje
+izgleda ispravno.
+
+Sada `detailOeffnen` **prvo zaboravi** šta je tu bilo, sakrije dugmad dok
+dokument stvarno ne stigne, i obriše brojač pozicija. Na mestu greške stoji
+**Nochmal versuchen** — najčešći uzrok (`nur_post`) je prolazan, pa je jedan
+dodir dovoljan umesto povratka u listu i ponovnog otvaranja. Same radnje uz
+to proveravaju `S.detail`, ali to je poslednja linija, ne prva.
 
 **Apps Script na POST odgovara preusmerenjem.** Kad ga browser prati, po
 HTTP standardu se POST pretvara u **GET** i telo zahteva nestane. Sporadično
