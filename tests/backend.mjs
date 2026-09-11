@@ -681,7 +681,7 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
   ok('Bericht meldet die fehlende Adresse', bericht.includes('PWA_URL: FEHLT'), bericht);
   ok('Bericht nennt die Tabelle', bericht.includes('Wareneingang (Test)'));
   ok('Bericht nennt die CSV-Adresse', bericht.includes('&format=csv&tage=365'));
-  ok('Bericht meldet vollstaendige Blaetter', bericht.includes('alle sieben da'), bericht);
+  ok('Bericht meldet vollstaendige Blaetter', bericht.includes('alle ' + Object.keys(ss.blaetter).length + ' da'), bericht);
 
   delete ss.blaetter.Sessions;
   ok('Bericht meldet fehlende Blaetter',
@@ -1412,6 +1412,107 @@ console.log('\n28) Geduzt wird ueberall');
 
   ok('und die Pruefung wuerde ein «Sie» finden',
      hoeflich.test(client + '\nBitte melden Sie sich an.'));
+}
+
+console.log('\n29) Kontakte und Empfaenger je Kunde');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  mitBenutzer(ctx, ss);
+  const ruf = d => ctx.verteilen(Object.assign({ session: 'tokA' }, d));
+
+  // Kontakte anlegen
+  const r1 = ruf({ action: 'admin_kontakt', was: 'neu',
+                   name: 'Eva Muster', email: 'Eva@Firma.CH' });
+  ok('Kontakt angelegt', r1.ok === true && r1.kontakte.length === 1);
+  ok('die Adresse wird kleingeschrieben', r1.kontakte[0].email === 'eva@firma.ch');
+  ok('zweimal dieselbe geht nicht',
+     ruf({ action: 'admin_kontakt', was: 'neu', name: 'X', email: 'eva@firma.ch' })
+       .error === 'existiert');
+  ok('ohne @ ist es keine Adresse',
+     ruf({ action: 'admin_kontakt', was: 'neu', name: 'X', email: 'eva.firma.ch' })
+       .error === 'keine_mail');
+  ok('ohne Namen auch nicht',
+     ruf({ action: 'admin_kontakt', was: 'neu', name: '', email: 'x@firma.ch' })
+       .error === 'unvollstaendig');
+
+  ruf({ action: 'admin_kontakt', was: 'neu', name: 'Urs Vertretung',
+        email: 'urs@firma.ch' });
+  ok('deaktivieren wirkt',
+     ruf({ action: 'admin_kontakt', was: 'aus', email: 'urs@firma.ch' })
+       .kontakte.filter(k => k.email === 'urs@firma.ch')[0].aktiv === false);
+  ruf({ action: 'admin_kontakt', was: 'an', email: 'urs@firma.ch' });
+
+  // Kunden anlegen und Empfaenger hinterlegen
+  ss.blaetter.Kunden.appendRow(['Alte AG', true, 10, '', '']);
+  const r2 = ruf({ action: 'admin_kunde', was: 'neu', name: 'Neue AG' });
+  ok('Kunde angelegt', r2.kunden.some(k => k.name === 'Neue AG'));
+  const kd = ss.blaetter.Kunden.getDataRange().getValues();
+  const kk = ctx.spalten(kd[0]);
+  ok('die Sortierung haengt hinten an',
+     Number(kd[kd.length - 1][kk.Sortierung]) === 20,
+     String(kd[kd.length - 1][kk.Sortierung]));
+
+  const r3 = ruf({ action: 'admin_kunde', was: 'empfaenger', name: 'Neue AG',
+                   haupt: 'Eva@Firma.CH', vertretung: 'urs@firma.ch' });
+  const neue = r3.kunden.filter(k => k.name === 'Neue AG')[0];
+  ok('Haupt und Stellvertretung stehen beim Kunden',
+     neue.haupt === 'eva@firma.ch' && neue.vertretung === 'urs@firma.ch',
+     JSON.stringify(neue));
+  ok('eine kaputte Adresse wird abgelehnt',
+     ruf({ action: 'admin_kunde', was: 'empfaenger', name: 'Neue AG',
+           haupt: 'eva.firma.ch' }).error === 'keine_mail');
+  ok('leeren ist erlaubt — das ist «keine Vorgabe»',
+     ruf({ action: 'admin_kunde', was: 'empfaenger', name: 'Alte AG',
+           haupt: '', vertretung: '' }).ok === true);
+
+  // Die Stammdaten bringen beides mit, damit der Sendedialog nicht fragt
+  const st = ruf({ action: 'stammdaten' });
+  ok('Kontakte kommen mit den Stammdaten', st.kontakte.length === 2);
+  ok('und die Vorgabe je Kunde',
+     st.empfaenger['Neue AG'].an === 'eva@firma.ch' &&
+     st.empfaenger['Neue AG'].kopie === 'urs@firma.ch',
+     JSON.stringify(st.empfaenger));
+  ok('ein Kunde ohne Vorgabe steht nicht drin',
+     st.empfaenger['Alte AG'] === undefined);
+
+  // Nur Admins
+  ok('ein gewoehnlicher Benutzer darf nicht',
+     ctx.verteilen({ session: 'tokB', action: 'admin_kontakt', was: 'neu',
+                     name: 'X', email: 'x@firma.ch' }).error === 'keine Berechtigung');
+}
+
+console.log('\n30) Gesendet wird an die Vorgabe des Kunden');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  ss.blaetter.Parameter.appendRow(['MailAn', 'lager@firma.ch', '']);
+  ss.blaetter.Kunden.appendRow(['Neue AG', true, 10, 'eva@firma.ch', 'urs@firma.ch']);
+  ss.blaetter.Kunden.appendRow(['Ohne AG', true, 20, '', '']);
+
+  const mit  = ctx.weSpeichern({ kunde: 'Neue AG', positionen: POS }, u).weNr;
+  const ohne = ctx.weSpeichern({ kunde: 'Ohne AG', positionen: POS }, u).weNr;
+
+  ctx.__mails.length = 0;
+  const r = ctx.verteilen({ action: 'we_senden', session: 'tokA', weNr: mit });
+  ok('geht an die Hauptadresse', r.an === 'eva@firma.ch', JSON.stringify(r.an));
+  ok('die Stellvertretung bekommt eine Kopie', r.kopie === 'urs@firma.ch');
+  ok('und beides steht wirklich in der Mail',
+     ctx.__mails[0][0].to === 'eva@firma.ch' && ctx.__mails[0][0].cc === 'urs@firma.ch',
+     JSON.stringify([ctx.__mails[0][0].to, ctx.__mails[0][0].cc]));
+
+  // Ohne Vorgabe bleibt der Parameter als Rueckfall
+  ctx.__mails.length = 0;
+  ok('ohne Vorgabe der Parameter',
+     ctx.verteilen({ action: 'we_senden', session: 'tokA', weNr: ohne })
+        .an === 'lager@firma.ch');
+
+  // Was im Dialog steht, gewinnt
+  ctx.__mails.length = 0;
+  const eigen = ctx.verteilen({ action: 'we_senden', session: 'tokA', weNr: mit,
+                                mailAn: 'chef@firma.ch', kopie: '' });
+  ok('der Dialog schlaegt die Vorgabe', eigen.an === 'chef@firma.ch');
+  ok('und eine geleerte Kopie bleibt leer',
+     eigen.kopie === '' && !ctx.__mails[0][0].cc, JSON.stringify(ctx.__mails[0][0].cc));
 }
 
 console.log('\n' + '='.repeat(46));

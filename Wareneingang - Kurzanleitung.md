@@ -200,8 +200,17 @@ Ein Eintrag mit der Marke **gesendet** wurde schon als Excel verschickt.
 
 ## Das Formular verschicken
 
-**Als Excel senden** schickt das ausgefüllte Formular als Excel-Datei an die
-hinterlegte Adresse und legt es zugleich im Archiv ab.
+**Als Excel senden** öffnet einen kurzen Schirm mit **An** und **Kopie**.
+Vorbelegt ist, was beim Kunden hinterlegt ist — die Hauptadresse und die der
+Stellvertretung. Beide Felder schlagen beim Tippen die bekannten Kontakte
+vor, und du darfst auch eine Adresse eintragen, die nicht vorgeschlagen
+wird.
+
+Was in diesem Schirm steht, geht hinaus. Die Vorgabe zu ändern gilt nur für
+diesen einen Versand; beim Kunden bleibt sie, wie sie ist.
+
+Danach geht das ausgefüllte Formular als Excel-Datei hinaus und wird
+zugleich im Archiv abgelegt.
 
 Du darfst jederzeit senden, auch mehrmals. Verschickt wird immer der
 aktuelle Stand. Sendest du, bevor alle drei Schritte quittiert sind, bleiben

@@ -51,6 +51,7 @@ function eigenschaft(name, darfFehlen) {
 const T = {
   we:          'Wareneingang',
   pos:         'Positionen',
+  kontakte:    'Kontakte',
   kunden:      'Kunden',
   lieferanten: 'Lieferanten',
   benutzer:    'Benutzer',
@@ -185,6 +186,9 @@ function ausfuehren(aktion, d, u) {
       case 'admin_neu':    return adminNeu(d, u);
       case 'admin_aktion': return adminAktion(d, u);
       case 'admin_parameter': return adminParameter(d, u);
+      case 'admin_stamm':     return adminStamm();
+      case 'admin_kontakt':   return adminKontakt(d);
+      case 'admin_kunde':     return adminKunde(d);
     }
   }
 
@@ -467,12 +471,48 @@ function sitzungenLoeschen(email) {
    ============================================================ */
 
 function stammdaten() {
-  const daten = datenLesen([T.kunden, T.lieferanten]);
+  const daten = datenLesen([T.kunden, T.lieferanten, T.kontakte]);
   return {
     ok: true,
     kunden: listeAktiv(T.kunden, daten[T.kunden]),
-    lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten])
+    lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten]),
+    kontakte: kontakteAktiv(daten[T.kontakte]),
+    empfaenger: empfaengerJeKunde(daten[T.kunden])
   };
+}
+
+/** Aktive Kontakte als {name, email}. */
+function kontakteAktiv(dat) {
+  const aus = [];
+  if (!dat || !dat.length) return aus;
+  const k = spalten(dat[0]);
+  for (let i = 1; i < dat.length; i++) {
+    if (String(dat[i][k.Aktiv]).toLowerCase() === 'false') continue;
+    const email = String(dat[i][k.Email] || '').trim();
+    if (!email) continue;
+    aus.push({ name: String(dat[i][k.Name] || '').trim(), email: email });
+  }
+  aus.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  return aus;
+}
+
+/**
+ * Die Vorgabe je Kunde, damit der Sendedialog sie ohne zweiten Weg zum
+ * Server kennt. Nur Kunden, bei denen ueberhaupt etwas hinterlegt ist.
+ */
+function empfaengerJeKunde(dat) {
+  const aus = {};
+  if (!dat || !dat.length) return aus;
+  const k = spalten(dat[0]);
+  if (k.EmailHaupt == null) return aus;
+  for (let i = 1; i < dat.length; i++) {
+    const name = String(dat[i][k.Name] || '').trim();
+    const an   = String(dat[i][k.EmailHaupt] || '').trim();
+    const kop  = k.EmailVertretung != null
+                   ? String(dat[i][k.EmailVertretung] || '').trim() : '';
+    if (name && (an || kop)) aus[name] = { an: an, kopie: kop };
+  }
+  return aus;
 }
 
 /**
@@ -959,11 +999,41 @@ function weStorno(d, u) {
  * schickt es an die Adresse aus «Parameter -> MailAn».
  * Kein SharePoint, keine Microsoft-Lizenz noetig.
  */
+/**
+ * Wer den Wareneingang eines Kunden bekommt.
+ *
+ * Beim Kunden stehen zwei Adressen: die Hauptadresse und die des
+ * Stellvertreters. Beide sind Vorgabe — der Stellvertreter ist die Person,
+ * die einspringt, und wer erst bei Abwesenheit erfaehrt, dass etwas
+ * geliefert wurde, springt zu spaet ein. Wer es anders will, traegt im
+ * Sendedialog etwas anderes ein; entschieden wird dort, nicht hier.
+ */
+function empfaengerFuer(kunde) {
+  const dat = datenLesen([T.kunden])[T.kunden];
+  const k   = spalten(dat[0]);
+  if (k.EmailHaupt == null) return { an: '', kopie: '' };
+  const i = zeileFinden(dat, k.Name, String(kunde || '').trim(), true);
+  if (i < 0) return { an: '', kopie: '' };
+  return {
+    an:    String(dat[i][k.EmailHaupt] || '').trim(),
+    kopie: k.EmailVertretung != null
+             ? String(dat[i][k.EmailVertretung] || '').trim() : ''
+  };
+}
+
 function weSenden(d, u) {
   const det = weDetail(d, u);
   if (!det.ok) return det;
 
-  const empfaenger = String(d.mailAn || parameter('MailAn') || '').trim();
+  // Reihenfolge: was im Dialog steht, sonst was beim Kunden hinterlegt ist,
+  // sonst die eine Adresse aus den Parametern. Die letzte ist der Rest aus
+  // der Zeit, als es nur eine gab.
+  const vorgabe = empfaengerFuer(det.kopf.Kunde);
+  const empfaenger = String(
+    d.mailAn != null && String(d.mailAn).trim() !== ''
+      ? d.mailAn
+      : (vorgabe.an || parameter('MailAn') || '')).trim();
+  const kopie = String(d.kopie != null ? d.kopie : vorgabe.kopie || '').trim();
   if (!empfaenger) return { ok: false, error: 'kein_empfaenger' };
 
   const name = det.kopf.WeNr + '_' +
@@ -974,6 +1044,7 @@ function weSenden(d, u) {
 
   MailApp.sendEmail({
     to: empfaenger,
+    cc: kopie || undefined,
     subject: 'Wareneingang ' + det.kopf.WeNr +
              (det.kopf.Lieferant ? ' — ' + det.kopf.Lieferant : ''),
     body: [
@@ -1003,7 +1074,7 @@ function weSenden(d, u) {
     if (url) bl.getRange(i + 1, k.DateiUrl + 1).setValue(url);
   }
 
-  return { ok: true, an: empfaenger, url: url };
+  return { ok: true, an: empfaenger, kopie: kopie, url: url };
 }
 
 /**
@@ -1231,7 +1302,117 @@ function adminListe() {
       gesperrt: !!(dat[i][k.GesperrtBis] && new Date(dat[i][k.GesperrtBis]) > new Date())
     });
   }
-  return { ok: true, benutzer: aus };
+  // Kontakte und Kunden gleich mit: der Adminbereich zeigt sie auf demselben
+  // Schirm, und ein zweiter Weg zum Server kostet mehr als dieses Lesen.
+  const stamm = adminStamm();
+  return { ok: true, benutzer: aus,
+           kontakte: stamm.kontakte, kunden: stamm.kunden };
+}
+
+/* ---------- Kontakte und Kunden ---------- */
+
+/** Beides in einer Antwort: der Adminbereich zeigt sie nebeneinander. */
+function adminStamm() {
+  const daten = datenLesen([T.kontakte, T.kunden]);
+  const kd = daten[T.kontakte] || [], kk = spalten(kd[0] || []);
+  const kontakte = [];
+  for (let i = 1; i < kd.length; i++) {
+    const email = String(kd[i][kk.Email] || '').trim();
+    if (!email) continue;
+    kontakte.push({
+      name: String(kd[i][kk.Name] || '').trim(),
+      email: email,
+      aktiv: String(kd[i][kk.Aktiv]).toLowerCase() !== 'false'
+    });
+  }
+
+  const dd = daten[T.kunden] || [], dk = spalten(dd[0] || []);
+  const kunden = [];
+  for (let i = 1; i < dd.length; i++) {
+    const name = String(dd[i][dk.Name] || '').trim();
+    if (!name) continue;
+    kunden.push({
+      name: name,
+      aktiv: String(dd[i][dk.Aktiv]).toLowerCase() !== 'false',
+      haupt: dk.EmailHaupt != null ? String(dd[i][dk.EmailHaupt] || '').trim() : '',
+      vertretung: dk.EmailVertretung != null
+                    ? String(dd[i][dk.EmailVertretung] || '').trim() : ''
+    });
+  }
+  return { ok: true, kontakte: kontakte, kunden: kunden };
+}
+
+function adminKontakt(d) {
+  const was   = String(d.was || '');
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!email || email.indexOf('@') < 0) return { ok: false, error: 'keine_mail' };
+
+  const bl  = blatt(T.kontakte);
+  const dat = bl.getDataRange().getValues();
+  const k   = spalten(dat[0]);
+  const i   = zeileFinden(dat, k.Email, email, true);
+
+  if (was === 'neu') {
+    if (i >= 0) return { ok: false, error: 'existiert' };
+    const name = String(d.name || '').trim();
+    if (!name) return { ok: false, error: 'unvollstaendig' };
+    bl.appendRow([name, email, true]);
+    return adminStamm();
+  }
+  if (i < 0) return { ok: false, error: 'nicht_gefunden' };
+  if (was === 'aus' || was === 'an') {
+    bl.getRange(i + 1, k.Aktiv + 1).setValue(was === 'an');
+    return adminStamm();
+  }
+  return { ok: false, error: 'unbekannte Aktion' };
+}
+
+function adminKunde(d) {
+  const was  = String(d.was || '');
+  const name = String(d.name || '').trim();
+  if (!name) return { ok: false, error: 'unvollstaendig' };
+
+  const bl  = blatt(T.kunden);
+  const dat = bl.getDataRange().getValues();
+  const k   = spalten(dat[0]);
+  const i   = zeileFinden(dat, k.Name, name, true);
+
+  if (was === 'neu') {
+    if (i >= 0) return { ok: false, error: 'existiert' };
+    const z = new Array(bl.getLastColumn()).fill('');
+    z[k.Name]  = name;
+    z[k.Aktiv] = true;
+    // Ans Ende der Sortierung, in Zehnerschritten wie die von Hand
+    // gepflegten Zeilen — dazwischen bleibt Platz.
+    let hoechste = 0;
+    for (let j = 1; j < dat.length; j++) {
+      hoechste = Math.max(hoechste, Number(dat[j][k.Sortierung] || 0));
+    }
+    z[k.Sortierung] = hoechste + 10;
+    bl.appendRow(z);
+    return adminStamm();
+  }
+  if (i < 0) return { ok: false, error: 'nicht_gefunden' };
+
+  if (was === 'aus' || was === 'an') {
+    bl.getRange(i + 1, k.Aktiv + 1).setValue(was === 'an');
+    return adminStamm();
+  }
+  if (was === 'empfaenger') {
+    if (k.EmailHaupt == null) return { ok: false, error: 'spalte_fehlt' };
+    const haupt = String(d.haupt || '').trim().toLowerCase();
+    const vert  = String(d.vertretung || '').trim().toLowerCase();
+    // Leer heisst «keine Vorgabe» und ist erlaubt; was dasteht, muss aber
+    // eine Adresse sein — sonst faellt es erst beim Senden auf.
+    if (haupt && haupt.indexOf('@') < 0) return { ok: false, error: 'keine_mail' };
+    if (vert && vert.indexOf('@') < 0)   return { ok: false, error: 'keine_mail' };
+    bl.getRange(i + 1, k.EmailHaupt + 1).setValue(haupt);
+    if (k.EmailVertretung != null) {
+      bl.getRange(i + 1, k.EmailVertretung + 1).setValue(vert);
+    }
+    return adminStamm();
+  }
+  return { ok: false, error: 'unbekannte Aktion' };
 }
 
 function adminNeu(d, u) {
@@ -1670,7 +1851,9 @@ function setupAnlegen() {
                 'Vorgang'];
   plan[T.pos] = ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
                  'Regalplatz', 'Bemerkung', 'Bestehend', 'FotoUrl'];
-  plan[T.kunden]      = ['Name', 'Aktiv', 'Sortierung'];
+  plan[T.kunden]      = ['Name', 'Aktiv', 'Sortierung',
+                         'EmailHaupt', 'EmailVertretung'];
+  plan[T.kontakte]    = ['Name', 'Email', 'Aktiv'];
   plan[T.lieferanten] = ['Name', 'Aktiv', 'Sortierung'];
   plan[T.benutzer]    = ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',
                          'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle'];
@@ -1767,8 +1950,11 @@ function einrichtungPruefen() {
     const ss = tabelle();
     zeilen.push('Tabelle: ' + ss.getName());
     const fehlt = Object.keys(T).map(s => T[s]).filter(n => !ss.getSheetByName(n));
+    // Die Zahl nicht ausschreiben: sie hat sich schon geaendert, und ein
+    // Bericht, der «alle sieben» sagt, waehrend es acht sind, ist schlimmer
+    // als einer ohne Zahl.
     zeilen.push(fehlt.length ? 'Blaetter FEHLEN: ' + fehlt.join(', ') + ' — setupAnlegen()'
-                             : 'Blaetter: alle sieben da');
+                             : 'Blaetter: alle ' + Object.keys(T).length + ' da');
   } catch (e) {
     zeilen.push('Tabelle: ' + e.message);
   }

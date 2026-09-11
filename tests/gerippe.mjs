@@ -105,7 +105,8 @@ function neueTabelle() {
     'Storniert', 'Status', 'FotoUrl', 'DateiUrl', 'Gesendet', 'Vorgang']);
   B('Positionen', ['WeNr', 'Nr', 'Artikel', 'Anzahl', 'KG', 'MHD',
     'Regalplatz', 'Bemerkung', 'Bestehend', 'FotoUrl']);
-  B('Kunden', ['Name', 'Aktiv', 'Sortierung']);
+  B('Kunden', ['Name', 'Aktiv', 'Sortierung', 'EmailHaupt', 'EmailVertretung']);
+  B('Kontakte', ['Name', 'Email', 'Aktiv']);
   B('Lieferanten', ['Name', 'Aktiv', 'Sortierung']);
   B('Benutzer', ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',
     'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle']);

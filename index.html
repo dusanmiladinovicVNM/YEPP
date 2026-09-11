@@ -126,6 +126,14 @@ select{
 .regal-zeile input{flex:1;min-width:0}
 .regal-zeile .klein{white-space:nowrap;flex:0 0 auto}
 .klein.hat-foto{border-color:var(--akzent);color:var(--akzent)}
+.stamm{border:1px solid var(--rand);border-radius:4px;padding:10px;margin-top:8px}
+.stamm .kopfzeile{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.stamm .titel{font-weight:600;font-size:14px}
+.stamm .adresse{font-size:12px;color:var(--grau);word-break:break-all}
+.stamm .felder{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px}
+.stamm label{font-size:11px;color:var(--grau);margin:0}
+.stamm input{width:100%}
+.stamm .aus{opacity:.5}
 .pos{
   border:1px solid var(--rand);border-radius:4px;
   padding:12px;margin-top:10px;background:rgba(255,255,255,.02);
@@ -226,6 +234,7 @@ select{
 .marke.neu{background:rgba(255,255,255,.08);color:var(--grau)}
 .marke.versandt{background:rgba(255,255,255,.08);color:var(--grau)}
 #st-suche{margin-bottom:10px}
+
 
 /* ---------- Detail ---------- */
 .schritt{
@@ -622,8 +631,81 @@ select{
 
     <hr class="trennlinie">
     <div id="adm-liste"></div>
+
+    <hr class="trennlinie">
+
+    <div class="pos-kopf" style="margin-top:0">
+      <h2>Kontakte</h2>
+      <span class="zahl">Empfänger für den Versand</span>
+    </div>
+
+    <label for="adm-k-name">Name</label>
+    <input id="adm-k-name" type="text" placeholder="Vorname Nachname">
+
+    <label for="adm-k-mail">E-Mail</label>
+    <input id="adm-k-mail" type="email" inputmode="email"
+           autocapitalize="off" placeholder="name@firma.ch">
+
+    <div id="adm-k-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="adm-k-neu" class="gross primaer">Kontakt anlegen</button>
+    </div>
+
+    <div id="adm-kontakte"></div>
+
+    <hr class="trennlinie">
+
+    <div class="pos-kopf" style="margin-top:0">
+      <h2>Kunden</h2>
+      <span class="zahl">je Kunde zwei Adressen</span>
+    </div>
+
+    <label for="adm-kd-name">Neuer Kunde</label>
+    <input id="adm-kd-name" type="text" placeholder="Firma AG">
+
+    <div id="adm-kd-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="adm-kd-neu" class="gross primaer">Kunde anlegen</button>
+    </div>
+
+    <p class="hinweis">Haupt und Stellvertretung sind die Vorgabe beim Senden.
+       Beide bekommen die Mail — wer nur bei Abwesenheit davon erfährt,
+       erfährt es zu spät. Im Sendedialog lässt sich beides ändern.</p>
+
+    <div id="adm-kunden"></div>
   </div>
 </section>
+
+<!-- ============ SENDEN ============ -->
+<section id="scr-senden" class="screen">
+  <header class="kopf-liste">
+    <button class="zurueck" id="sd-zurueck" aria-label="Zurück">&#8592;</button>
+    <h1 id="sd-titel">Als Excel senden</h1>
+  </header>
+
+  <div class="scroll">
+    <label for="sd-an">An</label>
+    <input id="sd-an" type="email" inputmode="email" autocapitalize="off"
+           list="dl-kontakte" placeholder="name@firma.ch">
+
+    <label for="sd-kopie">Kopie</label>
+    <input id="sd-kopie" type="email" inputmode="email" autocapitalize="off"
+           list="dl-kontakte" placeholder="freiwillig">
+
+    <p class="hinweis" id="sd-hinweis"></p>
+
+    <div id="sd-meldung" class="meldung err"></div>
+
+    <div class="knopfzeile">
+      <button id="sd-senden" class="gross primaer">Senden</button>
+      <button id="sd-ab" class="gross sekundaer">Abbrechen</button>
+    </div>
+  </div>
+</section>
+
+<datalist id="dl-kontakte"></datalist>
 
 <!-- ============ DIALOGE ============ -->
 <div class="overlay" id="dlg-pw">
@@ -671,6 +753,8 @@ const S = {
   rolle:       localStorage.getItem('rolle')   || '',
   kunden:      [],
   lieferanten: [],
+  kontakte:    [],      // {name, email} — Vorschlaege im Sendedialog
+  empfaenger:  {},      // Kunde -> {an, kopie}, die Vorgabe
   positionen:  [],
   bild:        null,
   regalBilder: {},       // beim Einlagern geknipst, nach Positionsnummer
@@ -1197,6 +1281,7 @@ function stammdatenAusSpeicher() {
   try {
     const c = JSON.parse(roh);
     S.kunden = c.kunden || []; S.lieferanten = c.lieferanten || [];
+    S.kontakte = c.kontakte || []; S.empfaenger = c.empfaenger || {};
     fuelleStammdaten();
     return c;
   } catch (e) { return null; }  // beschaedigt — wird gleich ersetzt
@@ -1206,8 +1291,10 @@ function stammdatenAusSpeicher() {
 function startUebernehmen(r) {
   if (r.kunden || r.lieferanten) {
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
-    localStorage.setItem('stammdaten',
-      JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
+    S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
+    localStorage.setItem('stammdaten', JSON.stringify({
+      kunden: S.kunden, lieferanten: S.lieferanten,
+      kontakte: S.kontakte, empfaenger: S.empfaenger }));
     fuelleStammdaten();
   }
   altVerbergen('st-alt');
@@ -1227,8 +1314,10 @@ async function startEinzeln(cache) {
     const r = await post({ action: 'stammdaten', session: S.session });
     if (!antwortOk(r)) return;
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
-    localStorage.setItem('stammdaten',
-      JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
+    S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
+    localStorage.setItem('stammdaten', JSON.stringify({
+      kunden: S.kunden, lieferanten: S.lieferanten,
+      kontakte: S.kontakte, empfaenger: S.empfaenger }));
     fuelleStammdaten();
   } catch (e) {
     if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
@@ -1241,6 +1330,10 @@ function fuelleStammdaten() {
   };
   setze('dl-kunden', S.kunden);
   setze('dl-lieferanten', S.lieferanten);
+  // Die Adresse ist der Wert, der Name steht daneben — getippt wird die
+  // Adresse, erkannt wird der Mensch.
+  $('dl-kontakte').innerHTML = S.kontakte.map(k =>
+    '<option value="' + esc(k.email) + '" label="' + esc(k.name) + '">').join('');
 }
 
 const SCHRITT_FOLGE = ['angenommen', 'gezaehlt', 'eingelagert'];
@@ -1602,6 +1695,98 @@ function fotoWeg() {
   $('fm-foto-info').textContent = '';
 }
 
+/* ---------- Kontakte und Kunden ---------- */
+
+/**
+ * Zwei Listen, eine Antwort. Jede Aenderung gibt den neuen Stand gleich
+ * zurueck, damit der Schirm nicht raet, was daraus geworden ist.
+ */
+function zeichneStamm(r) {
+  if (r.kontakte) {
+    S.kontakte = r.kontakte.filter(k => k.aktiv).map(k => ({ name: k.name, email: k.email }));
+    fuelleStammdaten();
+    $('adm-kontakte').innerHTML = r.kontakte.length
+      ? r.kontakte.map(k =>
+          '<div class="stamm' + (k.aktiv ? '' : ' aus') + '">' +
+            '<div class="kopfzeile">' +
+              '<div><div class="titel">' + esc(k.name) + '</div>' +
+              '<div class="adresse">' + esc(k.email) + '</div></div>' +
+              '<button type="button" class="klein k-aktion" data-mail="' +
+                esc(k.email) + '" data-was="' + (k.aktiv ? 'aus' : 'an') + '">' +
+                (k.aktiv ? 'Deaktivieren' : 'Aktivieren') + '</button>' +
+            '</div>' +
+          '</div>').join('')
+      : '<div class="leer">Noch keine Kontakte.</div>';
+  }
+
+  if (r.kunden) {
+    $('adm-kunden').innerHTML = r.kunden.length
+      ? r.kunden.map(k =>
+          '<div class="stamm' + (k.aktiv ? '' : ' aus') + '" data-kunde="' +
+              esc(k.name) + '">' +
+            '<div class="kopfzeile">' +
+              '<div class="titel">' + esc(k.name) + '</div>' +
+              '<button type="button" class="klein kd-aktion" data-name="' +
+                esc(k.name) + '" data-was="' + (k.aktiv ? 'aus' : 'an') + '">' +
+                (k.aktiv ? 'Deaktivieren' : 'Aktivieren') + '</button>' +
+            '</div>' +
+            '<div class="felder">' +
+              '<div><label>Haupt</label>' +
+                '<input type="email" inputmode="email" autocapitalize="off" ' +
+                  'list="dl-kontakte" data-f="haupt" value="' + esc(k.haupt) + '"></div>' +
+              '<div><label>Stellvertretung</label>' +
+                '<input type="email" inputmode="email" autocapitalize="off" ' +
+                  'list="dl-kontakte" data-f="vertretung" value="' +
+                  esc(k.vertretung) + '"></div>' +
+              '<button type="button" class="klein kd-speichern" data-name="' +
+                esc(k.name) + '">Empfänger speichern</button>' +
+            '</div>' +
+          '</div>').join('')
+      : '<div class="leer">Noch keine Kunden.</div>';
+  }
+}
+
+async function stammAktion(daten, meldungsId) {
+  const feld = meldungsId ? $(meldungsId) : null;
+  if (feld) feld.classList.remove('zeigen');
+  try {
+    const r = await post(Object.assign({ session: S.session }, daten));
+    if (!antwortOk(r)) {
+      const text = {
+        existiert:      'Das gibt es schon.',
+        keine_mail:     'Das ist keine E-Mail-Adresse.',
+        unvollstaendig: 'Bitte Name und Adresse ausfüllen.',
+        nicht_gefunden: 'Nicht gefunden — die Liste ist womöglich veraltet.',
+        spalte_fehlt:   'Die Tabelle kennt die Empfängerspalten noch nicht. ' +
+                        '«setupAnlegen» im Apps Script ausführen.'
+      }[r.error] || abgelehntText(r, 'Nicht gespeichert');
+      if (feld) { feld.textContent = text; feld.classList.add('zeigen'); }
+      else toast(text, 'err');
+      return false;
+    }
+    zeichneStamm(r);
+    return true;
+  } catch (e) {
+    const text = verbindungText(e);
+    if (feld) { feld.textContent = text; feld.classList.add('zeigen'); }
+    else toast(text, 'err');
+    return false;
+  }
+}
+
+async function kontaktNeu() {
+  const ok_ = await stammAktion({ action: 'admin_kontakt', was: 'neu',
+    name: $('adm-k-name').value.trim(),
+    email: $('adm-k-mail').value.trim() }, 'adm-k-meldung');
+  if (ok_) { $('adm-k-name').value = ''; $('adm-k-mail').value = ''; }
+}
+
+async function kundeNeu() {
+  const ok_ = await stammAktion({ action: 'admin_kunde', was: 'neu',
+    name: $('adm-kd-name').value.trim() }, 'adm-kd-meldung');
+  if (ok_) $('adm-kd-name').value = '';
+}
+
 /* ---------- Detail ---------- */
 
 /**
@@ -1915,32 +2100,60 @@ function regalSenden() {
 
 /* ---------- Excel senden ---------- */
 
+/**
+ * Kein Ja/Nein mehr, sondern ein Schirm: an wen es geht, gehoert vor das
+ * Senden und nicht danach. Vorbelegt ist, was beim Kunden hinterlegt ist —
+ * geaendert wird es hier, nicht in der Verwaltung.
+ */
 function sendenKlick() {
   // Die Knopfzeile ist verborgen, solange nichts geladen ist — das hier
   // ist die letzte Linie, nicht die erste.
   if (!S.detail) return;
-  frage('Das ausgefüllte Formular wird als Excel-Datei verschickt und abgelegt. Fortfahren?',
-    async () => {
-      const btn = $('dt-senden');
-      btn.disabled = true; btn.textContent = 'Wird gesendet …';
-      try {
-        const r = await post({
-          action: 'we_senden', session: S.session, weNr: S.detail.kopf.WeNr
-        });
-        if (r.ok) {
-          toast('Gesendet an ' + r.an, 'ok');
-          await detailOeffnen(S.detail.kopf.WeNr);
-        } else if (!antwortOk(r)) {
-          toast(r.error === 'kein_empfaenger'
-            ? 'Keine Empfängeradresse hinterlegt (Parameter «MailAn»).'
-            : 'Senden nicht möglich: ' + r.error, 'err');
-        }
-      } catch (e) {
-        toast(verbindungText(e), 'err');
-      } finally {
-        btn.disabled = false; btn.textContent = 'Als Excel senden';
-      }
+  const kunde = String(S.detail.kopf.Kunde || '').trim();
+  const vor = S.empfaenger[kunde] || { an: '', kopie: '' };
+
+  $('sd-titel').textContent = S.detail.kopf.WeNr;
+  $('sd-an').value    = vor.an || '';
+  $('sd-kopie').value = vor.kopie || '';
+  $('sd-meldung').classList.remove('zeigen');
+  $('sd-hinweis').textContent = vor.an
+    ? 'Vorgabe für ' + kunde + '. Änderungen gelten nur für diesen Versand.'
+    : (kunde
+        ? 'Für ' + kunde + ' ist nichts hinterlegt — leer lassen geht auch, ' +
+          'dann nimmt der Server die allgemeine Adresse.'
+        : 'Leer lassen geht auch, dann nimmt der Server die allgemeine Adresse.');
+  zeigeScreen('scr-senden');
+}
+
+async function sendenAusfuehren() {
+  if (!S.detail || S.laeuft) return;
+  S.laeuft = true;
+  const btn = $('sd-senden');
+  btn.disabled = true; btn.textContent = 'Wird gesendet …';
+  $('sd-meldung').classList.remove('zeigen');
+  try {
+    const r = await post({
+      action: 'we_senden', session: S.session, weNr: S.detail.kopf.WeNr,
+      mailAn: $('sd-an').value.trim(), kopie: $('sd-kopie').value.trim()
     });
+    if (r.ok) {
+      toast('Gesendet an ' + r.an + (r.kopie ? ' (Kopie: ' + r.kopie + ')' : ''), 'ok');
+      await detailOeffnen(S.detail.kopf.WeNr);
+    } else if (!antwortOk(r)) {
+      const text = r.error === 'kein_empfaenger'
+        ? 'Keine Empfängeradresse — hier eintragen, oder in der Verwaltung ' +
+          'beim Kunden hinterlegen.'
+        : abgelehntText(r, 'Nicht gesendet');
+      $('sd-meldung').textContent = text;
+      $('sd-meldung').classList.add('zeigen');
+    }
+  } catch (e) {
+    $('sd-meldung').textContent = verbindungText(e);
+    $('sd-meldung').classList.add('zeigen');
+  } finally {
+    S.laeuft = false;
+    btn.disabled = false; btn.textContent = 'Senden';
+  }
 }
 
 function stornoKlick() {
@@ -1978,6 +2191,8 @@ async function adminOeffnen() {
   $('adm-meldung').classList.remove('zeigen');
   $('adm-par-meldung').classList.remove('zeigen');
   $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+  $('adm-k-meldung').classList.remove('zeigen');
+  $('adm-kd-meldung').classList.remove('zeigen');
   zeigeScreen('scr-admin');
   await adminParameter();          // nacheinander, siehe start()
   await adminLaden();
@@ -2040,6 +2255,7 @@ async function adminLaden() {
       return;
     }
     adminZeichnen(r.benutzer || []);
+    zeichneStamm(r);
   } catch (e) {
     $('adm-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }
@@ -2175,6 +2391,36 @@ $('dt-storno').addEventListener('click', stornoKlick);
 
 $('rg-zurueck').addEventListener('click', () => zeigeScreen('scr-detail'));
 $('rg-senden').addEventListener('click', regalSenden);
+
+$('adm-k-neu').addEventListener('click', kontaktNeu);
+$('adm-kd-neu').addEventListener('click', kundeNeu);
+
+$('adm-kontakte').addEventListener('click', e => {
+  const k = e.target.closest('.k-aktion');
+  if (k) stammAktion({ action: 'admin_kontakt', was: k.dataset.was,
+                       email: k.dataset.mail });
+});
+
+$('adm-kunden').addEventListener('click', e => {
+  const aktion = e.target.closest('.kd-aktion');
+  if (aktion) {
+    stammAktion({ action: 'admin_kunde', was: aktion.dataset.was,
+                  name: aktion.dataset.name });
+    return;
+  }
+  const sp = e.target.closest('.kd-speichern');
+  if (!sp) return;
+  const karte = sp.closest('.stamm');
+  stammAktion({
+    action: 'admin_kunde', was: 'empfaenger', name: sp.dataset.name,
+    haupt:      karte.querySelector('[data-f="haupt"]').value.trim(),
+    vertretung: karte.querySelector('[data-f="vertretung"]').value.trim()
+  });
+});
+
+$('sd-senden').addEventListener('click', sendenAusfuehren);
+$('sd-ab').addEventListener('click', () => zeigeScreen('scr-detail'));
+$('sd-zurueck').addEventListener('click', () => zeigeScreen('scr-detail'));
 
 $('adm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
 $('adm-neu').addEventListener('click', adminNeu);
