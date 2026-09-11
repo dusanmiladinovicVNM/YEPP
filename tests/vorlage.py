@@ -288,6 +288,53 @@ def main():
     ok('elfte Position erscheint nirgends',
        'Palette 11' not in [fm[f'B{z}'].value for z in range(16, 26)])
 
+    # ---------------------------------------------------------------
+    # Der M-Code der beiden Abfragen
+    # ---------------------------------------------------------------
+    # Auf dem Mac legt kein Makro die Abfragen an; dort wird dieser Text
+    # eingefuegt. Er muss deshalb allein stehen koennen — und mit dem im
+    # Makro uebereinstimmen, sonst laden Windows und Mac verschieden.
+    m_text = (WURZEL / 'vorlage' / 'Abfragen.m').read_text(encoding='utf-8')
+    bas    = (WURZEL / 'vorlage' / 'Vorlage-Aufbau.bas').read_text(encoding='utf-8')
+
+    # Nur der Daten-Teil: die Nummernabfrage enthaelt {"WeNr", Order.Descending},
+    # und das ist eine Sortierung, keine Typangabe.
+    m_daten = m_text.split('// ============ Nummern')[0]
+    getypt = dict(re.findall(r'\{"([^"]+)", ([^}]+)\}', m_daten))
+    ok('jede CSV-Spalte ist ausdruecklich getypt',
+       [n for n in kopf if n not in getypt] == [],
+       str([n for n in kopf if n not in getypt]))
+    ok('und keine erfundene dazu',
+       [n for n in getypt if n not in kopf] == [],
+       str([n for n in getypt if n not in kopf]))
+
+    zahlen = {'Anzahl': 'type number', 'KG': 'type number',
+              'LagerM2': 'type number', 'Nr': 'Int64.Type'}
+    for name, typ in zahlen.items():
+        ok(f'{name} ist eine Zahl', getypt.get(name) == typ, str(getypt.get(name)))
+
+    # Die Datums- und Uhrzeitspalten sind der eigentliche Grund fuer die
+    # Liste: als Datum geladen verschieben sie sich um die Zeitzone, und im
+    # Formular stuende dann ein Tag daneben.
+    datums = [n for n in kopf if n.endswith('Dat') or n.endswith('Zeit')
+              or n == 'MHD']
+    ok('Datum und Uhrzeit bleiben Text',
+       all(getypt.get(n) == 'type text' for n in datums),
+       str({n: getypt.get(n) for n in datums if getypt.get(n) != 'type text'}))
+    ok('es sind ueberhaupt welche darunter', len(datums) >= 7, str(len(datums)))
+
+    ok('das Gebietsschema steht dabei', '"en-US"' in m_text)
+    ok('die Nummernabfrage baut auf Daten auf',
+       'Quelle = Daten' in m_text and 'Table.Distinct' in m_text)
+    ok('und sortiert absteigend', 'Order.Descending' in m_text)
+
+    # Windows (Makro) und Mac (eingefuegt) muessen denselben Text laden.
+    bas_typen = dict(re.findall(r'\{""([^"]+)"", ((?:type \w+|Int64\.Type))\}', bas))
+    ok('Makro und M-Datei typen gleich', bas_typen == getypt,
+       str({n: (bas_typen.get(n), getypt.get(n))
+            for n in set(list(bas_typen) + list(getypt))
+            if bas_typen.get(n) != getypt.get(n)}))
+
     print('\n' + '=' * 46)
     print(f'{bestanden} bestanden, {fehler} gescheitert')
     return 1 if fehler else 0

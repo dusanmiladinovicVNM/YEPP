@@ -90,9 +90,13 @@ slučaj da nekome zatreba jedan dokument bez Excela.
 
 ```
 vorlage/Wareneingang-Vorlage.xlsx   arbeitsmappa: Formular, Daten, Nummern, Liste
-vorlage/Vorlage-Aufbau.bas          makro koji dodaje Power Query upite
-tools/vorlage_bauen.py              generator — odavde je fajl nastao
+vorlage/Abfragen.m                  M-kod oba upita — za Mac, za lepljenje
+vorlage/Vorlage-Aufbau.bas          makro koji ih dodaje sam — za Windows
+tools/vorlage_bauen.py              generator — odavde su nastali i fajl i M
 ```
+
+`Abfragen.m` i M u makrou **potiču iz istog generatora**. Nije reč o dve
+kopije koje neko treba da drži u koraku.
 
 Broj dokumenta stoji **gore desno u `F1`** (`=IF($J$2="","",$J$2)`), unutar
 oblasti štampe — `J2` je van nje, pa bi bez toga potpisan i odložen list
@@ -111,8 +115,10 @@ Generator čita `CSV_SPALTEN` **iz `Code.gs`**. Promeni li se endpoint, pokrene�
 `python3 tools/vorlage_bauen.py` i šablon je opet u koraku. Zato ovde nema
 argumenta „šablon se razilazi sa kodom" — ne pravi se rukom.
 
-Ostaju samo **upiti**, jer njih Excel mora da napravi sam: Power Query delovi
-sklopljeni izvan Excela se često odbiju bez poruke.
+Ostaju samo **upiti u samom fajlu**, jer njih Excel mora da upiše sam: Power
+Query delovi sklopljeni izvan Excela se često odbiju **bez poruke**, a fajl
+koji ćuteći ne radi gori je od jednog ručnog koraka. Sam **tekst** upita je
+ipak generisan — vidi `Abfragen.m`.
 
 ---
 
@@ -138,35 +144,47 @@ End Sub
 Makro pravi oba upita i puni `Daten`, `Nummern` i `Liste`. Sme da se pokrene
 više puta — postojeći upiti se zamenjuju, ne dupliraju.
 
-### Mac — upiti rukom
+### Mac — M-kod se nalepi
 
-Excel za Mac ne poznaje `Queries.Add`; makro to prijavi i stane. Dva upita se
-tada prave jednom, kroz UI. **Daten → Aus dem Web**, URL:
+Excel za Mac ne poznaje `Queries.Add`; makro to prijavi i stane. Ali klikanje
+kroz čarobnjak nije potrebno — **`vorlage/Abfragen.m` nosi gotov M-kod oba
+upita**, i to je isti tekst koji makro upisuje na Windowsu.
 
 ```
-<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
+python3 tools/vorlage_bauen.py   # ako se CSV_SPALTEN promeni
 ```
 
-autentifikacija **Anonym**. U editoru:
+Postupak, dvaput (jednom za `Daten`, jednom za `Nummern`):
 
-- **Erste Zeile als Überschriften verwenden**
-- tipove ostaviti na **Text**, osim `Anzahl`, `KG`, `LagerM2` i `Nr`
-- te četiri menjaj **isključivo** preko **Typ ändern → Gebietsschema…**,
-  gde se bira **Englisch (USA)**, pa `Dezimalzahl` odnosno `Ganze Zahl`.
-  Obično „Dezimalzahl" uzima regionalno podešavanje računara — a na
-  nemačkom je tačka separator hiljada, pa od `3.4` kg tiho postane `34` kg,
-  i to samo na nekim mašinama. CSV uvek šalje tačku.
-  Makro to isto radi kroz `"en-US"` u `Table.TransformColumnTypes`.
-  Datumi **moraju ostati tekst** — CSV šalje `GGGG-MM-TT`, a kao datum
-  učitani se pomeraju po vremenskoj zoni
-- upit nazvati **`Daten`**, učitati u postojeći list `Daten`, ćelija `A1`
+1. **Daten → Daten abrufen → Leere Abfrage**
+2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
+   `Abfragen.m`
+3. u bloku `Daten` zameni `<Web-App-URL>` i `<TOKEN_READ>` —
+   **`einrichtungPruefen()`** u Apps Scriptu ispisuje celu adresu gotovu
+4. upit nazvati tačno **`Daten`** odnosno **`Nummern`**
+5. prvi put pita za pristup izvoru → **Anonym**, i za nivoe privatnosti →
+   **Ignorieren** ili sve na *Öffentlich*
 
-Zatim desni klik na `Daten` → **Duplizieren**, u duplikatu:
-**Andere Spalten entfernen** osim `WeNr` → **Duplikate entfernen** →
-**Sortieren absteigend**, nazvati **`Nummern`**, učitati u list `Nummern`.
+Zatim učitati: `Daten` u list **`Daten`** (ćelija `A1`) i još jednom u list
+**`Liste`**, a `Nummern` u list **`Nummern`**.
 
-Isti upit `Daten` učitati još jednom u list `Liste` — to je vidljiva
-evidencija.
+**Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
+puca. M-kod tipuje **svaku od 23 kolone izričito**:
+
+| | |
+|---|---|
+| `Anzahl` `KG` `LagerM2` | `type number`, uz `"en-US"` |
+| `Nr` | `Int64.Type` |
+| **sve ostalo, uključujući `AngDat`, `AngZeit`, `MHD`** | `type text` |
+
+Bez `"en-US"` „Dezimalzahl" uzima regionalno podešavanje računara — a na
+nemačkom je tačka separator hiljada, pa od `3.4` kg tiho postane `34` kg, i
+to samo na nekim mašinama. Datumi moraju ostati **tekst**: CSV šalje
+`GGGG-MM-TT`, a kao datum učitani se pomeraju po vremenskoj zoni.
+
+Pošto se lista tipova generiše iz `CSV_SPALTEN`, **nova kolona ne može da
+ostane netipizovana** — a test `vorlage.py` proverava i da makro i `.m`
+tipuju identično, pa Windows i Mac ne mogu da se raziđu.
 
 Na kraju sačuvati kao `.xlsm` i dodati `Workbook_Open` kao gore.
 

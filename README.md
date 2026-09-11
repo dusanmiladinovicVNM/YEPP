@@ -37,8 +37,9 @@ icons/icon-maskable-512.png
 apps-script/Code.gs        ceo backend — prijava, unos, kvitiranje, xlsx, CSV
 
 vorlage/Wareneingang-Vorlage.xlsx   gotova Excel šablona za SharePoint
-vorlage/Vorlage-Aufbau.bas          makro koji joj doda Power Query upite
-tools/vorlage_bauen.py              generator šablone iz CSV_SPALTEN
+vorlage/Abfragen.m                  M-kod oba Power Query upita — za Mac
+vorlage/Vorlage-Aufbau.bas          makro koji ih doda sam — za Windows
+tools/vorlage_bauen.py              generator šablone i M-koda iz CSV_SPALTEN
 
 tests/pwa.mjs              vozi pravi UI u Chromiumu sa lažnim backendom
 tests/backend.mjs          vozi Code.gs nad Sheets-om u memoriji
