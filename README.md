@@ -93,7 +93,8 @@ Nastaju ovi, sa ovim kolonama:
 |---|---|
 | `Wareneingang` | `WeNr` `Zeitstempel` `Erfasser` `Email` `Kunde` `Lieferant` `AngNam` `AngDat` `AngZeit` `GezNam` `GezDat` `GezZeit` `EinNam` `EinDat` `EinZeit` `LagerM2` `Bemerkung` `Storniert` `Status` `FotoUrl` `DateiUrl` `Gesendet` `Vorgang` |
 | `Positionen` | `WeNr` `Nr` `Artikel` `Anzahl` `KG` `MHD` `Regalplatz` `Bemerkung` `Bestehend` `FotoUrl` |
-| `Kunden` | `Name` `Aktiv` `Sortierung` |
+| `Kunden` | `Name` `Aktiv` `Sortierung` `EmailHaupt` `EmailVertretung` |
+| `Kontakte` | `Name` `Email` `Aktiv` |
 | `Lieferanten` | `Name` `Aktiv` `Sortierung` |
 | `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` |
 | `Sessions` | `Token` `Email` `GueltigBis` |
@@ -462,6 +463,39 @@ upisuje umesto tebe.
 `Benutzer`, a u njemu `PassHash` i `Salt`. Zato je odvojen od `ArchivOrdner`,
 koji se po pravilu deli sa računovodstvom.
 
+### Kontakti i kupci
+
+Admin ih održava kroz aplikaciju; u tabelu se ne mora ulaziti.
+
+**Kontakti** su spisak primalaca — ime i adresa. Deaktivirani ostaju u
+tabeli ali nestaju iz predloga.
+
+**Kod svakog kupca** stoje dve adrese: **Haupt** i **Stellvertretung**. Obe
+su podrazumevani primaoci pri slanju — glavni u `An`, zamena u `Kopie`.
+
+> Zamena je osoba koja uskače; ko tek u odsustvu sazna da je nešto
+> isporučeno, uskače prekasno. Zato oboje dobijaju mejl, a ne samo prvi
+> kad drugog nema.
+
+**Ništa od toga nije prisila.** Pri slanju se otvara ekran sa poljima `An` i
+`Kopie`, popunjenim iz te vrednosti — a radnik sme da izabere bilo kog
+kontakta iz padajuće liste ili da prosto upiše adresu. Šta stoji u tom
+ekranu, to i ide.
+
+Redosled kojim server bira primaoca:
+
+| | |
+|---|---|
+| 1 | šta je upisano u ekranu za slanje |
+| 2 | `EmailHaupt` / `EmailVertretung` kod kupca |
+| 3 | parametar `MailAn` — ostatak iz vremena kad je adresa bila jedna |
+
+Prazno kod kupca znači **nema vrednosti**, ne greška; tek ako ni parametar
+nije postavljen, slanje javlja `kein_empfaenger`.
+
+Stara tabela bez kolona `EmailHaupt`/`EmailVertretung` radi dalje — slanje
+pada na parametar, a admin dobija poruku da pokrene `setupAnlegen`.
+
 ### Korisnici
 
 Korisnicima upravlja neko iz firme kroz samu aplikaciju, ne kroz tabelu.
@@ -786,6 +820,10 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 21 | Admin zalepi celu Drive adresu u polje za folder | sačuva se ID, ispod stoji ime foldera |
 | 22 | Admin upiše `lager.firma.ch` bez `@` | odbijeno, stari unos ostaje |
 | 23 | Novi korisnik iz Verwaltung, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
+| 23b | Novi kontakt bez `@` | odbijen, poruka pored polja |
+| 23c | Kod kupca upisati Haupt i Stellvertretung | *Als Excel senden* nudi obe |
+| 23d | U ekranu za slanje upisati treću adresu | ide na nju, ne na vrednost |
+| 23e | Kupac bez vrednosti | uzima se `MailAn` |
 | 24 | Avionski režim usred *Speichern*, pa ponovo *Speichern* | jedan dokument, ne dva |
 | 25 | *Abmelden*, pa isti token ubačen ručno | odbijen sa `session` |
 | 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |

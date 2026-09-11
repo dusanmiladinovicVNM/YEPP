@@ -78,9 +78,24 @@ const attrappe = () => {
                           x.erfasser).toLowerCase().includes(s);
       return eigen.concat([fremd]).filter(passt);
     };
-    const stamm = { kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'] };
+    DB.kontakte = DB.kontakte ||
+      [{ name: 'Eva Muster', email: 'eva@firma.ch', aktiv: true }];
+    DB.kundenStamm = DB.kundenStamm ||
+      [{ name: 'Kunde AG', aktiv: true, haupt: 'eva@firma.ch', vertretung: '' }];
+    const stammEmpf = () => {
+      const aus = {};
+      DB.kundenStamm.forEach(k => {
+        if (k.haupt || k.vertretung) aus[k.name] = { an: k.haupt, kopie: k.vertretung };
+      });
+      return aus;
+    };
+    const stamm = { kunden: ['Kunde AG'], lieferanten: ['Lieferant GmbH'],
+                    kontakte: DB.kontakte.filter(k => k.aktiv)
+                                .map(k => ({ name: k.name, email: k.email })),
+                    empfaenger: stammEmpf() };
     const startDaten = () => ({ ok: true, liste: liste(),
-                                kunden: stamm.kunden, lieferanten: stamm.lieferanten });
+                                kunden: stamm.kunden, lieferanten: stamm.lieferanten,
+                                kontakte: stamm.kontakte, empfaenger: stamm.empfaenger });
 
     switch (d.action) {
       case 'login':
@@ -99,7 +114,33 @@ const attrappe = () => {
         if (window.__ohneStart) return A({ ok: false, error: 'unbekannte Aktion' });
         return A(startDaten());
       case 'stammdaten':
-        return A({ ok: true, kunden: stamm.kunden, lieferanten: stamm.lieferanten });
+        return A({ ok: true, kunden: stamm.kunden, lieferanten: stamm.lieferanten,
+                   kontakte: stamm.kontakte, empfaenger: stamm.empfaenger });
+      case 'admin_kontakt': {
+        if (d.was === 'neu') {
+          if (!d.name || !String(d.email).includes('@')) {
+            return A({ ok: false, error: d.name ? 'keine_mail' : 'unvollstaendig' });
+          }
+          DB.kontakte.push({ name: d.name, email: String(d.email).toLowerCase(),
+                             aktiv: true });
+        } else {
+          const k = DB.kontakte.filter(x => x.email === d.email)[0];
+          if (k) k.aktiv = d.was === 'an';
+        }
+        return A({ ok: true, kontakte: DB.kontakte, kunden: DB.kundenStamm });
+      }
+      case 'admin_kunde': {
+        if (d.was === 'neu') DB.kundenStamm.push(
+          { name: d.name, aktiv: true, haupt: '', vertretung: '' });
+        else {
+          const k = DB.kundenStamm.filter(x => x.name === d.name)[0];
+          if (k && d.was === 'empfaenger') {
+            k.haupt = String(d.haupt || '').toLowerCase();
+            k.vertretung = String(d.vertretung || '').toLowerCase();
+          } else if (k) k.aktiv = d.was === 'an';
+        }
+        return A({ ok: true, kontakte: DB.kontakte, kunden: DB.kundenStamm });
+      }
       case 'we_liste':
         return A({ ok: true, liste: liste() });
       case 'we_speichern': {
@@ -155,8 +196,12 @@ const attrappe = () => {
           ordner: { ArchivOrdner: 'Wareneingang Archiv', FotoOrdner: '',
                     SicherungOrdner: '' } });
       case 'admin_liste':
-        return A({ ok: true, benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
-          aktiv: true, admin: true, neu: false, gesperrt: false }] });
+        // Wie im echten Code.gs: Benutzer, Kontakte und Kunden in einer
+        // Antwort — der Adminbereich zeigt sie auf demselben Schirm.
+        return A({ ok: true,
+          benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
+                       aktiv: true, admin: true, neu: false, gesperrt: false }],
+          kontakte: DB.kontakte, kunden: DB.kundenStamm });
       case 'admin_neu':
         return A({ ok: true, passwort: 'Xy7k9m2Qw4', text: 'Guten Tag …',
                    wem: d.name + ' <' + d.email + '>' });
@@ -319,9 +364,11 @@ ok('Regalplatz im Detail sichtbar',
 // --- 7) Excel senden --------------------------------------------------------
 console.log('\n7) Excel senden');
 await page.click('#dt-senden');
-await page.waitForSelector('#dlg-frage.zeigen');
-ok('fragt vor dem Versand nach', await page.isVisible('#frage-text'));
-await page.click('#frage-ja');
+await page.waitForSelector('#scr-senden.aktiv');
+ok('vor dem Versand steht, an wen es geht', await page.isVisible('#sd-an'));
+ok('und welcher Wareneingang gemeint ist',
+   (await page.textContent('#sd-titel')) === 'WE-2026-0001');
+await page.click('#sd-senden');
 await page.waitForFunction(() =>
   window.__gesendet.some(x => x.action === 'we_senden'));
 ok('Sendeauftrag mit WE-Nummer', (await page.evaluate(() =>
@@ -1214,6 +1261,104 @@ ok('auch beim Einlagern ein Knopf je Position',
 ok('die schon erfasste Position ist markiert',
    await pf.$eval('#rg-liste .rg-foto', e => e.className.includes('hat-foto')));
 await pf.close();
+
+// --- 22) Kontakte, Kunden und der Sendedialog -------------------------------
+// Aus dem Betrieb: je Kunde eine Haupt- und eine Vertretungsadresse als
+// Vorgabe, aber waehlen oder tippen muss man trotzdem koennen.
+console.log('\n22) Kontakte, Kunden und der Sendedialog');
+const kt = await browser.newPage();
+kt.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await kt.addInitScript(attrappe);
+await kt.goto(APP);
+await kt.fill('#lg-email', 'anna@firma.ch');
+await kt.fill('#lg-pass', 'geheim123');
+await kt.click('#lg-senden');
+await kt.waitForSelector('#scr-start.aktiv');
+
+ok('die Kontakte stehen als Vorschlag bereit',
+   (await kt.$$('#dl-kontakte option')).length === 1);
+
+await kt.click('#st-admin');
+await kt.waitForSelector('#scr-admin.aktiv');
+await kt.waitForFunction(() => document.querySelectorAll('#adm-kunden .stamm').length > 0);
+ok('der Adminbereich zeigt die Kontakte',
+   (await kt.textContent('#adm-kontakte')).includes('eva@firma.ch'));
+ok('und die Kunden mit ihren Adressen',
+   (await kt.inputValue('#adm-kunden [data-f="haupt"]')) === 'eva@firma.ch');
+
+// Einen zweiten Kontakt anlegen
+await kt.fill('#adm-k-name', 'Urs Vertretung');
+await kt.fill('#adm-k-mail', 'urs@firma.ch');
+await kt.click('#adm-k-neu');
+await kt.waitForFunction(() =>
+  document.getElementById('adm-kontakte').textContent.includes('urs@firma.ch'));
+ok('ein neuer Kontakt erscheint sofort',
+   (await kt.textContent('#adm-kontakte')).includes('Urs Vertretung'));
+ok('die Felder sind danach leer', (await kt.inputValue('#adm-k-name')) === '');
+ok('und er steht gleich in der Vorschlagsliste',
+   (await kt.$$('#dl-kontakte option')).length === 2);
+
+// Eine kaputte Adresse wird abgewiesen, nicht stillschweigend gespeichert
+await kt.fill('#adm-k-name', 'Kaputt');
+await kt.fill('#adm-k-mail', 'keine-adresse');
+await kt.click('#adm-k-neu');
+await kt.waitForSelector('#adm-k-meldung.zeigen');
+ok('eine kaputte Adresse wird benannt',
+   (await kt.textContent('#adm-k-meldung')).includes('E-Mail'),
+   await kt.textContent('#adm-k-meldung'));
+
+// Vertretung beim Kunden hinterlegen
+await kt.fill('#adm-kunden [data-f="vertretung"]', 'urs@firma.ch');
+await kt.click('#adm-kunden .kd-speichern');
+await kt.waitForFunction(() =>
+  window.__gesendet.some(x => x.action === 'admin_kunde' && x.was === 'empfaenger'));
+const gesetzt = await kt.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_kunde' && x.was === 'empfaenger').pop());
+ok('beide Adressen gehen mit',
+   gesetzt.haupt === 'eva@firma.ch' && gesetzt.vertretung === 'urs@firma.ch',
+   JSON.stringify(gesetzt));
+
+// Einen neuen Kunden anlegen
+await kt.fill('#adm-kd-name', 'Zweite AG');
+await kt.click('#adm-kd-neu');
+await kt.waitForFunction(() =>
+  document.getElementById('adm-kunden').textContent.includes('Zweite AG'));
+ok('ein neuer Kunde erscheint sofort',
+   (await kt.textContent('#adm-kunden')).includes('Zweite AG'));
+
+// Und jetzt der Sendedialog
+await kt.click('#adm-zurueck');
+await kt.waitForSelector('#scr-start.aktiv');
+await kt.click('#st-neu');
+await kt.waitForSelector('#scr-form.aktiv');
+await kt.fill('#fm-kunde', 'Kunde AG');
+await kt.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await kt.click('#fm-speichern');
+await kt.waitForSelector('#scr-detail.aktiv');
+await kt.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+await kt.click('#dt-senden');
+await kt.waitForSelector('#scr-senden.aktiv');
+
+ok('der Sendedialog ist mit der Vorgabe gefuellt',
+   (await kt.inputValue('#sd-an')) === 'eva@firma.ch',
+   await kt.inputValue('#sd-an'));
+ok('und nennt, woher sie kommt',
+   (await kt.textContent('#sd-hinweis')).includes('Kunde AG'),
+   await kt.textContent('#sd-hinweis'));
+ok('die Felder schlagen die Kontakte vor',
+   (await kt.$eval('#sd-an', e => e.getAttribute('list'))) === 'dl-kontakte');
+
+// Von Hand etwas anderes eintragen — das gewinnt
+await kt.fill('#sd-an', 'chef@firma.ch');
+await kt.fill('#sd-kopie', '');
+await kt.click('#sd-senden');
+await kt.waitForFunction(() => window.__gesendet.some(x => x.action === 'we_senden'));
+const auftrag = await kt.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_senden').pop());
+ok('was getippt wurde, geht hinaus',
+   auftrag.mailAn === 'chef@firma.ch' && auftrag.kopie === '',
+   JSON.stringify([auftrag.mailAn, auftrag.kopie]));
+await kt.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
