@@ -874,14 +874,28 @@ function verbindungText(e) {
  * verschweigt genau das, was man wissen muss, und schickt einen auf die
  * Suche nach einem Netzproblem, das es nicht gibt.
  */
-function abgelehntText(r) {
+/**
+ * @param was  Was nicht geladen werden konnte, fuer den Fall, dass der
+ *             Grund unbekannt ist. «Nicht geladen» ueber einem Foto zu
+ *             melden hilft niemandem.
+ */
+function abgelehntText(r, was) {
   return {
     nur_post: 'Der Aufruf kam beim Server ohne Inhalt an. Bitte noch einmal ' +
               'versuchen.',
     nicht_gefunden: 'Dieser Wareneingang wurde nicht gefunden.',
     'keine Berechtigung': 'Dafür fehlen die Rechte.',
-    passwort_noetig: 'Bitte zuerst ein eigenes Passwort setzen.'
-  }[r.error] || ('Nicht geladen. Der Server meldet: ' + r.error);
+    passwort_noetig: 'Bitte zuerst ein eigenes Passwort setzen.',
+
+    // Die App ist neuer als das Skript. Ein Merge auf GitHub erneuert nur
+    // die Seite; Code.gs kommt dort nicht von selbst an. Ohne diesen Satz
+    // steht «Der Server meldet: unbekannte Aktion» auf dem Schirm, und das
+    // schickt jeden an die falsche Stelle suchen.
+    'unbekannte Aktion':
+      'Diese Funktion kennt die Bereitstellung noch nicht. In Apps Script ' +
+      'den aktuellen Code.gs einfügen und unter «Bereitstellungen verwalten» ' +
+      'eine neue Version veröffentlichen.'
+  }[r.error] || ((was || 'Nicht geladen') + '. Der Server meldet: ' + r.error);
 }
 
 function sessionWeg() {
@@ -1739,7 +1753,7 @@ async function fotoZeigen() {
         kein_foto:     'Zu diesem Wareneingang wurde kein Foto erfasst.',
         foto_unlesbar: 'Das Foto ist in Drive nicht mehr auffindbar.',
         storniert:     'Der Wareneingang wurde zurückgezogen.'
-      }[r.error] || abgelehntText(r), 'err');
+      }[r.error] || abgelehntText(r, 'Foto nicht geladen'), 'err');
       return;
     }
     fotoMerken(weNr, r.bild);

@@ -796,6 +796,11 @@ bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
 jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
 da nikad nije više od jednog.
 
+**„unbekannte Aktion" znači: aplikacija je novija od skripte.** Merge na
+GitHubu osvežava samo Pages; `Code.gs` u Apps Script ne stiže sam. Poruka
+zato kaže baš to — koji korak nedostaje i gde — umesto da ponovi kod
+greške i pošalje čoveka da traži na pogrešnom mestu.
+
 **Kad server odbije, poruka nosi njegov razlog.** Poznati razlozi dobijaju
 rečenicu, ostali se ispisuju onako kako su stigli — `Nicht geladen. Der
 Server meldet: …`. Golo „Nicht geladen." je krilo baš ono što treba znati i

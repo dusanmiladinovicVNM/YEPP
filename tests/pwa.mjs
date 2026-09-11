@@ -1108,6 +1108,17 @@ ok('das zweite Mal kommt aus dem Speicher',
    (await fot.evaluate(() => window.__fotoAbrufe)) === 1,
    String(await fot.evaluate(() => window.__fotoAbrufe)));
 
+// Die App kann neuer sein als das Skript — ein Merge auf GitHub erneuert
+// nur die Seite. Dann muss die Meldung sagen, WO das fehlt.
+const veraltet = await fot.evaluate(() =>
+  abgelehntText({ error: 'unbekannte Aktion' }, 'Foto nicht geladen'));
+ok('eine aeltere Bereitstellung wird als solche benannt',
+   veraltet.includes('Code.gs') && veraltet.includes('Version') &&
+   !veraltet.includes('unbekannte Aktion'), veraltet);
+ok('und ein unbekannter Grund nennt, was nicht kam',
+   (await fot.evaluate(() => abgelehntText({ error: 'irgendwas' }, 'Foto nicht geladen')))
+     .startsWith('Foto nicht geladen.'));
+
 await fot.keyboard.press('Escape');
 await fot.waitForFunction(() => document.getElementById('bild-schau').hidden);
 ok('Escape schliesst auch', await fot.$eval('#bild-schau', e => e.hidden));
