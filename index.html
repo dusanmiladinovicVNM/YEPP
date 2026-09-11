@@ -494,6 +494,7 @@ select{
   </header>
 
   <div class="scroll">
+    <div class="alt" id="dt-alt" hidden></div>
     <div class="daten" id="dt-daten"></div>
 
     <div class="pos-kopf"><h2>Aufgabe / Task</h2></div>
@@ -1027,7 +1028,7 @@ async function start(vorab) {
   // Sekunden; solange auf «Wird geladen …» zu starren ist die
   // Wartezeit, die man loswerden wollte.
   const zuletzt = listeAusSpeicher();
-  if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen(zuletzt.zeit); }
+  if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen('st-alt', zuletzt.zeit); }
   else         { $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>'; }
 
   try {
@@ -1061,13 +1062,8 @@ async function start(vorab) {
  * darueber sagt dann aber, dass sie alt ist und warum sie es bleibt.
  */
 function nichtErneuert(grund, zuletzt) {
-  if (zuletzt) {
-    $('st-alt').hidden = false;
-    $('st-alt').textContent = 'Stand vom Gerät, geladen ' + altText(zuletzt.zeit) +
-                              '. ' + grund;
-    return;
-  }
-  altVerbergen();
+  if (zuletzt) { altZeigen('st-alt', zuletzt.zeit, grund); return; }
+  altVerbergen('st-alt');
   $('st-zahl').textContent = '';
   $('st-liste').innerHTML = '<div class="leer">' + esc(grund) + '</div>';
 }
@@ -1120,13 +1116,13 @@ function altText(zeit) {
   return 'vor ' + tage + (tage === 1 ? ' Tag' : ' Tagen');
 }
 
-function altZeigen(zeit) {
-  $('st-alt').hidden = false;
-  $('st-alt').textContent = 'Letzter Stand vom Gerät, geladen ' + altText(zeit) +
-                            '. Wird aktualisiert …';
+function altZeigen(id, zeit, grund) {
+  $(id).hidden = false;
+  $(id).textContent = 'Stand vom Gerät, geladen ' + altText(zeit) + '. ' +
+                      (grund || 'Wird aktualisiert …');
 }
 
-function altVerbergen() { $('st-alt').hidden = true; }
+function altVerbergen(id) { $(id).hidden = true; }
 
 /**
  * Der Umschalter steht nur beim Admin — und das ist Bequemlichkeit, keine
@@ -1171,7 +1167,7 @@ function startUebernehmen(r) {
       JSON.stringify({ kunden: S.kunden, lieferanten: S.lieferanten }));
     fuelleStammdaten();
   }
-  altVerbergen();
+  altVerbergen('st-alt');
   zeichneListe(r.liste || []);
   listeSpeichern(r.liste || []);
 }
@@ -1213,28 +1209,42 @@ const STATUS_TEXT = {
   eingelagert: 'eingelagert'
 };
 
+/**
+ * Holt die Liste neu — OHNE das wegzuwerfen, was schon dasteht.
+ *
+ * «Wird geladen …» ueber Zeilen zu legen, die richtig sind, macht aus
+ * einem unsichtbaren Abruf acht Sekunden Warten. Genau das geschah beim
+ * Zurueckgehen aus dem Detail: die Liste stand fertig auf dem Schirm und
+ * wurde durch den Ladehinweis ersetzt.
+ *
+ * Der Ladehinweis bleibt fuer den einen Fall, in dem er stimmt: es steht
+ * nichts da und das Geraet hat auch nichts gemerkt. Bei einer SUCHE wird
+ * dagegen geleert — die Zeilen auf dem Schirm gehoeren zu einer anderen
+ * Frage und wuerden als Antwort auf diese gelesen.
+ */
 async function ladeListe() {
   const suche = $('st-suche').value.trim();
   $('st-titel').textContent = listenTitel(suche);
-  altVerbergen();
-  $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+
+  const zuletzt = suche ? null : listeAusSpeicher();
+  if (suche) {
+    altVerbergen('st-alt');
+    $('st-liste').innerHTML = '<div class="leer">Wird gesucht …</div>';
+  } else if (!$('st-liste').querySelector('.eintrag')) {
+    if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen('st-alt', zuletzt.zeit); }
+    else { altVerbergen('st-alt');
+           $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>'; }
+  }
+
   try {
     const r = await post({ action: 'we_liste', session: S.session,
                           suche: suche, alle: S.alle });
-    if (!antwortOk(r)) {
-      // Der Zaehler stammt sonst noch vom letzten geglueckten Aufruf und
-      // behauptet Eintraege, die gerade niemand sehen kann.
-      altVerbergen();
-      $('st-zahl').textContent = '';
-      $('st-liste').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
-      return;
-    }
-    altVerbergen();
+    if (!antwortOk(r)) { nichtErneuert(abgelehntText(r), zuletzt); return; }
+    altVerbergen('st-alt');
     zeichneListe(r.liste || []);
     listeSpeichern(r.liste || []);
   } catch (e) {
-    altVerbergen();
-    $('st-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
+    nichtErneuert(verbindungText(e), zuletzt);
   }
 }
 
@@ -1507,6 +1517,37 @@ function fotoWeg() {
 
 /* ---------- Detail ---------- */
 
+/**
+ * Die zuletzt geoeffneten Dokumente auf dem Geraet.
+ *
+ * Dasselbe Versprechen wie bei der Liste: nichts davon entscheidet etwas.
+ * Jede Handlung nennt dem Server die WE-Nummer, und der liest die Zeile
+ * neu — «bereits quittiert», «storniert» und die Rechte entscheiden sich
+ * dort, nicht hier. Ein alter Stand kann also hoechstens einen Knopf
+ * zeigen, den der Server danach ablehnt; er kann nichts Falsches tun.
+ *
+ * Begrenzt auf zwanzig und beim Abmelden vergessen: darin stehen
+ * Kunden- und Lieferantennamen, und ein iPad wird geteilt.
+ */
+const DETAIL_MERKEN = 20;
+
+function detailsAusSpeicher() {
+  try { return JSON.parse(localStorage.getItem('details') || '{}') || {}; }
+  catch (e) { return {}; }
+}
+
+function detailSpeichern(weNr, r) {
+  try {
+    const alle = detailsAusSpeicher();
+    alle[weNr] = { kopf: r.kopf, positionen: r.positionen, zeit: Date.now() };
+    Object.keys(alle)
+      .sort((a, b) => (alle[b].zeit || 0) - (alle[a].zeit || 0))
+      .slice(DETAIL_MERKEN)
+      .forEach(n => { delete alle[n]; });
+    localStorage.setItem('details', JSON.stringify(alle));
+  } catch (e) { /* voller Speicher — kein Grund, das Oeffnen zu verhindern */ }
+}
+
 async function detailOeffnen(weNr) {
   // ZUERST vergessen, was hier zuletzt stand. Ohne das zeigte der Kopf
   // schon die neue Nummer, waehrend S.detail noch das vorige Dokument
@@ -1516,21 +1557,41 @@ async function detailOeffnen(weNr) {
   S.detail = null;
   $('dt-titel').textContent = weNr;
   $('dt-daten').innerHTML = '';
-  $('dt-schritte').innerHTML = '<div class="leer">Wird geladen …</div>';
   $('dt-positionen').innerHTML = '';
   $('dt-poszahl').textContent = '';
-  // Kein Knopf auf einem Dokument, das noch gar nicht da ist.
   $('dt-aktionen').hidden = true;
+  altVerbergen('dt-alt');
+
+  // Was das Geraet von diesem Dokument noch hat, steht sofort da. Der
+  // Abruf dauert Sekunden, und in dieser Zeit auf einen Ladehinweis zu
+  // sehen ist die Wartezeit selbst.
+  const gemerkt = detailsAusSpeicher()[weNr];
+  if (gemerkt) {
+    S.detail = { ok: true, kopf: gemerkt.kopf, positionen: gemerkt.positionen };
+    zeichneDetail(gemerkt.kopf, gemerkt.positionen);
+    $('dt-aktionen').hidden = false;
+    altZeigen('dt-alt', gemerkt.zeit);
+  } else {
+    // Kein Knopf auf einem Dokument, das noch gar nicht da ist.
+    $('dt-schritte').innerHTML = '<div class="leer">Wird geladen …</div>';
+  }
   zeigeScreen('scr-detail');
 
   try {
     const r = await post({ action: 'we_detail', session: S.session, weNr: weNr });
-    if (!antwortOk(r)) { detailFehler(abgelehntText(r), weNr); return; }
+    if (!antwortOk(r)) {
+      if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, abgelehntText(r));
+      else detailFehler(abgelehntText(r), weNr);
+      return;
+    }
     S.detail = r;
     zeichneDetail(r.kopf, r.positionen);
+    detailSpeichern(weNr, r);
+    altVerbergen('dt-alt');
     $('dt-aktionen').hidden = false;
   } catch (e) {
-    detailFehler(verbindungText(e), weNr);
+    if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, verbindungText(e));
+    else detailFehler(verbindungText(e), weNr);
   }
 }
 
@@ -1545,6 +1606,7 @@ async function detailOeffnen(weNr) {
  * die Liste und den Eintrag erneut antippen.
  */
 function detailFehler(text, weNr) {
+  altVerbergen('dt-alt');
   $('dt-schritte').innerHTML =
     '<div class="leer">' + esc(text) + '</div>' +
     '<div class="knopfzeile"><button class="gross sekundaer" id="dt-nochmal">' +

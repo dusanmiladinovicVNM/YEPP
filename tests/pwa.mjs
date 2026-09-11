@@ -767,6 +767,71 @@ ok('der vergebliche Aufruf wird nicht wiederholt',
    (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
 await alt.close();
 
+// --- 19) Nichts wegwerfen, was schon richtig dasteht ------------------------
+// Aus dem Betrieb: acht Sekunden fuer die Liste, acht fuers Detail, und noch
+// einmal acht beim Zurueckgehen — obwohl die Liste da schon fertig auf dem
+// Schirm stand und nur vom Ladehinweis zugedeckt wurde.
+console.log('\n19) Nichts wegwerfen, was schon richtig dasteht');
+const flott = await browser.newPage();
+flott.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await flott.addInitScript(attrappe);
+await flott.goto(APP);
+await flott.fill('#lg-email', 'anna@firma.ch');
+await flott.fill('#lg-pass', 'geheim123');
+await flott.click('#lg-senden');
+await flott.waitForSelector('#scr-start.aktiv');
+
+await flott.click('#st-neu');
+await flott.waitForSelector('#scr-form.aktiv');
+await flott.fill('#fm-kunde', 'Kunde AG');
+await flott.fill('#fm-lieferant', 'Lieferant GmbH');
+await flott.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await flott.click('#fm-speichern');
+await flott.waitForSelector('#scr-detail.aktiv');
+await flott.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('das Detail merkt sich sein Dokument',
+   !!(await flott.evaluate(() =>
+     JSON.parse(localStorage.getItem('details') || '{}')['WE-2026-0001'])));
+
+// Ab hier dauert jede Antwort lange — was der Schirm VORHER zeigt, zaehlt.
+await flott.evaluate(() => { window.__langsam = 900; });
+
+await flott.click('#dt-zurueck');
+ok('die Liste steht beim Zurueckgehen sofort',
+   (await flott.textContent('#st-liste')).includes('WE-2026-0001'),
+   await flott.textContent('#st-liste'));
+ok('und kein Ladehinweis deckt sie zu',
+   !(await flott.textContent('#st-liste')).includes('Wird geladen'),
+   await flott.textContent('#st-liste'));
+await flott.waitForFunction(() =>
+  window.__gesendet.filter(x => x.action === 'we_liste').length > 0);
+ok('frisch geholt wird trotzdem, nur unsichtbar',
+   (await flott.evaluate(() =>
+     window.__gesendet.filter(x => x.action === 'we_liste').length)) > 0);
+
+// Dasselbe Dokument ein zweites Mal: es steht sofort da.
+await flott.click('#st-liste .eintrag');
+ok('das Detail steht beim zweiten Mal sofort',
+   (await flott.textContent('#dt-positionen')).includes('Schrauben M6'),
+   await flott.textContent('#dt-positionen'));
+ok('und sagt, dass der Stand vom Geraet ist',
+   !(await flott.$eval('#dt-alt', e => e.hidden)) &&
+   (await flott.textContent('#dt-alt')).includes('Gerät'),
+   await flott.textContent('#dt-alt'));
+await flott.waitForFunction(() => document.getElementById('dt-alt').hidden);
+ok('frische Daten loeschen den Hinweis',
+   await flott.$eval('#dt-alt', e => e.hidden));
+
+// Eine Suche dagegen LEERT: die Zeilen gehoeren zu einer anderen Frage.
+await flott.click('#dt-zurueck');
+await flott.fill('#st-suche', 'nordwind');
+await flott.waitForFunction(() =>
+  document.getElementById('st-liste').textContent.includes('Wird gesucht'));
+ok('eine Suche raeumt die alten Zeilen weg',
+   !(await flott.textContent('#st-liste')).includes('WE-2026-0001'),
+   await flott.textContent('#st-liste'));
+await flott.close();
+
 // --- 18) Ein Detail, das nicht geladen hat, ist kein Detail ----------------
 // Aus dem Betrieb: der Kopf zeigte WE-2026-0005, darunter stand die Meldung
 // ueber die verlorene Anfrage — und beide Knoepfe waren da. S.detail hielt
