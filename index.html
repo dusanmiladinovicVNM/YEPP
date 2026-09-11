@@ -505,7 +505,7 @@ select{
     </div>
     <div id="dt-positionen"></div>
 
-    <div class="knopfzeile">
+    <div class="knopfzeile" id="dt-aktionen" hidden>
       <button id="dt-senden" class="gross primaer">Als Excel senden</button>
       <button id="dt-storno" class="gross sekundaer">Zurückziehen</button>
     </div>
@@ -1508,23 +1508,48 @@ function fotoWeg() {
 /* ---------- Detail ---------- */
 
 async function detailOeffnen(weNr) {
+  // ZUERST vergessen, was hier zuletzt stand. Ohne das zeigte der Kopf
+  // schon die neue Nummer, waehrend S.detail noch das vorige Dokument
+  // hielt — und «Zurueckziehen» haette den FALSCHEN Wareneingang
+  // zurueckgezogen, mit einer Rueckfrage, die richtig aussah. Sechs
+  // Stellen lesen S.detail; keine davon darf einen alten Stand erben.
+  S.detail = null;
   $('dt-titel').textContent = weNr;
   $('dt-daten').innerHTML = '';
   $('dt-schritte').innerHTML = '<div class="leer">Wird geladen …</div>';
   $('dt-positionen').innerHTML = '';
+  $('dt-poszahl').textContent = '';
+  // Kein Knopf auf einem Dokument, das noch gar nicht da ist.
+  $('dt-aktionen').hidden = true;
   zeigeScreen('scr-detail');
 
   try {
     const r = await post({ action: 'we_detail', session: S.session, weNr: weNr });
-    if (!antwortOk(r)) {
-      $('dt-schritte').innerHTML = '<div class="leer">' + esc(abgelehntText(r)) + '</div>';
-      return;
-    }
+    if (!antwortOk(r)) { detailFehler(abgelehntText(r), weNr); return; }
     S.detail = r;
     zeichneDetail(r.kopf, r.positionen);
+    $('dt-aktionen').hidden = false;
   } catch (e) {
-    $('dt-schritte').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
+    detailFehler(verbindungText(e), weNr);
   }
+}
+
+/**
+ * Nicht geladen — und das heisst hier: es gibt nichts, worauf eine
+ * Handlung sich beziehen koennte. Also keine Knoepfe, kein Positionszaehler,
+ * und stattdessen der eine Knopf, der etwas aendern kann.
+ *
+ * «Nochmal versuchen» steht da, weil der haeufigste Grund voruebergehend
+ * ist: Apps Script leitet den POST um, der Browser macht daraus ein GET,
+ * der Rumpf ist weg. Ein Druck genuegt — ohne ihn muesste man zurueck in
+ * die Liste und den Eintrag erneut antippen.
+ */
+function detailFehler(text, weNr) {
+  $('dt-schritte').innerHTML =
+    '<div class="leer">' + esc(text) + '</div>' +
+    '<div class="knopfzeile"><button class="gross sekundaer" id="dt-nochmal">' +
+      'Nochmal versuchen</button></div>';
+  $('dt-nochmal').addEventListener('click', () => detailOeffnen(weNr));
 }
 
 function zeichneDetail(kopf, pos) {
@@ -1601,7 +1626,7 @@ function schrittKlick(schritt, btn) {
 }
 
 async function schrittSenden(schritt, regalplaetze, btn) {
-  if (S.laeuft) return;
+  if (!S.detail || S.laeuft) return;
   S.laeuft = true;
   const alt = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
@@ -1632,6 +1657,7 @@ async function schrittSenden(schritt, regalplaetze, btn) {
 /* ---------- Einlagern ---------- */
 
 function regalOeffnen() {
+  if (!S.detail) return;
   const pos = S.detail.positionen;
   $('rg-liste').innerHTML = pos.map(p =>
     '<div class="regal">' +
@@ -1655,6 +1681,9 @@ function regalSenden() {
 /* ---------- Excel senden ---------- */
 
 function sendenKlick() {
+  // Die Knopfzeile ist verborgen, solange nichts geladen ist — das hier
+  // ist die letzte Linie, nicht die erste.
+  if (!S.detail) return;
   frage('Das ausgefüllte Formular wird als Excel-Datei verschickt und abgelegt. Fortfahren?',
     async () => {
       const btn = $('dt-senden');
@@ -1680,6 +1709,7 @@ function sendenKlick() {
 }
 
 function stornoKlick() {
+  if (!S.detail) return;
   frage('Diesen Wareneingang zurückziehen? Er verschwindet aus der Liste und aus Excel.',
     async () => {
       try {

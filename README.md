@@ -626,6 +626,8 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 32c | Isti slučaj, pa pritisneš **Alle** | vratio se, naslov `Alle Wareneingänge` |
 | 32d | Običan korisnik: ima li dugme **Alle** | nema ga |
 | 32e | Razmak na kraju u koloni `Email` tvog završenog unosa | i dalje ga vidiš u svojoj listi |
+| 37 | Otvoriti jedan unos, nazad, pa drugi kod kog učitavanje padne | nema dugmadi, `Nochmal versuchen` stoji |
+| 37b | Pritisnuti `Nochmal versuchen` | učitava **taj** dokument, dugmad se vrate |
 | 33 | `<Web-App-URL>?action=we_liste&session=…` u browseru | ne izvršava ništa |
 | 34 | Pokrenuti `setupAnlegen` dvaput | folderi se ne dupliraju, upisi ostaju |
 | 35 | Obrisati `FotoOrdner`, pa `setupAnlegen` | ostaje prazan — gašenje je namerno |
@@ -658,6 +660,19 @@ Server meldet: …`. Golo „Nicht geladen." je krilo baš ono što treba znati 
 slalo čoveka da traži problem u mreži, koje nema. Brojač unosa se pri tom
 briše: inače stoji od prethodnog uspešnog učitavanja i tvrdi da ima unosa
 koje niko ne vidi.
+
+**Detalj koji se nije učitao nije detalj.** Ako `we_detail` padne, ekran ne
+sme da ostane kao da je sve na mestu. Ranije jeste: u zaglavlju je pisao
+novi broj, ispod poruka o grešci — a **`S.detail` je i dalje držao prethodno
+otvoreni dokument**. Šest mesta u aplikaciji čita baš njega, pa bi
+*Zurückziehen* povuklo **pogrešan wareneingang**, sa potvrdnim pitanjem koje
+izgleda ispravno.
+
+Sada `detailOeffnen` **prvo zaboravi** šta je tu bilo, sakrije dugmad dok
+dokument stvarno ne stigne, i obriše brojač pozicija. Na mestu greške stoji
+**Nochmal versuchen** — najčešći uzrok (`nur_post`) je prolazan, pa je jedan
+dodir dovoljan umesto povratka u listu i ponovnog otvaranja. Same radnje uz
+to proveravaju `S.detail`, ali to je poslednja linija, ne prva.
 
 **Apps Script na POST odgovara preusmerenjem.** Kad ga browser prati, po
 HTTP standardu se POST pretvara u **GET** i telo zahteva nestane. Sporadično

@@ -118,7 +118,10 @@ const attrappe = () => {
       }
       case 'we_detail':
         return A({ ok: true, positionen: DB.positionen, kopf: {
-          WeNr: 'WE-2026-0001', Kunde: DB.kopf.kunde, Lieferant: DB.kopf.lieferant,
+          // Das angefragte Dokument, nicht immer dasselbe: sonst faellt
+          // nie auf, wenn der Schirm ein anderes zeigt, als er geladen hat.
+          WeNr: d.weNr || 'WE-2026-0001',
+          Kunde: DB.kopf.kunde, Lieferant: DB.kopf.lieferant,
           LagerM2: String(DB.kopf.lagerM2), Bemerkung: DB.kopf.bemerkung,
           AngNam: DB.ang || '', AngDat: DB.ang ? '2026-09-09' : '',
           AngZeit: DB.ang ? '08:30' : '',
@@ -763,6 +766,75 @@ ok('der vergebliche Aufruf wird nicht wiederholt',
      'we_liste,stammdaten',
    (await alt.evaluate(() => window.__gesendet.map(x => x.action))).join(','));
 await alt.close();
+
+// --- 18) Ein Detail, das nicht geladen hat, ist kein Detail ----------------
+// Aus dem Betrieb: der Kopf zeigte WE-2026-0005, darunter stand die Meldung
+// ueber die verlorene Anfrage — und beide Knoepfe waren da. S.detail hielt
+// dabei noch das ZUVOR geoeffnete Dokument, und «Zurueckziehen» haette
+// genau dieses zurueckgezogen.
+console.log('\n18) Ein Detail, das nicht geladen hat, ist kein Detail');
+const det = await browser.newPage();
+det.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await det.addInitScript(attrappe);
+await det.goto(APP);
+await det.fill('#lg-email', 'anna@firma.ch');
+await det.fill('#lg-pass', 'geheim123');
+await det.click('#lg-senden');
+await det.waitForSelector('#scr-start.aktiv');
+
+// Ein Dokument anlegen und oeffnen — das ist der Stand, der spaeter nicht
+// weiterwirken darf.
+await det.click('#st-neu');
+await det.waitForSelector('#scr-form.aktiv');
+await det.fill('#fm-kunde', 'Kunde AG');
+await det.fill('#fm-lieferant', 'Lieferant GmbH');
+await det.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await det.click('#fm-speichern');
+// Nach dem Speichern steht das Detail schon offen.
+await det.waitForSelector('#scr-detail.aktiv');
+await det.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('geladenes Detail zeigt seine Knoepfe',
+   !(await det.$eval('#dt-aktionen', e => e.hidden)));
+ok('und haelt sein Dokument',
+   (await det.evaluate(() => S.detail && S.detail.kopf.WeNr)) === 'WE-2026-0001');
+
+// Jetzt geht die Anfrage unterwegs verloren — zweimal, wie im Betrieb.
+await det.evaluate(() => {
+  window.__echt = window.fetch;
+  window.fetch = async (url, opt) => {
+    const d = JSON.parse(opt.body);
+    if (d.action === 'we_detail') {
+      return { status: 200, text: async () => '{"ok":false,"error":"nur_post"}' };
+    }
+    return window.__echt(url, opt);
+  };
+});
+await det.evaluate(() => detailOeffnen('WE-2026-0009'));
+await det.waitForSelector('#dt-nochmal');
+
+ok('der Kopf zeigt das angefragte Dokument',
+   (await det.textContent('#dt-titel')) === 'WE-2026-0009');
+ok('das vorige Dokument wirkt nicht weiter',
+   (await det.evaluate(() => S.detail)) === null,
+   JSON.stringify(await det.evaluate(() => S.detail && S.detail.kopf.WeNr)));
+ok('keine Knoepfe auf einem Dokument, das nicht da ist',
+   await det.$eval('#dt-aktionen', e => e.hidden));
+ok('der Positionszaehler behauptet nichts',
+   (await det.textContent('#dt-poszahl')) === '');
+ok('die Meldung nennt den Grund',
+   (await det.textContent('#dt-schritte')).includes('ohne Inhalt'),
+   await det.textContent('#dt-schritte'));
+
+// Und ein Druck genuegt, statt zurueck in die Liste und wieder hinein.
+await det.evaluate(() => { window.fetch = window.__echt; });
+await det.click('#dt-nochmal');
+await det.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+ok('«Nochmal versuchen» laedt dasselbe Dokument',
+   (await det.evaluate(() => S.detail && S.detail.kopf.WeNr)) === 'WE-2026-0009',
+   await det.evaluate(() => S.detail && S.detail.kopf.WeNr));
+ok('und die Knoepfe sind wieder da',
+   !(await det.$eval('#dt-aktionen', e => e.hidden)));
+await det.close();
 
 // --- 17) Alle Wareneingaenge, fuer den Admin --------------------------------
 // Die Uebersicht ist eine Arbeitsliste: fremde Eintraege verschwinden aus
