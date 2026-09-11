@@ -90,15 +90,25 @@ End Sub
 ' nach Version, ohne Meldung, und nur auf manchen Arbeitsplaetzen. Die CSV
 ' liefert immer den Punkt, also wird die Kultur hier festgenagelt.
 Private Function MDaten(ByVal quelle As String) As String
-    MDaten = _
-        "let" & vbLf & _
-        "    Quelle = Csv.Document(Web.Contents(""" & quelle & """)," & _
-        "[Delimiter="","", Encoding=65001, QuoteStyle=QuoteStyle.Csv])," & vbLf & _
-        "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true])," & vbLf & _
-        "    Typen = Table.TransformColumnTypes(Kopf,{" & _
-        "{""WeNr"", type text}, {""Kunde"", type text}, {""Lieferant"", type text}, {""LagerM2"", type number}, {""KopfBemerkung"", type text}, {""AngNam"", type text}, {""AngDat"", type text}, {""AngZeit"", type text}, {""GezNam"", type text}, {""GezDat"", type text}, {""GezZeit"", type text}, {""EinNam"", type text}, {""EinDat"", type text}, {""EinZeit"", type text}, {""Nr"", Int64.Type}, {""Artikel"", type text}, {""Anzahl"", type number}, {""KG"", type number}, {""MHD"", type text}, {""Regalplatz"", type text}, {""Bemerkung"", type text}, {""Bestehend"", type text}, {""Schluessel"", type text}}, ""en-US"")" & vbLf & _
-        "in" & vbLf & _
-        "    Typen"
+    ' ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.
+    ' Mehrere Anweisungen statt einer langen: VBA laesst je logischer
+    ' Zeile nur 1024 Zeichen zu, und die Typenliste waechst mit den
+    ' Spalten. Derselbe Text steht in vorlage/Abfragen.m.
+    Dim m As String
+    m = "let" & vbLf
+    m = m & "    Quelle = Csv.Document(Web.Contents(""" & quelle & """),"
+    m = m & "[Delimiter="","", Encoding=65001, QuoteStyle=QuoteStyle.Csv])," & vbLf
+    m = m & "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true])," & vbLf
+    m = m & "    Typen = Table.TransformColumnTypes(Kopf,{"
+    m = m & "{""WeNr"", type text}, {""Kunde"", type text}, {""Lieferant"", type text}, {""LagerM2"", type number}, "
+    m = m & "{""KopfBemerkung"", type text}, {""AngNam"", type text}, {""AngDat"", type text}, {""AngZeit"", type text}, "
+    m = m & "{""GezNam"", type text}, {""GezDat"", type text}, {""GezZeit"", type text}, {""EinNam"", type text}, {""EinDat"", type text}, "
+    m = m & "{""EinZeit"", type text}, {""Nr"", Int64.Type}, {""Artikel"", type text}, {""Anzahl"", type number}, {""KG"", type number}, "
+    m = m & "{""MHD"", type text}, {""Regalplatz"", type text}, {""Bemerkung"", type text}, {""Bestehend"", type text}, "
+    m = m & "{""Schluessel"", type text}"
+    m = m & "}, ""en-US"")" & vbLf
+    m = m & "in" & vbLf & "    Typen"
+    MDaten = m
 End Function
 
 ' Eindeutige Nummern, neueste zuerst - Quelle der Auswahlliste in J2.

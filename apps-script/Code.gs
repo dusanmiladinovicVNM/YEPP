@@ -272,6 +272,9 @@ function login(d) {
     if (pwGeaendert) {
       const u = { email: email, name: antwort.name, rolle: antwort.rolle,
                   pwGeaendert: true, zeile: zeile };
+      // d traegt «alle» mit, falls der Admin die Ansicht eingeschaltet hat —
+      // sonst kaeme hier die kurze Liste zurueck und wuerde als die ganze
+      // angezeigt und gemerkt.
       antwort.start = startDaten(d, u);
     }
     return antwort;
@@ -375,14 +378,33 @@ function sitzungCacheLeeren(email) {
  */
 function datenLesen(namen) {
   if (typeof Sheets !== 'undefined') {
-    try { return batchLesen(namen); }
+    try {
+      const b = batchLesen(namen);
+      // batchGet liefert fuer ein fehlendes Blatt gar keinen Bereich; der
+      // Aufrufer bekaeme undefined statt einer leeren Tabelle.
+      namen.forEach(n => { if (!b[n]) b[n] = []; });
+      return b;
+    }
     catch (e) {
       console.warn('batchGet nicht moeglich (' + e.message +
                    ') — gelesen wird ueber SpreadsheetApp.');
     }
   }
   const aus = {};
-  namen.forEach(n => { aus[n] = blatt(n).getDataRange().getValues(); });
+  namen.forEach(n => {
+    // Ein Blatt, das es nicht gibt, gilt hier als leer — NICHT als Fehler.
+    // Wer die neue Fassung einspielt und setupAnlegen noch nicht laufen
+    // liess, dem fehlt «Kontakte»; mit blatt() waere der Anmeldeschirm tot,
+    // weil startDaten am Anmelden mit dranhaengt. einrichtungPruefen()
+    // nennt fehlende Blaetter beim Namen — das ist der Ort dafuer.
+    const bl = tabelle().getSheetByName(n);
+    if (!bl) {
+      console.warn('Blatt fehlt, wird als leer gelesen: ' + n + ' — setupAnlegen()');
+      aus[n] = [];
+      return;
+    }
+    aus[n] = bl.getDataRange().getValues();
+  });
   return aus;
 }
 
@@ -456,14 +478,19 @@ function passwortSetzen(d, u) {
 }
 
 function sitzungenLoeschen(email) {
-  sitzungCacheLeeren(email);          // zuerst: danach sind die Token weg
+  const gesucht = String(email || '').trim().toLowerCase();
   const bl  = blatt(T.sessions);
   const dat = bl.getDataRange().getValues();
+  // Token einsammeln und Zeilen loeschen im SELBEN Durchgang: ein eigener
+  // Aufruf las das Blatt noch einmal, und ein Lesevorgang kostet hier rund
+  // 330 ms.
+  const weg = [];
   for (let i = dat.length - 1; i >= 1; i--) {
-    if (String(dat[i][1]).trim().toLowerCase() === String(email).toLowerCase()) {
-      bl.deleteRow(i + 1);
-    }
+    if (String(dat[i][1]).trim().toLowerCase() !== gesucht) continue;
+    weg.push(sitzungCacheSchluessel(dat[i][0]));
+    bl.deleteRow(i + 1);
   }
+  if (weg.length) CacheService.getScriptCache().removeAll(weg);
 }
 
 /* ============================================================
@@ -560,6 +587,9 @@ function startDaten(d, u) {
 
 function listeAktiv(name, vorab) {
   const dat = vorab || datenLesen([name])[name];
+  // Ein leeres Blatt ist truthy, und spalten(undefined) wirft — dann waere
+  // die ganze Antwort ein TypeError statt einer leeren Liste.
+  if (!dat || !dat.length) return [];
   const k   = spalten(dat[0]);
   const aus = [];
   for (let i = 1; i < dat.length; i++) {
@@ -841,6 +871,7 @@ function regalplaetzeSchreiben(weNr, werte, bilder) {
  */
 function weListe(d, u, vorab) {
   const dat = vorab || datenLesen([T.we])[T.we];
+  if (!dat || !dat.length) return { ok: true, liste: [] };
   const k   = spalten(dat[0]);
   const aus = [];
   const suche = String(d.suche || '').trim().toLowerCase();
@@ -883,6 +914,32 @@ function weListe(d, u, vorab) {
  * neue Tabellen — das hier holt zurueck, was schon falsch drinsteht, und
  * bleibt die Bremse, falls jemand das Format wieder wegnimmt.
  */
+/**
+ * Ein Datum als yyyy-MM-dd, aus allem, was hier ankommen kann.
+ *
+ * feldText() allein genuegt dafuer nicht mehr: es heilt nur Date-Werte, und
+ * ueber batchGet kommt gar kein Date an, sondern der ANGEZEIGTE Text der
+ * Zelle — je nach Format «2026-09-10» oder «9/10/2026». Der Vergleich fuer
+ * «&tage=» ist eine Zeichenkette gegen eine Zeichenkette; steht links das
+ * amerikanische Format, ist er immer falsch und «&tage=» schneidet nichts
+ * ab. Das ist genau der Fehler, den der alte String()-Vergleich hatte, nur
+ * eine Etage weiter.
+ *
+ * Nur hier verwendet: fuer die Anzeige bleibt es bei feldText(), das den
+ * Text unveraendert durchreicht.
+ */
+function alsDatum(wert) {
+  if (wert instanceof Date) return fmt(wert, 'yyyy-MM-dd');
+  const s = String(wert == null ? '' : wert).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (us) {
+    const p = n => (n.length < 2 ? '0' + n : n);
+    return us[3] + '-' + p(us[1]) + '-' + p(us[2]);
+  }
+  return s;
+}
+
 function feldText(name, wert) {
   if (!(wert instanceof Date)) return String(wert == null ? '' : wert);
   if (/Zeit$/.test(name))           return fmt(wert, 'HH:mm');
@@ -905,6 +962,7 @@ function weDetail(d, u) {
 
 function positionenLesen(weNr, vorab) {
   const dat = vorab || datenLesen([T.pos])[T.pos];
+  if (!dat || !dat.length) return [];
   const k   = spalten(dat[0]);
   const aus = [];
   for (let i = 1; i < dat.length; i++) {
@@ -1039,12 +1097,16 @@ function weSenden(d, u) {
   // Reihenfolge: was im Dialog steht, sonst was beim Kunden hinterlegt ist,
   // sonst die eine Adresse aus den Parametern. Die letzte ist der Rest aus
   // der Zeit, als es nur eine gab.
-  const vorgabe = empfaengerFuer(det.kopf.Kunde);
+  // Erst nachsehen, wenn der Dialog nichts gesagt hat: sonst liest jeder
+  // Versand das Kundenblatt fuer eine Antwort, die gleich verworfen wird.
+  const eigenAn    = d.mailAn != null && String(d.mailAn).trim() !== '';
+  const eigenKopie = d.kopie != null;
+  let vorgabe = null;
+  const nachsehen = () => (vorgabe || (vorgabe = empfaengerFuer(det.kopf.Kunde)));
+
   const empfaenger = String(
-    d.mailAn != null && String(d.mailAn).trim() !== ''
-      ? d.mailAn
-      : (vorgabe.an || parameter('MailAn') || '')).trim();
-  const kopie = String(d.kopie != null ? d.kopie : vorgabe.kopie || '').trim();
+    eigenAn ? d.mailAn : (nachsehen().an || parameter('MailAn') || '')).trim();
+  const kopie = String(eigenKopie ? d.kopie : nachsehen().kopie || '').trim();
   if (!empfaenger) return { ok: false, error: 'kein_empfaenger' };
 
   const name = det.kopf.WeNr + '_' +
@@ -1270,14 +1332,36 @@ function dateiname(name) {
   return sauber || 'Foto';
 }
 
+/**
+ * Der Monatsordner, einmal je Ausfuehrung.
+ *
+ * fotoAblegen laeuft bei zehn bebilderten Positionen elfmal, und jeder
+ * Aufruf las vorher das Parameterblatt und suchte den Ordner in Drive neu —
+ * elf Lesevorgaenge und elf Ordnersuchen fuer ein Ergebnis, das sich
+ * innerhalb eines Aufrufs nicht aendert.
+ */
+function fotoOrdnerHolen() {
+  if (fotoOrdnerHolen._da) return fotoOrdnerHolen._ordner;
+  fotoOrdnerHolen._da = true;
+  fotoOrdnerHolen._ordner = null;
+  const wurzel = String(parameter('FotoOrdner') || '').trim();
+  if (!wurzel) return null;
+  try {
+    fotoOrdnerHolen._ordner =
+      unterordner(DriveApp.getFolderById(wurzel), fmt(new Date(), 'yyyy-MM'));
+  } catch (e) {
+    console.error('Fotoordner nicht erreichbar: ' + e);
+  }
+  return fotoOrdnerHolen._ordner;
+}
+
 function fotoAblegen(dataUrl, name) {
   try {
-    const wurzel = String(parameter('FotoOrdner') || '').trim();
-    if (!wurzel) return '';
     const teile = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
     if (!teile) return '';
 
-    const ordner = unterordner(DriveApp.getFolderById(wurzel), fmt(new Date(), 'yyyy-MM'));
+    const ordner = fotoOrdnerHolen();
+    if (!ordner) return '';
     // Endung nach dem wirklichen Typ: die App schickt JPEG, ein anderer
     // Client koennte PNG schicken, und eine falsche Endung faellt erst auf,
     // wenn jemand die Datei nicht oeffnen kann.
@@ -1367,7 +1451,14 @@ function adminKontakt(d) {
     if (i >= 0) return { ok: false, error: 'existiert' };
     const name = String(d.name || '').trim();
     if (!name) return { ok: false, error: 'unvollstaendig' };
-    bl.appendRow([name, email, true]);
+    // Nach Spaltennamen, nicht nach Position: die Reihenfolge im Blatt darf
+    // sich aendern, sagt spalten() — und adminKunde direkt darunter haelt
+    // sich auch daran.
+    const z = new Array(bl.getLastColumn()).fill('');
+    z[k.Name]  = name;
+    z[k.Email] = email;
+    z[k.Aktiv] = true;
+    bl.appendRow(z);
     return adminStamm();
   }
   if (i < 0) return { ok: false, error: 'nicht_gefunden' };
@@ -1673,11 +1764,7 @@ function csvExport(p) {
     if (String(wd[i][wk.Storniert]).toLowerCase() === 'true') continue;
     const nr = String(wd[i][wk.WeNr]);
     if (nurWe && nr !== nurWe) continue;
-    // feldText(), nicht String(): steht in AngDat ein Datum statt Text —
-    // und die lebende Tabelle zeigt, dass das vorkommt —, dann verglich
-    // String() «Thu Sep 10 2026 …» mit «2025-09-11», und «&tage=» schnitt
-    // nichts ab. Beide Faelle kommen hier als yyyy-MM-dd an.
-    if (abDatum && feldText('AngDat', wd[i][wk.AngDat]) < abDatum) continue;
+    if (abDatum && alsDatum(wd[i][wk.AngDat]) < abDatum) continue;
     kopf[nr] = wd[i];
   }
 
@@ -2003,8 +2090,16 @@ function einrichtungPruefen() {
    Projekt hat die Ueberlegung sich schon einmal geirrt: die Vermutung,
    `openById` koste innerhalb einer Ausfuehrung jedes Mal, war falsch.
 
-   Darum stehen hier erst die beiden Messungen. Der Umbau kommt danach,
-   und nur wenn beide dafuer sprechen.
+   Beide Messungen sind gelaufen und haben dafuer gesprochen: 1948 ms
+   gegen 209, und «Positionen» ohne einen einzigen Unterschied. Der Umbau
+   IST getan — datenLesen() liest ueber batchGet, sobald der erweiterte
+   Dienst da ist, und der README sagt jeder Installation, ihn
+   einzuschalten. «Sessions» und «Benutzer» blieben aussen vor, weil an
+   ihnen die Datumsvergleiche haengen.
+
+   Die beiden Funktionen bleiben stehen, aber fuer das Danach: nach jeder
+   Aenderung an CSV_SPALTEN oder am Tabellenaufbau sagt treueVergleichen(),
+   ob beide Wege noch dasselbe liefern.
 
    Beide brauchen den erweiterten Dienst: im Editor links **Dienste +**,
    dann **Google Sheets API** hinzufuegen (Kennung `Sheets`).
@@ -2108,7 +2203,10 @@ function batchLesen(namen) {
   (antwort.valueRanges || []).forEach(vr => {
     const name = String(vr.range || '').split('!')[0].replace(/^'|'$/g, '').replace(/''/g, "'");
     const werte = vr.values || [];
-    const breit = Math.max(0, ...werte.map(z => z.length));
+    // reduce statt Math.max(...): ein Argument je Zeile sprengt bei
+    // hunderttausend Zeilen den Aufrufstapel, und der Wurf faellt in den
+    // catch von datenLesen — die Optimierung waere dann still wieder weg.
+    const breit = werte.reduce((m, z) => (z.length > m ? z.length : m), 0);
     aus[name] = werte.map(z => {
       if (z.length < breit) batchLesen.kurz++;
       const voll = z.slice();

@@ -329,6 +329,22 @@ def main():
     ok('und sortiert absteigend', 'Order.Descending' in m_text)
 
     # Windows (Makro) und Mac (eingefuegt) muessen denselben Text laden.
+    # VBA: 1024 Zeichen und 24 Fortsetzungen je LOGISCHER Zeile. Die alte
+    # Fassung stand bei 1003 — eine Spalte mehr haette den Import unter
+    # Windows zerbrochen, waehrend der Mac-Weg weitergelaufen waere.
+    logisch, fort, laengste, meiste = '', 0, 0, 0
+    for roh in bas.replace('\r\n', '\n').split('\n'):
+        if roh.rstrip().endswith(' _'):
+            logisch += roh.rstrip()[:-1]
+            fort += 1
+            continue
+        logisch += roh
+        laengste = max(laengste, len(logisch))
+        meiste = max(meiste, fort)
+        logisch, fort = '', 0
+    ok('keine VBA-Zeile nahe an der 1024er-Grenze', laengste < 1000, f'{laengste} Zeichen')
+    ok('und keine mit zu vielen Fortsetzungen', meiste <= 24, f'{meiste}')
+
     bas_typen = dict(re.findall(r'\{""([^"]+)"", ((?:type \w+|Int64\.Type))\}', bas))
     ok('Makro und M-Datei typen gleich', bas_typen == getypt,
        str({n: (bas_typen.get(n), getypt.get(n))

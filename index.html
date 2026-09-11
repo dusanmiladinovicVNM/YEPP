@@ -804,6 +804,7 @@ const S = {
   positionen:  [],
   bild:        null,
   regalBilder: {},       // beim Einlagern geknipst, nach Positionsnummer
+  regalWerte:  {},       // getippte Regalplaetze, ueberleben das Neuzeichnen
   fotoZiel:    null,     // welche Position der Dateiwaehler gerade meint
   vorgang:     '',       // Schluessel dieser Erfassung, gegen Doppeleintraege
   altPass:     '',       // nur im Speicher, fuer den erzwungenen Wechsel
@@ -1164,7 +1165,11 @@ async function anmelden() {
   btn.textContent = 'Anmelden …';
 
   try {
-    const r = await post({ action: 'login', email: email, passwort: pass });
+    // «alle» mitschicken: das Anmelden bringt die Liste gleich mit, und ohne
+    // das bekaeme ein Admin mit eingeschalteter Ansicht die kurze Liste —
+    // gezeigt und gemerkt, als waere es die ganze.
+    const r = await post({ action: 'login', email: email, passwort: pass,
+                           alle: S.alle });
     if (r.ok) {
       S.session = r.session;
       S.name    = r.name;
@@ -1277,7 +1282,11 @@ async function start(vorab) {
   // Zwischenspeicher zuerst, damit die Listen sofort stehen
   const cache = stammdatenAusSpeicher();
 
-  if (vorab && vorab.ok) { startUebernehmen(vorab); return; }
+  if (vorab && vorab.ok) {
+    $('st-titel').textContent = listenTitel('');
+    startUebernehmen(vorab);
+    return;
+  }
 
   // Eine Bereitstellung, die «start» einmal nicht kannte, kennt es auch
   // beim naechsten Anmelden nicht. Ohne dieses Merken kostete jeder Start
@@ -1795,7 +1804,10 @@ async function posFotoGewaehlt(ereignis) {
   try {
     const bild = await bildVerkleinern(datei, 1200, 0.68);
     if (ziel.wo === 'form') { S.positionen[ziel.i].bild = bild; zeichnePositionen(); }
-    else { S.regalBilder[ziel.nr] = bild; regalOeffnen(); }
+    else {
+      // Erst retten, was in den Feldern steht — das Neuzeichnen wirft es sonst weg.
+      S.regalBilder[ziel.nr] = bild; regalWerteLesen(); regalZeichnen();
+    }
   } catch (e) {
     toast('Foto konnte nicht verarbeitet werden.', 'err');
   }
@@ -1815,7 +1827,7 @@ function posFotoEntfernen() {
   const ziel = S.fotoZiel;
   if (!ziel) return;
   if (ziel.wo === 'form') { S.positionen[ziel.i].bild = null; zeichnePositionen(); }
-  else { delete S.regalBilder[ziel.nr]; regalOeffnen(); }
+  else { delete S.regalBilder[ziel.nr]; regalWerteLesen(); regalZeichnen(); }
   bildSchauZu();
 }
 
@@ -1850,7 +1862,12 @@ function zeichneStamm(r) {
       if (k.haupt || k.vertretung) vor[k.name] = { an: k.haupt, kopie: k.vertretung };
     });
     S.empfaenger = vor;
+    // Und die Namen selbst: ein eben angelegter Kunde gehoert sofort in die
+    // Vorschlagsliste des Formulars, ein deaktivierter sofort heraus.
+    S.kunden = r.kunden.filter(k => k.aktiv).map(k => k.name)
+                 .sort((a, b) => a.localeCompare(b, 'de'));
   }
+  if (r.kunden) fuelleStammdaten();
   if (r.kontakte) {
     S.kontakte = r.kontakte.filter(k => k.aktiv).map(k => ({ name: k.name, email: k.email }));
     fuelleStammdaten();
@@ -2058,7 +2075,9 @@ function zeichneDetail(kopf, pos) {
     zeile('Versandt', kopf.Gesendet);
 
   // Der Knopf entsteht eben erst mit dem innerHTML darueber.
-  if ($('dt-foto')) $('dt-foto').addEventListener('click', fotoZeigen);
+  // Nicht fotoZeigen direkt: der Klick reicht sonst sein PointerEvent als
+  // Positionsnummer weiter, und der Lieferschein waere nie zu sehen.
+  if ($('dt-foto')) $('dt-foto').addEventListener('click', () => fotoZeigen());
 
   const schritte = [
     { s: 'angenommen',  t: 'Angenommen / Accepted',
@@ -2217,9 +2236,31 @@ async function schrittSenden(schritt, regalplaetze, btn, bilder) {
 
 /* ---------- Einlagern ---------- */
 
+/**
+ * Das Einlagern beginnt — HIER wird vergessen, was von einem frueheren
+ * Durchgang stehengeblieben ist, und nur hier.
+ *
+ * Vorher stand das Leeren in der Zeichenfunktion, und die wird nach jedem
+ * Foto neu gerufen: das eben aufgenommene Bild war damit schon wieder weg,
+ * bevor es abgeschickt werden konnte. Getippte Regalplaetze ebenso.
+ */
 function regalOeffnen() {
   if (!S.detail) return;
   S.regalBilder = {};
+  S.regalWerte = {};
+  S.detail.positionen.forEach(p => { S.regalWerte[p.nr] = p.regalplatz || ''; });
+  regalZeichnen();
+  zeigeScreen('scr-regal');
+}
+
+/** Was in den Feldern steht, bevor sie neu gezeichnet werden. */
+function regalWerteLesen() {
+  $('rg-liste').querySelectorAll('input[data-nr]').forEach(f => {
+    S.regalWerte[Number(f.dataset.nr)] = f.value;
+  });
+}
+
+function regalZeichnen() {
   const pos = S.detail.positionen;
   $('rg-liste').innerHTML = pos.map(p =>
     '<div class="regal">' +
@@ -2228,14 +2269,14 @@ function regalOeffnen() {
         esc(p.kg !== '' ? p.kg + ' kg' : '') + '</small></div>' +
       '<div class="regal-zeile">' +
         '<input type="text" data-nr="' + p.nr + '" placeholder="Regalplatz"' +
-          ' value="' + esc(p.regalplatz) + '">' +
+          ' value="' + esc(S.regalWerte[p.nr] != null ? S.regalWerte[p.nr]
+                                                      : (p.regalplatz || '')) + '">' +
         '<button type="button" class="klein rg-foto' +
           (S.regalBilder[p.nr] || p.foto ? ' hat-foto' : '') +
           '" data-nr="' + p.nr + '">' +
           (S.regalBilder[p.nr] || p.foto ? '✓ Foto' : 'Foto') + '</button>' +
       '</div>' +
     '</div>').join('') || '<div class="leer">Keine Positionen.</div>';
-  zeigeScreen('scr-regal');
 }
 
 function regalSenden() {
