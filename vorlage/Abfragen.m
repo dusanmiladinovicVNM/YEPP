@@ -6,8 +6,12 @@
 // die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern
 // und Liste bauen auf Daten auf.
 //
-// Die Adresse unten eintragen: einrichtungPruefen() im Apps Script
-// schreibt sie fertig hin.
+// Zwei Platzhalter, und beide NUR im Block «Daten»:
+//   <Web-App-URL>  die Adresse der Bereitstellung, die auf /exec
+//                  endet — dieselbe, mit der die App spricht.
+//   <TOKEN_READ>   schreibt einrichtungPruefen() im Apps Script
+//                  fertig hin, in der letzten Zeile des Berichts.
+// Nummern und Liste bekommen keine Adresse: sie lesen Daten.
 //
 // ============ Daten ============
 let

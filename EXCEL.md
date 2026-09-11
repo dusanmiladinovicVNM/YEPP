@@ -43,8 +43,11 @@ Bez ponovnog osvežavanja, bez čekanja.
 ```
 
 `TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
-Ako ga nemaš pri ruci, pokreni `einrichtungPruefen()` u editoru — ispisuje
-gotovu adresu za ovaj upit. Za nov, jak token: `tokenErzeugen()`.
+Ako ga nemaš pri ruci, pokreni `einrichtungPruefen()` u editoru — poslednji
+red izveštaja nosi **gotov rep** `?token=…&format=csv&tage=365`. Adresu
+ispred njega izveštaj **ne zna** i ostavlja `<Web-App-URL>`: to je adresa
+bereitstellunga koja se završava na `/exec`, ista s kojom aplikacija priča.
+Za nov, jak token: `tokenErzeugen()`.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
 Stornirani ispadaju. **23 kolone, fiksni redosled:**
@@ -166,8 +169,10 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. u bloku `Daten` zameni `<Web-App-URL>` i `<TOKEN_READ>` —
-   **`einrichtungPruefen()`** u Apps Scriptu ispisuje celu adresu gotovu
+3. zameni oba placeholdera — ima ih **samo u bloku `Daten`**:
+   `<Web-App-URL>` je adresa bereitstellunga koja se završava na `/exec`,
+   a `<TOKEN_READ>` ispisuje **`einrichtungPruefen()`** u Apps Scriptu.
+   `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje
 5. prvi put pita za pristup izvoru → **Anonym**, i za nivoe privatnosti →

@@ -334,6 +334,25 @@ def main():
         ok(f'der Block «{name}» steht in der Datei',
            f'============ {name} ============' in m_text)
 
+    # Wer die Datei einfuegt, muss wissen, WO die Adresse hingehoert.
+    # Sie steht nur in «Daten»; Nummern und Liste lesen Daten. Stuende
+    # ein Platzhalter auch dort, wuerde er beim Einfuegen stehenbleiben
+    # und die Abfrage brechen, ohne dass jemand danach sucht.
+    bloecke = {}
+    for teil in m_text.split('// ============ ')[1:]:
+        kopf, _, rumpf = teil.partition(' ============')
+        bloecke[kopf] = rumpf
+    for halter in ('<Web-App-URL>', '<TOKEN_READ>'):
+        ok(f'{halter} steht in «Daten»', halter in bloecke.get('Daten', ''))
+        ok(f'{halter} steht sonst in keinem Block',
+           not any(halter in r for n, r in bloecke.items() if n != 'Daten'),
+           str([n for n, r in bloecke.items() if n != 'Daten' and halter in r]))
+    # Und der Kopf sagt dasselbe, damit man nicht erst suchen muss.
+    kopfzeilen = m_text.split('// ============ ')[0]
+    ok('der Kopf nennt /exec als die Adresse', '/exec' in kopfzeilen)
+    ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
+       'keine Adresse' in kopfzeilen)
+
     # Windows (Makro) und Mac (eingefuegt) muessen denselben Text laden.
     # VBA: 1024 Zeichen und 24 Fortsetzungen je LOGISCHER Zeile. Die alte
     # Fassung stand bei 1003 — eine Spalte mehr haette den Import unter
