@@ -345,6 +345,42 @@ function sitzungCacheLeeren(email) {
   if (weg.length) CacheService.getScriptCache().removeAll(weg);
 }
 
+/**
+ * Liest mehrere Blaetter auf einmal — der Leseweg fuer alles, was nur
+ * ansieht und nichts schreibt.
+ *
+ * An der lebenden Tabelle gemessen: fuenf Lesevorgaenge ueber
+ * SpreadsheetApp brauchen im Median 1631 ms und davor 317 ms fuers
+ * Oeffnen; dieselben Daten ueber `Sheets.Spreadsheets.Values.batchGet`
+ * 209 ms, und geoeffnet wird dabei gar nichts.
+ *
+ * Gilt NICHT fuer Blaetter, an denen Datumsvergleiche haengen —
+ * «Sessions» und «Benutzer» bleiben bei SpreadsheetApp. batchGet gaebe
+ * `GueltigBis` als «10/10/2026 19:11:27» zurueck, und das amerikanisch zu
+ * lesen funktioniert, bis es eines Tages anders gelesen wird. Der Cache
+ * aus Abschnitt 3 macht diese beiden Lesevorgaenge ohnehin selten.
+ *
+ * Und nicht fuers Schreiben: wer eine Zeile sucht, um sie zu aendern,
+ * liest sie weiter ueber SpreadsheetApp — dieselbe Quelle, aus der er
+ * gleich schreibt.
+ *
+ * Ohne den erweiterten Dienst faellt das hier auf SpreadsheetApp zurueck:
+ * langsamer und richtig, statt einer App, die wegen einer Einstellung
+ * nicht startet.
+ */
+function datenLesen(namen) {
+  if (typeof Sheets !== 'undefined') {
+    try { return batchLesen(namen); }
+    catch (e) {
+      console.warn('batchGet nicht moeglich (' + e.message +
+                   ') — gelesen wird ueber SpreadsheetApp.');
+    }
+  }
+  const aus = {};
+  namen.forEach(n => { aus[n] = blatt(n).getDataRange().getValues(); });
+  return aus;
+}
+
 /** Gibt den Benutzer zurueck oder null. Einzige Quelle fuer die Identitaet. */
 function sitzungPruefen(token) {
   if (!token) return null;
@@ -430,10 +466,11 @@ function sitzungenLoeschen(email) {
    ============================================================ */
 
 function stammdaten() {
+  const daten = datenLesen([T.kunden, T.lieferanten]);
   return {
     ok: true,
-    kunden: listeAktiv(T.kunden),
-    lieferanten: listeAktiv(T.lieferanten)
+    kunden: listeAktiv(T.kunden, daten[T.kunden]),
+    lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten])
   };
 }
 
@@ -457,18 +494,20 @@ function stammdaten() {
  * und eine aeltere App muss sich weiter anmelden koennen.
  */
 function startDaten(d, u) {
-  const liste = weListe(d, u);
+  // Drei Blaetter, EINE Anfrage. Getrennt gelesen waeren es drei.
+  const daten = datenLesen([T.we, T.kunden, T.lieferanten]);
+  const liste = weListe(d, u, daten[T.we]);
   if (!liste.ok) return liste;
   return {
     ok: true,
     liste: liste.liste,
-    kunden: listeAktiv(T.kunden),
-    lieferanten: listeAktiv(T.lieferanten)
+    kunden: listeAktiv(T.kunden, daten[T.kunden]),
+    lieferanten: listeAktiv(T.lieferanten, daten[T.lieferanten])
   };
 }
 
-function listeAktiv(name) {
-  const dat = blatt(name).getDataRange().getValues();
+function listeAktiv(name, vorab) {
+  const dat = vorab || datenLesen([name])[name];
   const k   = spalten(dat[0]);
   const aus = [];
   for (let i = 1; i < dat.length; i++) {
@@ -532,7 +571,11 @@ function weSpeichern(d, u) {
     const z  = new Array(bl.getLastColumn()).fill('');
 
     z[k.WeNr]        = weNr;
-    z[k.Zeitstempel] = jetzt;
+    // Als TEXT, wie jede andere Zeit in dieser Tabelle. Als Date geschrieben
+    // haengt sein Aussehen am Anzeigeformat der Spalte, und damit daran,
+    // ueber welchen Weg gelesen wird: SpreadsheetApp gab «2026-09-11 08:41»,
+    // batchGet «9/11/2026 08:41:10» — dieselbe Zelle, zwei Antworten.
+    z[k.Zeitstempel] = fmt(jetzt, 'yyyy-MM-dd HH:mm');
     z[k.Erfasser]    = u.name;
     z[k.Email]       = u.email;
     z[k.Kunde]       = kunde;
@@ -728,8 +771,8 @@ function regalplaetzeSchreiben(weNr, werte) {
  * in der Sitzung: dass der Knopf beim gewoehnlichen Benutzer fehlt, ist
  * keine Sicherung — der Client kann alles schicken.
  */
-function weListe(d, u) {
-  const dat = blatt(T.we).getDataRange().getValues();
+function weListe(d, u, vorab) {
+  const dat = vorab || datenLesen([T.we])[T.we];
   const k   = spalten(dat[0]);
   const aus = [];
   const suche = String(d.suche || '').trim().toLowerCase();
@@ -780,7 +823,8 @@ function feldText(name, wert) {
 }
 
 function weDetail(d, u) {
-  const dat = blatt(T.we).getDataRange().getValues();
+  const daten = datenLesen([T.we, T.pos]);
+  const dat = daten[T.we];
   const k   = spalten(dat[0]);
   const i   = zeileFinden(dat, k.WeNr, d.weNr);
   if (i < 0) return { ok: false, error: 'nicht_gefunden' };
@@ -788,11 +832,11 @@ function weDetail(d, u) {
   const kopf = {};
   Object.keys(k).forEach(name => { kopf[name] = feldText(name, dat[i][k[name]]); });
 
-  return { ok: true, kopf: kopf, positionen: positionenLesen(d.weNr) };
+  return { ok: true, kopf: kopf, positionen: positionenLesen(d.weNr, daten[T.pos]) };
 }
 
-function positionenLesen(weNr) {
-  const dat = blatt(T.pos).getDataRange().getValues();
+function positionenLesen(weNr, vorab) {
+  const dat = vorab || datenLesen([T.pos])[T.pos];
   const k   = spalten(dat[0]);
   const aus = [];
   for (let i = 1; i < dat.length; i++) {
@@ -1342,18 +1386,23 @@ function csvExport(p) {
   const abDatum = tage > 0
     ? fmt(new Date(Date.now() - tage * 86400000), 'yyyy-MM-dd') : '';
 
-  const wd = blatt(T.we).getDataRange().getValues();
+  const daten = datenLesen([T.we, T.pos]);
+  const wd = daten[T.we];
   const wk = spalten(wd[0]);
   const kopf = {};
   for (let i = 1; i < wd.length; i++) {
     if (String(wd[i][wk.Storniert]).toLowerCase() === 'true') continue;
     const nr = String(wd[i][wk.WeNr]);
     if (nurWe && nr !== nurWe) continue;
-    if (abDatum && String(wd[i][wk.AngDat]) < abDatum) continue;
+    // feldText(), nicht String(): steht in AngDat ein Datum statt Text —
+    // und die lebende Tabelle zeigt, dass das vorkommt —, dann verglich
+    // String() «Thu Sep 10 2026 …» mit «2025-09-11», und «&tage=» schnitt
+    // nichts ab. Beide Faelle kommen hier als yyyy-MM-dd an.
+    if (abDatum && feldText('AngDat', wd[i][wk.AngDat]) < abDatum) continue;
     kopf[nr] = wd[i];
   }
 
-  const pd = blatt(T.pos).getDataRange().getValues();
+  const pd = daten[T.pos];
   const pk = spalten(pd[0]);
   const aus = [CSV_SPALTEN.slice()];
 
@@ -1568,7 +1617,8 @@ function setupAnlegen() {
   // und beides kommt danach als Zeitstempel zurueck — in die Liste, in die
   // CSV und damit ins Excel-Formular, wo dann «Sat Dec 30 1899 ...» steht.
   textSpalten(ss, T.we, ['AngDat', 'AngZeit', 'GezDat', 'GezZeit',
-                         'EinDat', 'EinZeit']);
+                         'EinDat', 'EinZeit',
+                         'Zeitstempel', 'Gesendet']);
   textSpalten(ss, T.pos, ['MHD']);
 
   const par = ss.getSheetByName(T.parameter);
