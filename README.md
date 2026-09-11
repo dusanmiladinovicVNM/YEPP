@@ -574,6 +574,30 @@ stari put — sporije, ali radi, pa redosled ažuriranja (Pages / `Code.gs`)
 više ništa ne lomi. Da se uzaludan poziv ne ponavlja, pamti se do
 osvežavanja stranice.
 
+**Vidi se da nešto teče.** Poziv ovde traje sekundama; bez vidljivog znaka
+čovek pritisne drugi i treći put — s pravom, jer mu ništa ne kaže da je
+prvi stigao.
+
+| | |
+|---|---|
+| **čitanje** | tanka traka na vrhu; ekran ostaje upotrebljiv — ko hoće nazad, sme nazad |
+| **pisanje** | traka **i** zastor preko celog ekrana, sa rečenicom šta se dešava |
+
+Razlika nije stvar ukusa: pri pisanju drugi dodir zaista nešto pokvari, pri
+čitanju ne.
+
+To stoji u `post()`, ne na pojedinim dugmadima — tako nijedna nova akcija ne
+može da zaboravi. Dugmad se i dalje sama preimenuju (*Speichern …*,
+*Wird gesendet …*); to je finija informacija, ovo je ona koja nikad ne fali.
+
+`admin_parameter` bez `werte` čita a sa `werte` piše — po samoj akciji se to
+ne vidi, pa se gleda sadržaj.
+
+**Poziv se prekida posle 45 s** (`GEDULD_MS`). `fetch` inače čeka večno, a
+zastor bi tada zauvek ostao — aplikacija koja se više ne da koristiti gora je
+od one koja javi grešku. Prekid za ostatak koda izgleda kao pad veze, a to je
+svuda već obrađeno.
+
 **Lista se crta sa uređaja, pa se ispravi.** Otvaranje aplikacije više ne
 pokazuje „Wird geladen …" nego poslednje redove koje je uređaj video, a
 sveži stižu iza toga. Iznad liste tada stoji crveno **`Letzter Stand vom
@@ -825,6 +849,8 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 23d | U ekranu za slanje upisati treću adresu | ide na nju, ne na vrednost |
 | 23e | Kupac bez vrednosti | uzima se `MailAn` |
 | 24 | Avionski režim usred *Speichern*, pa ponovo *Speichern* | jedan dokument, ne dva |
+| 24b | Pritisnuti *Speichern* pa odmah još pet puta | jedan poziv, zastor pokriva dugme |
+| 24c | Izvući mrežu usred snimanja | zastor nestaje, poruka stoji |
 | 25 | *Abmelden*, pa isti token ubačen ručno | odbijen sa `session` |
 | 26 | Odštampan list iz šablona i iz mejla | broj `WE-…-….` stoji gore desno |
 | 27 | Zameniti ceo `Code.gs` novom verzijom | radi bez unošenja ijedne vrednosti |

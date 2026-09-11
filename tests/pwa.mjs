@@ -1360,6 +1360,105 @@ ok('was getippt wurde, geht hinaus',
    JSON.stringify([auftrag.mailAn, auftrag.kopie]));
 await kt.close();
 
+// --- 23) Man sieht, dass etwas laeuft ---------------------------------------
+// Aus dem Betrieb: nichts sagt dem Benutzer, dass seine Handlung unterwegs
+// ist — also tippt er ein zweites und ein drittes Mal auf «Speichern».
+console.log('\n23) Man sieht, dass etwas laeuft');
+const ar = await browser.newPage();
+ar.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await ar.addInitScript(attrappe);
+await ar.goto(APP);
+await ar.fill('#lg-email', 'anna@firma.ch');
+await ar.fill('#lg-pass', 'geheim123');
+
+// Das Anmelden ist ein Schreiben: Balken UND Sperre
+await ar.evaluate(() => { window.__langsam = 900; });
+await ar.click('#lg-senden');
+await ar.waitForFunction(() => !document.getElementById('sperre').hidden);
+ok('beim Anmelden liegt die Sperre auf dem Schirm',
+   !(await ar.$eval('#sperre', e => e.hidden)));
+ok('und der Balken laeuft', !(await ar.$eval('#arbeit', e => e.hidden)));
+ok('die Sperre sagt, was laeuft',
+   (await ar.textContent('#sperre-text')) === 'Anmelden …',
+   await ar.textContent('#sperre-text'));
+
+await ar.waitForSelector('#scr-start.aktiv');
+await ar.waitForFunction(() => document.getElementById('sperre').hidden);
+ok('danach ist beides wieder weg',
+   (await ar.$eval('#sperre', e => e.hidden)) &&
+   (await ar.$eval('#arbeit', e => e.hidden)));
+
+// Beim LESEN nur der Balken — wer zurueckgehen will, soll das duerfen
+await ar.evaluate(() => { ladeListe(); });
+await ar.waitForFunction(() => !document.getElementById('arbeit').hidden);
+ok('beim Lesen laeuft nur der Balken',
+   !(await ar.$eval('#arbeit', e => e.hidden)) &&
+   (await ar.$eval('#sperre', e => e.hidden)));
+await ar.waitForFunction(() => document.getElementById('arbeit').hidden);
+
+// Und beim Speichern deckt die Sperre den Knopf wirklich zu
+await ar.click('#st-neu');
+await ar.waitForSelector('#scr-form.aktiv');
+await ar.fill('#fm-kunde', 'Kunde AG');
+await ar.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await ar.click('#fm-speichern');
+await ar.waitForFunction(() => !document.getElementById('sperre').hidden);
+ok('beim Speichern steht «Wird gespeichert …»',
+   (await ar.textContent('#sperre-text')) === 'Wird gespeichert …');
+ok('und der Knopf ist nicht mehr erreichbar', await ar.evaluate(() => {
+  const k = document.getElementById('fm-speichern').getBoundingClientRect();
+  const drauf = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2);
+  return !!drauf && drauf.closest('#sperre') !== null;
+}));
+ok('ein zweiter Aufruf entsteht dabei nicht',
+   (await ar.evaluate(() =>
+     window.__gesendet.filter(x => x.action === 'we_speichern').length)) === 1);
+
+await ar.waitForSelector('#scr-detail.aktiv');
+// Auf die Knopfzeile warten, nicht auf den Schirm: erst dann steht
+// S.detail, und ohne das liefe stornoKlick() ins Leere.
+await ar.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
+await ar.waitForFunction(() => document.getElementById('sperre').hidden);
+await ar.evaluate(() => { window.__langsam = 5; });
+
+// Auch wenn es schiefgeht, bleibt die Sperre nicht stehen — sonst waere die
+// App nach einem Funkloch nicht mehr zu bedienen.
+await ar.evaluate(() => {
+  window.__echt2 = window.fetch;
+  window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+});
+await ar.evaluate(() => { stornoKlick(); });
+await ar.waitForSelector('#dlg-frage.zeigen');
+await ar.click('#frage-ja');
+await ar.waitForFunction(() => !document.getElementById('sperre').hidden, null,
+                         { timeout: 5000 }).catch(() => {});
+await ar.waitForFunction(() => document.getElementById('sperre').hidden);
+ok('nach einem Fehlschlag ist die Sperre weg',
+   (await ar.$eval('#sperre', e => e.hidden)) &&
+   (await ar.$eval('#arbeit', e => e.hidden)));
+
+// Ein abgebrochener Aufruf ist derselbe Fall
+await ar.evaluate(() => {
+  window.fetch = async () => {
+    const f = new Error('The user aborted a request.'); f.name = 'AbortError';
+    throw f;
+  };
+});
+await ar.evaluate(() => ladeListe());
+await ar.waitForFunction(() => document.getElementById('arbeit').hidden);
+ok('und nach einem Abbruch auch',
+   await ar.$eval('#arbeit', e => e.hidden));
+await ar.evaluate(() => { window.fetch = window.__echt2; });
+
+// «admin_parameter» liest ohne werte und schreibt mit — nur das Schreiben sperrt
+ok('Lesen von Einstellungen sperrt nicht',
+   (await ar.evaluate(() => schreibt({ action: 'admin_parameter' }))) === false);
+ok('Speichern von Einstellungen schon',
+   (await ar.evaluate(() => schreibt({ action: 'admin_parameter', werte: {} }))) === true);
+ok('eine Leseaktion sperrt nie',
+   (await ar.evaluate(() => schreibt({ action: 'we_liste' }))) === false);
+await ar.close();
+
 await browser.close();
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');

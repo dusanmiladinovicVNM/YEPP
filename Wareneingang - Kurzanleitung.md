@@ -281,8 +281,11 @@ Das ist so gewollt: Ein Passwortwechsel meldet alle Geräte ab.
 
 **Speichern dauert lange**
 Bei einem Wareneingang mit Foto und schwachem Empfang kann es einige
-Sekunden dauern. Bitte warten, bis die Bestätigung erscheint, und nicht
-mehrfach tippen.
+Sekunden dauern. Solange etwas unterwegs ist, läuft oben ein schmaler
+Balken; wird gespeichert oder gesendet, legt sich zusätzlich eine Sperre
+über den Schirm und sagt, was gerade läuft. Dann ist nichts verloren —
+einfach warten, bis sie verschwindet. Ein zweites Tippen ist dabei gar
+nicht möglich.
 
 **Die App braucht Empfang**
 Es gibt keine Offline-Erfassung. Im Funkloch bitte einen Schritt näher zum
