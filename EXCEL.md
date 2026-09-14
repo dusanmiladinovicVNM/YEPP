@@ -250,11 +250,22 @@ Za svaki upit, u **Daten importieren**:
 
 Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
 
-**Ako je već nastao `Daten (2)`:** ne briši ga prvo. U **Daten → Abfragen und
-Verbindungen** desni klik na upit → **Laden in…** → *Bestehendes
-Arbeitsblatt* → `=Daten!$A$1`. Tek kad podaci stoje u pravom listu, obriši
-prazan `Daten (2)`. Obrnutim redom upit ostaje „nur Verbindung" i moraš da
-ga tražiš.
+**Ako je već nastao `Daten (2)`:**
+
+> **Ne briši list `Daten` i ne preimenuj `Daten (2)` u `Daten`.** Obrišeš li
+> list koji formula pominje, Excel referencu pretvori u `#REF!` **trajno** —
+> pravljenje novog lista istog imena je **ne vraća**. Formule u `Formular` i
+> padajuća lista bi ostale mrtve, i šablon bi morao iz repoa ispočetka.
+
+Ide se obrnuto — premesti se **upit**, ne list:
+
+1. **Daten → Abfragen und Verbindungen**
+2. desni klik na upit `Daten` → **Laden in…**
+3. *Tabelle* + **Bestehendes Arbeitsblatt** → `=Daten!$A$1`
+4. tek kad podaci **stoje u listu `Daten`**, obriši prazan `Daten (2)` — njega
+   nijedna formula ne pominje
+
+Isto za `Nummern` i `Liste`.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:

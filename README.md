@@ -990,6 +990,7 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 12b | Otvoriti .xlsm sa SharePointa iz Findera | podaci trenutni, padajuća lista puna |
 | 12g | Posle učitavanja pogledati jezičke listova | nema `Daten (2)` — podaci su u `Daten` |
 | 12h | U `Basis` staviti `/dev` adresu namerno | poruka imenuje `/dev` umesto da govori o koloni `WeNr` |
+| 12i | Posle ispravke cilja upita obrisati `Daten (2)` | formule u `Formular` i dalje rade — `#REF!` se nigde ne pojavi |
 | 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
 | 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
 | 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
