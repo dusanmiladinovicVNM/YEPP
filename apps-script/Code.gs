@@ -1423,9 +1423,21 @@ function fotoAblegen(dataUrl, name) {
    10) Benutzerverwaltung
    ============================================================ */
 
+/**
+ * Alles, was der Einstellungsschirm beim Oeffnen braucht, in EINER Antwort.
+ *
+ * Vorher waren es zwei Aufrufe nacheinander — erst die Parameter, dann die
+ * Listen. Der Weg zum Server kostet hier Sekunden, das Lesen Millisekunden:
+ * zwei Wege sind die doppelte Wartezeit fuer dieselbe Arbeit. Dasselbe hat
+ * beim Anmelden geholfen, und aus demselben Grund.
+ *
+ * Die Benutzer kommen jetzt ueber datenLesen() mit: getrennt gelesen waere
+ * es eine Anfrage mehr an die Tabelle.
+ */
 function adminListe() {
-  const dat = blatt(T.benutzer).getDataRange().getValues();
-  const k   = spalten(dat[0]);
+  const daten = datenLesen([T.benutzer, T.kontakte, T.kunden]);
+  const dat = daten[T.benutzer] || [];
+  const k   = spalten(dat[0] || []);
   const aus = [];
   for (let i = 1; i < dat.length; i++) {
     if (!String(dat[i][k.Email] || '').trim()) continue;
@@ -1439,18 +1451,29 @@ function adminListe() {
       gesperrt: !!(dat[i][k.GesperrtBis] && new Date(dat[i][k.GesperrtBis]) > new Date())
     });
   }
-  // Kontakte und Kunden gleich mit: der Adminbereich zeigt sie auf demselben
-  // Schirm, und ein zweiter Weg zum Server kostet mehr als dieses Lesen.
-  const stamm = adminStamm();
+  // Kontakte, Kunden und die Einstellungen gleich mit: der Adminbereich
+  // zeigt sie auf demselben Schirm, und ein zweiter Weg zum Server kostet
+  // ein Vielfaches dieses Lesens.
+  const stamm = stammAus(daten);
+  const par   = adminParameter({});
   return { ok: true, benutzer: aus,
-           kontakte: stamm.kontakte, kunden: stamm.kunden };
+           kontakte: stamm.kontakte, kunden: stamm.kunden,
+           werte: par.werte, ordner: par.ordner };
 }
 
 /* ---------- Kontakte und Kunden ---------- */
 
 /** Beides in einer Antwort: der Adminbereich zeigt sie nebeneinander. */
 function adminStamm() {
-  const daten = datenLesen([T.kontakte, T.kunden]);
+  return stammAus(datenLesen([T.kontakte, T.kunden]));
+}
+
+/**
+ * Dieselbe Auswertung, aber auf schon gelesenen Zeilen — sonst laese
+ * adminListe() die beiden Blaetter ein zweites Mal, nur um sie gleich
+ * wieder wegzuwerfen.
+ */
+function stammAus(daten) {
   const kd = daten[T.kontakte] || [], kk = spalten(kd[0] || []);
   const kontakte = [];
   for (let i = 1; i < kd.length; i++) {
@@ -1695,6 +1718,7 @@ function adminParameter(d, u) {
 
 /** Schreibt einen Parameter; legt die Zeile an, wenn es sie noch nicht gibt. */
 function parameterSetzen(schluessel, wert) {
+  parameterAlle._werte = null;         // sonst gaebe parameter() den alten Wert
   const bl  = blatt(T.parameter);
   const dat = bl.getDataRange().getValues();
   const k   = spalten(dat[0]);
@@ -1723,13 +1747,39 @@ function driveId(wert) {
 }
 
 /** Name des Ordners zu einer ID, oder leer wenn sie nicht stimmt. */
+const ORDNERNAME_CACHE_SEK = 6 * 3600;
+
+/**
+ * Der Name zu einer Ordner-ID. Er steht unter dem Feld, damit ein Mensch
+ * sieht, ob die eingefuegte ID den richtigen Ordner trifft — eine ID allein
+ * sagt niemandem etwas.
+ *
+ * Jeder Aufruf ist ein Weg zu Drive, und drei davon standen bisher zwischen
+ * dem Antippen von «Einstellungen» und dem ersten sichtbaren Zeichen. Gemerkt
+ * wird je ID: eine geaenderte ID ist ein anderer Schluessel und damit
+ * ohnehin ein Fehlschlag im Cache. Dass ein Ordner umbenannt wird, ohne dass
+ * die ID sich aendert, kommt vor — dann steht der alte Name bis zu sechs
+ * Stunden da. Das ist ein Hinweis, keine Angabe, die stimmen muss.
+ */
 function ordnerName(id) {
-  if (!String(id || '').trim()) return '';
+  const rein = String(id || '').trim();
+  if (!rein) return '';
+
+  const cache = CacheService.getScriptCache();
+  const schluessel = 'ordnername_' + rein;
+  const gemerkt = cache.get(schluessel);
+  if (gemerkt !== null) return gemerkt;
+
+  let name = '';
   try {
-    return DriveApp.getFolderById(String(id).trim()).getName();
+    name = DriveApp.getFolderById(rein).getName();
   } catch (e) {
-    return '';
+    name = '';
   }
+  // Auch den leeren Namen merken: eine unerreichbare ID kostet sonst bei
+  // jedem Oeffnen denselben vergeblichen Weg zu Drive.
+  cache.put(schluessel, name, ORDNERNAME_CACHE_SEK);
+  return name;
 }
 
 /**
@@ -1979,14 +2029,29 @@ function zeileFinden(dat, spalte, wert, klein) {
 }
 
 function parameter(schluessel) {
+  return parameterAlle()[schluessel] || '';
+}
+
+/**
+ * Alle Parameter in EINEM Lesen. parameter() wurde je Schluessel gerufen und
+ * las jedes Mal das ganze Blatt — beim Oeffnen der Einstellungen viermal
+ * hintereinander fuer vier Werte.
+ *
+ * Gemerkt wird je Ausfuehrung, nicht darueber hinaus: innerhalb eines
+ * Aufrufs aendert sich nichts, was hier stuende, ausser durch
+ * parameterSetzen() — und das raeumt den Merker selbst weg.
+ */
+function parameterAlle() {
+  if (parameterAlle._werte) return parameterAlle._werte;
   const dat = blatt(T.parameter).getDataRange().getValues();
   const k   = spalten(dat[0]);
+  const aus = {};
   for (let i = 1; i < dat.length; i++) {
-    if (String(dat[i][k.Schluessel]).trim() === schluessel) {
-      return String(dat[i][k.Wert]).trim();
-    }
+    const s = String(dat[i][k.Schluessel]).trim();
+    if (s && !(s in aus)) aus[s] = String(dat[i][k.Wert]).trim();
   }
-  return '';
+  parameterAlle._werte = aus;
+  return aus;
 }
 
 /**

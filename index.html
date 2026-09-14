@@ -3355,7 +3355,9 @@ async function adminOeffnen() {
   // aussieht — und Zugaenge werden hier am oeftesten angelegt.
   adminReiter('benutzer');
   zeigeScreen('scr-admin');
-  await adminParameter();          // nacheinander, siehe start()
+  // EIN Aufruf: «admin_liste» bringt die Einstellungen mit. Vorher waren es
+  // zwei nacheinander, und die Benutzerliste stand erst nach dem zweiten —
+  // «Wird geladen …» ist genau die Wartezeit, die weg sollte.
   await adminLaden();
 }
 
@@ -3389,19 +3391,18 @@ function adminReiter(name) {
 const PAR_MELDUNGEN = ['adm-par-meldung', 'adm-ord-meldung'];
 const PAR_KNOEPFE   = ['adm-par', 'adm-ord'];
 
+/**
+ * Beide Bereiche bekommen dieselbe Meldung. Welcher davon offen steht,
+ * braucht hier niemand zu wissen: gespeichert wird nur aus einem sichtbaren
+ * Knopf heraus, und waehrend der Aufruf laeuft, liegt der Zustor ueber dem
+ * ganzen Schirm — ein Reiterwechsel dazwischen ist gar nicht moeglich.
+ */
 function parMeldung(text) {
-  let gesehen = false;
   PAR_MELDUNGEN.forEach(id => {
     const m = $(id);
     m.textContent = text || '';
     m.classList.toggle('zeigen', !!text);
-    const bereich = m.closest('.reiter-feld');
-    if (text && bereich && !bereich.hidden) gesehen = true;
   });
-  // Steht ein anderer Reiter offen — beim Oeffnen ist das «Benutzer», weil
-  // adminParameter() dann liest, ohne dass jemand einen Knopf gedrueckt hat —
-  // liegt die Meldung im Verborgenen. Der Toast steht ueber allen Bereichen.
-  if (text && !gesehen) toast(text, 'err');
 }
 
 const PAR_FELDER = { MailAn: 'adm-mailan', ArchivOrdner: 'adm-archiv',
@@ -3414,34 +3415,46 @@ const PAR_LEER = {
   SicherungOrdner: 'ad_sicherung_leer'
 };
 
-/** Ohne `werte` nur lesen, mit `werte` speichern — dieselbe Antwort. */
+/**
+ * Traegt Werte und Ordnernamen in die Felder. Zwei Anlaesse dafuer: das
+ * Oeffnen, wo sie mit «admin_liste» kommen, und das Speichern, das sie
+ * zurueckgibt. Zwei Abschriften davon liefen frueher oder spaeter
+ * auseinander.
+ */
+function parameterEintragen(r) {
+  if (!r || !r.werte) return;
+  Object.keys(PAR_FELDER).forEach(s => { $(PAR_FELDER[s]).value = r.werte[s] || ''; });
+
+  // Der Name sagt einem Menschen, ob die eingefuegte ID den richtigen Ordner
+  // trifft. Eine ID allein sagt gar nichts.
+  Object.keys(PAR_LEER).forEach(s => {
+    const feld = $(PAR_FELDER[s] + '-name');
+    if (!r.werte[s]) feld.textContent = t(PAR_LEER[s]);
+    else if (r.ordner && r.ordner[s]) feld.textContent = t('ad_ordner_name') + r.ordner[s];
+    else feld.textContent = t('ad_ordner_weg');
+  });
+}
+
+/**
+ * Speichert die Einstellungen. Gelesen werden sie nicht mehr hier — sie
+ * kommen mit «admin_liste», in derselben Antwort wie die Listen.
+ */
 async function adminParameter(werte) {
   const knoepfe = PAR_KNOEPFE.map($);
   parMeldung('');
-  if (werte) {
-    knoepfe.forEach(b => { b.disabled = true; b.textContent = t('wird_gespeichert'); });
-  }
+  knoepfe.forEach(b => { b.disabled = true; b.textContent = t('wird_gespeichert'); });
 
   try {
     const r = await post({ action: 'admin_parameter', session: S.session,
-                           werte: werte || null });
+                           werte: werte });
     if (!antwortOk(r)) {
       parMeldung(r.error === 'mail_ungueltig'
         ? t('err_mail_ungueltig')
         : t('err_nicht_moeglich') + r.error);
       return;
     }
-    Object.keys(PAR_FELDER).forEach(s => { $(PAR_FELDER[s]).value = r.werte[s] || ''; });
-
-    // Der Name sagt einem Menschen, ob die eingefuegte ID den richtigen
-    // Ordner trifft. Eine ID allein sagt gar nichts.
-    Object.keys(PAR_LEER).forEach(s => {
-      const feld = $(PAR_FELDER[s] + '-name');
-      if (!r.werte[s]) feld.textContent = t(PAR_LEER[s]);
-      else if (r.ordner[s]) feld.textContent = t('ad_ordner_name') + r.ordner[s];
-      else feld.textContent = t('ad_ordner_weg');
-    });
-    if (werte) toast(t('ad_gespeichert'), 'ok');
+    parameterEintragen(r);
+    toast(t('ad_gespeichert'), 'ok');
   } catch (e) {
     parMeldung(verbindungText(e));
   } finally {
@@ -3461,6 +3474,7 @@ async function adminLaden() {
     }
     adminZeichnen(r.benutzer || []);
     zeichneStamm(r);
+    parameterEintragen(r);
   } catch (e) {
     $('adm-liste').innerHTML = '<div class="leer">' + esc(verbindungText(e)) + '</div>';
   }

@@ -1855,6 +1855,62 @@ console.log('\n40) Nichts steht mehr fest auf Deutsch');
      gas.includes("'Artikel'") && gas.includes("'Lieferant'") && gas.includes("'Regalplatz'"));
 }
 
+console.log('\n41) Die Einstellungen oeffnen sich in EINEM Aufruf');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  ss.blaetter.Parameter.appendRow(['MailAn', 'lager@firma.ch', '']);
+  ss.blaetter.Parameter.appendRow(['ArchivOrdner', 'id-Excel', '']);
+  ss.blaetter.Parameter.appendRow(['FotoOrdner', 'id-Foto', '']);
+  ss.blaetter.Kontakte.appendRow(['Eva Muster', 'eva@firma.ch', true]);
+  ss.blaetter.Kunden.appendRow(['Kunde AG', true, 10, 'eva@firma.ch', '']);
+
+  // Vorher waren es zwei Aufrufe nacheinander: erst die Parameter, dann die
+  // Listen. Der Weg zum Server kostet Sekunden, das Lesen Millisekunden.
+  const r = ctx.verteilen({ action: 'admin_liste', session: 'tokA' });
+  ok('die Benutzer kommen mit', (r.benutzer || []).length === 2, JSON.stringify(r.benutzer));
+  ok('die Kontakte auch', (r.kontakte || []).length === 1);
+  ok('die Kunden auch', (r.kunden || []).length === 1);
+  ok('und die Einstellungen', r.werte && r.werte.MailAn === 'lager@firma.ch',
+     JSON.stringify(r.werte));
+  ok('samt Ordnernamen', r.ordner && r.ordner.ArchivOrdner === 'Ordner id-Excel',
+     JSON.stringify(r.ordner));
+
+  // Das Blatt «Parameter» wurde je Schluessel einmal ganz gelesen — vier
+  // Werte, vier Lesevorgaenge fuer dieselben Zeilen.
+  const par = ss.blaetter.Parameter;
+  const vorher = par.gelesen;
+  ctx.parameterAlle._werte = null;
+  ctx.parameter('MailAn'); ctx.parameter('ArchivOrdner');
+  ctx.parameter('FotoOrdner'); ctx.parameter('SicherungOrdner');
+  ok('vier Parameter kosten ein Lesen', par.gelesen - vorher === 1,
+     (par.gelesen - vorher) + ' Lesevorgaenge');
+
+  // Schreiben muss den Merker wegraeumen, sonst gaebe das naechste Lesen
+  // innerhalb derselben Ausfuehrung den alten Wert zurueck.
+  ctx.parameterSetzen('MailAn', 'neu@firma.ch');
+  ok('nach dem Schreiben steht der neue Wert da',
+     ctx.parameter('MailAn') === 'neu@firma.ch', ctx.parameter('MailAn'));
+
+  // Der Ordnername ist ein Weg zu Drive. Er steht nur als Hinweis unter dem
+  // Feld — ihn bei jedem Oeffnen neu zu holen, kostet mehr als er wert ist.
+  ctx.__cache.leeren();
+  ctx.__driveAufrufe = 0;
+  ok('der erste Name kostet einen Weg zu Drive',
+     ctx.ordnerName('id-Excel') === 'Ordner id-Excel' && ctx.__driveAufrufe === 1,
+     String(ctx.__driveAufrufe));
+  ok('der zweite keinen mehr',
+     ctx.ordnerName('id-Excel') === 'Ordner id-Excel' && ctx.__driveAufrufe === 1,
+     String(ctx.__driveAufrufe));
+  // Auch der Fehlschlag wird gemerkt: eine unerreichbare ID kostete sonst
+  // bei jedem Oeffnen denselben vergeblichen Weg.
+  ok('eine kaputte ID gibt leer zurueck', ctx.ordnerName('kaputt-id') === '');
+  const nachKaputt = ctx.__driveAufrufe;
+  ctx.ordnerName('kaputt-id');
+  ok('und kostet beim zweiten Mal nichts', ctx.__driveAufrufe === nachKaputt,
+     ctx.__driveAufrufe + ' statt ' + nachKaputt);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);
