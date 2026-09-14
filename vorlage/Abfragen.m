@@ -6,31 +6,35 @@
 // die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern
 // und Liste bauen auf Daten auf.
 //
-// EINE Zeile ist einzusetzen, und nur im Block «Daten»:
-//     Basis = "<Veroeffentlichte-CSV-Adresse>",
+// ZWEI Stellen sind einzusetzen, und nur im Block «Daten»:
+//     "<Web-App-URL>"          die Bereitstellung, Endung /exec
+//     token = "<TOKEN_READ>"
 //
-// Sie kommt aus der Google-Tabelle selbst:
-//   Datei -> Im Web veroeffentlichen -> Blatt «Export»
-//         -> Kommagetrennte Werte (.csv) -> Veroeffentlichen
+// Beides steht fertig im Protokoll von einrichtungPruefen().
 //
-// NICHT die Apps-Script-Adresse: /exec antwortet mit einer
-// Weiterleitung auf eine Adresse, die einmal und kurz gilt, und
-// Excel for Mac kommt damit nicht zurecht (404 mitten im Abruf).
-// Veroeffentlicht wird nur «Export» — die uebrigen Blaetter,
-// darunter «Benutzer», bleiben privat.
+// Die Adresse muss auf /exec enden. /dev verlangt eine Anmeldung,
+// und Power Query bekommt dafuer die Anmeldeseite als HTML — Excel
+// meldet dann «Die Spalte "WeNr" wurde nicht gefunden».
+//
+// Die Adresse steht als TEXT im Web.Contents, nicht in einer
+// Variablen: sonst ist die Datenquelle fuer Power Query nicht
+// statisch bestimmbar und die Aktualisierung bricht ausserhalb des
+// Editors. Und kein Schritt darf einen anderen zweimal nennen —
+// dann wird zweimal abgerufen, und die Weiterleitung von /exec gilt
+// nur einmal: (404) Not Found. Genau diese Form laeuft in Spesen.
 // Nummern und Liste bekommen keine Adresse: sie lesen Daten.
 //
 // ============ Daten ============
 let
-    Basis = "<Veroeffentlichte-CSV-Adresse>",
-    Antwort = Binary.Buffer(Web.Contents(Basis)),
-    Quelle = Csv.Document(Antwort,[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),
-    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),
-    Geprueft = if List.Contains(Table.ColumnNames(Kopf), "WeNr") then Kopf
-        else error Error.Record("Keine CSV",
-            "Die Adresse liefert keine CSV mit der Spalte WeNr. Haeufigste Gruende: die Veroeffentlichung wurde aufgehoben, sie zeigt auf ein anderes Blatt als «Export», oder das Format ist nicht CSV. In der Tabelle: Datei -> Im Web veroeffentlichen -> Blatt «Export» -> Kommagetrennte Werte (CSV).",
-            Text.Start(Text.Combine(Table.ColumnNames(Kopf), " | "), 200)),
-    Typen = Table.TransformColumnTypes(Geprueft,{{"WeNr", type text}, {"Kunde", type text}, {"Lieferant", type text}, {"LagerM2", type number}, {"KopfBemerkung", type text}, {"AngNam", type text}, {"AngDat", type text}, {"AngZeit", type text}, {"GezNam", type text}, {"GezDat", type text}, {"GezZeit", type text}, {"EinNam", type text}, {"EinDat", type text}, {"EinZeit", type text}, {"Nr", Int64.Type}, {"Artikel", type text}, {"Anzahl", type number}, {"KG", type number}, {"MHD", type text}, {"Regalplatz", type text}, {"Bemerkung", type text}, {"Bestehend", type text}, {"Schluessel", type text}}, "en-US")
+    Quelle = Csv.Document(
+        Web.Contents(
+            "<Web-App-URL>",
+            [Query = [token = "<TOKEN_READ>", format = "csv"]]
+        ),
+        [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]
+    ),
+    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars = true]),
+    Typen = Table.TransformColumnTypes(Kopf, {{"WeNr", type text}, {"Kunde", type text}, {"Lieferant", type text}, {"LagerM2", type number}, {"KopfBemerkung", type text}, {"AngNam", type text}, {"AngDat", type text}, {"AngZeit", type text}, {"GezNam", type text}, {"GezDat", type text}, {"GezZeit", type text}, {"EinNam", type text}, {"EinDat", type text}, {"EinZeit", type text}, {"Nr", Int64.Type}, {"Artikel", type text}, {"Anzahl", type number}, {"KG", type number}, {"MHD", type text}, {"Regalplatz", type text}, {"Bemerkung", type text}, {"Bestehend", type text}, {"Schluessel", type text}}, "en-US")
 in
     Typen
 
