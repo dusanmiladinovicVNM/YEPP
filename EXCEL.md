@@ -59,7 +59,34 @@ drugi put je više ne nalazi:
 (404) durch "Web.Contents": Not Found
 ```
 
-Zato blok `Daten` nosi tri stvari koje to sprečavaju:
+### `/dev` nikad ne radi — a greška govori o kolonama
+
+Adresa bereitstellunga ima dva oblika. Za Power Query je upotrebljiv **samo
+jedan**:
+
+| oblik | ko sme | šta dobija Power Query |
+|---|---|---|
+| `…/exec` | svako sa tokenom | CSV |
+| `…/dev` | **samo prijavljeni vlasnik skripte** | Google-ovu stranicu za prijavu |
+
+Kad stigne stranica za prijavu, `Csv.Document` je razloži kao običan tekst,
+`PromoteHeaders` uzme prvi red HTML-a za zaglavlje, i Excel javi:
+
+```
+[Expression.Error] Die Spalte "WeNr" der Tabelle wurde nicht gefunden.
+```
+
+Poruka govori o kolonama, a problem je da odgovor **uopšte nije CSV**. Zato
+blok `Daten` nosi **čuvara** ispred tipovanja: ako u zaglavlju nema `WeNr`,
+stane sa rečenicom koja imenuje pravi uzrok umesto da pusti Excel da govori
+o kolonama.
+
+Prava adresa stoji pod **Bereitstellen → Bereitstellungen verwalten**, ili
+gotova u izveštaju `einrichtungPruefen()`.
+
+### Protiv preusmerenja
+
+Blok `Daten` nosi tri stvari koje to sprečavaju:
 
 | | zašto |
 |---|---|

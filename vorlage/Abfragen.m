@@ -27,7 +27,11 @@ let
     ])),
     Quelle = Csv.Document(Antwort,[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),
     Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),
-    Typen = Table.TransformColumnTypes(Kopf,{{"WeNr", type text}, {"Kunde", type text}, {"Lieferant", type text}, {"LagerM2", type number}, {"KopfBemerkung", type text}, {"AngNam", type text}, {"AngDat", type text}, {"AngZeit", type text}, {"GezNam", type text}, {"GezDat", type text}, {"GezZeit", type text}, {"EinNam", type text}, {"EinDat", type text}, {"EinZeit", type text}, {"Nr", Int64.Type}, {"Artikel", type text}, {"Anzahl", type number}, {"KG", type number}, {"MHD", type text}, {"Regalplatz", type text}, {"Bemerkung", type text}, {"Bestehend", type text}, {"Schluessel", type text}}, "en-US")
+    Geprueft = if List.Contains(Table.ColumnNames(Kopf), "WeNr") then Kopf
+        else error Error.Record("Keine CSV",
+            "Die Adresse liefert keine CSV mit der Spalte WeNr. Haeufigster Grund: sie endet auf /dev statt /exec. Die /dev-Adresse verlangt eine Anmeldung, und Power Query bekommt dafuer die Anmeldeseite. Die richtige steht in Apps Script unter Bereitstellen -> Bereitstellungen verwalten, oder fertig bei einrichtungPruefen().",
+            Text.Start(Text.Combine(Table.ColumnNames(Kopf), " | "), 200)),
+    Typen = Table.TransformColumnTypes(Geprueft,{{"WeNr", type text}, {"Kunde", type text}, {"Lieferant", type text}, {"LagerM2", type number}, {"KopfBemerkung", type text}, {"AngNam", type text}, {"AngDat", type text}, {"AngZeit", type text}, {"GezNam", type text}, {"GezDat", type text}, {"GezZeit", type text}, {"EinNam", type text}, {"EinDat", type text}, {"EinZeit", type text}, {"Nr", Int64.Type}, {"Artikel", type text}, {"Anzahl", type number}, {"KG", type number}, {"MHD", type text}, {"Regalplatz", type text}, {"Bemerkung", type text}, {"Bestehend", type text}, {"Schluessel", type text}}, "en-US")
 in
     Typen
 

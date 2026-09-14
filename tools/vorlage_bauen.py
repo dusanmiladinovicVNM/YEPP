@@ -154,7 +154,20 @@ def m_abfragen(namen, basis='<Web-App-URL>', token='<TOKEN_READ>'):
         '    Quelle = Csv.Document(Antwort,'
         '[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n'
         '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),\n'
-        f'    Typen = Table.TransformColumnTypes(Kopf,{{{m_typen(namen)}}}, "en-US")\n'
+        # Kam gar keine CSV zurueck, sagt Excel sonst «Die Spalte "WeNr" der
+        # Tabelle wurde nicht gefunden» — und schickt damit jeden, der das
+        # liest, zu den Spalten. Dort ist nichts. Der haeufigste Grund ist
+        # eine Adresse auf /dev: die verlangt eine Anmeldung, und Power Query
+        # bekommt dafuer die Anmeldeseite als HTML. Diese Zeile sagt das.
+        '    Geprueft = if List.Contains(Table.ColumnNames(Kopf), "WeNr") then Kopf\n'
+        '        else error Error.Record("Keine CSV",\n'
+        '            "Die Adresse liefert keine CSV mit der Spalte WeNr. '
+        'Haeufigster Grund: sie endet auf /dev statt /exec. Die /dev-Adresse '
+        'verlangt eine Anmeldung, und Power Query bekommt dafuer die '
+        'Anmeldeseite. Die richtige steht in Apps Script unter Bereitstellen '
+        '-> Bereitstellungen verwalten, oder fertig bei einrichtungPruefen().",\n'
+        '            Text.Start(Text.Combine(Table.ColumnNames(Kopf), " | "), 200)),\n'
+        f'    Typen = Table.TransformColumnTypes(Geprueft,{{{m_typen(namen)}}}, "en-US")\n'
         'in\n'
         '    Typen'
     )

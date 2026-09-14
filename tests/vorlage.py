@@ -360,6 +360,19 @@ def main():
     # Die drei Griffe gegen die Weiterleitung muessen im Block «Daten» stehen.
     for stueck in ('Query   = [ token = Token', 'IsRetry = true', 'Binary.Buffer('):
        ok(f'«{stueck[:20]}…» steht in «Daten»', stueck in bloecke.get('Daten', ''))
+
+    # Kam gar keine CSV, meldet Excel von sich aus «Die Spalte WeNr wurde
+    # nicht gefunden» — und schickt damit zu den Spalten, wo nichts ist.
+    # Der Waechter muss VOR dem Typen stehen, sonst kommt er nie dran.
+    daten_block = bloecke.get('Daten', '')
+    ok('ein Waechter prueft, ob ueberhaupt eine CSV kam',
+       'List.Contains(Table.ColumnNames(Kopf), "WeNr")' in daten_block)
+    ok('und er nennt den haeufigsten Grund beim Namen',
+       '/dev statt /exec' in daten_block)
+    ok('er steht vor dem Typen',
+       daten_block.index('Geprueft =') < daten_block.index('Typen ='))
+    ok('und die Typen lesen von ihm, nicht am ihm vorbei',
+       'TransformColumnTypes(Geprueft,' in daten_block)
     ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
        'keine Adresse' in kopfzeilen)
 
