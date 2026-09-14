@@ -30,6 +30,18 @@ class Range {
       for (let j = 0; j < this.nc; j++) this.sh._z(this.r + i)[this.c + j - 1] = w;
     return this;
   }
+  // Leert den Bereich, laesst die Zeilen aber stehen — wie in Sheets. Am
+  // Ende schneidet das Blatt leergewordene Zeilen hinten ab, sonst zaehlte
+  // getLastRow() nach einem kuerzer gewordenen Export weiter die alten mit.
+  clearContent() {
+    for (let i = 0; i < this.nr; i++)
+      for (let j = 0; j < this.nc; j++) this.sh._z(this.r + i)[this.c + j - 1] = '';
+    while (this.sh.daten.length &&
+           this.sh.daten[this.sh.daten.length - 1].every(w => w === '' || w == null)) {
+      this.sh.daten.pop();
+    }
+    return this;
+  }
   // Das Zahlenformat wird gemerkt: an ihm haengt, ob Sheets aus «08:30»
   // eine Uhrzeit macht. Der Rest der Formatierung muss nur verkettbar sein.
   setNumberFormat(f) {
@@ -62,6 +74,11 @@ class Sheet {
   }
   _z(n) { while (this.daten.length < n) this.daten.push([]); return this.daten[n - 1]; }
   setName(n) { this.name = n; return this; }
+  // Ein Blatt waechst, wenn mehr geschrieben wird, als es Zeilen hat.
+  insertRowsAfter(nach, wieviele) {
+    for (let i = 0; i < wieviele; i++) this.daten.push([]);
+    return this;
+  }
   getLastRow() { return this.daten.length; }
   // Google legt ein Blatt mit 1000 Zeilen an; darueber waechst es mit.
   getMaxRows() { return Math.max(1000, this.daten.length); }
@@ -112,6 +129,12 @@ function neueTabelle() {
     'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle', 'Sprache']);
   B('Sessions', ['Token', 'Email', 'GueltigBis']);
   B('Parameter', ['Schluessel', 'Wert', 'GueltigAb']);
+  // Der fertige Export als Blatt — Power Query liest ihn veroeffentlicht,
+  // statt die Ausgabe des Skripts ueber eine Weiterleitung zu holen.
+  B('Export', ['WeNr', 'Kunde', 'Lieferant', 'LagerM2', 'KopfBemerkung',
+    'AngNam', 'AngDat', 'AngZeit', 'GezNam', 'GezDat', 'GezZeit',
+    'EinNam', 'EinDat', 'EinZeit', 'Nr', 'Artikel', 'Anzahl', 'KG',
+    'MHD', 'Regalplatz', 'Bemerkung', 'Bestehend', 'Schluessel']);
   return ss;
 }
 

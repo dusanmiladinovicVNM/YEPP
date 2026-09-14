@@ -56,8 +56,18 @@ const T = {
   lieferanten: 'Lieferanten',
   benutzer:    'Benutzer',
   sessions:    'Sessions',
-  parameter:   'Parameter'
+  parameter:   'Parameter',
+  // Der fertige Export, Zeile fuer Zeile — dasselbe, was die CSV-Adresse
+  // liefert, nur als Blatt. Power Query liest eine DATEI statt der Ausgabe
+  // eines Programms: Apps Script beantwortet /exec mit einer Weiterleitung
+  // auf eine Adresse, die einmal und kurz gilt, und Excel for Mac kommt
+  // damit nicht zurecht. Ein veroeffentlichtes Blatt hat keine
+  // Weiterleitung, keinen Skriptlauf und keine Wartezeit.
+  ausgabe:     'Export'
 };
+
+/** Wie weit der Export zurueckreicht. Wie «&tage=» an der CSV-Adresse. */
+const EXPORT_TAGE = 365;
 
 /**
  * Die Sprachen der App. Der Excel-Bogen und die CSV bleiben davon
@@ -717,6 +727,7 @@ function weSpeichern(d, u) {
     bl.appendRow(z);
 
     positionenSchreiben(weNr, pos);
+    exportNachziehen();
     return { ok: true, weNr: weNr };
   } finally {
     sperre.releaseLock();
@@ -864,6 +875,7 @@ function schrittSchreiben(d, u, feld) {
       (Array.isArray(d.regalplaetze) || Array.isArray(d.bilder))) {
     regalplaetzeSchreiben(d.weNr, d.regalplaetze || [], d.bilder || []);
   }
+  exportNachziehen();
   return { ok: true, name: u.name, datum: fmt(jetzt, 'yyyy-MM-dd'), zeit: fmt(jetzt, 'HH:mm') };
 }
 
@@ -1097,6 +1109,9 @@ function weStorno(d, u) {
     return { ok: false, error: 'keine Berechtigung' };
   }
   bl.getRange(i + 1, k.Storniert + 1).setValue(true);
+  // Ohne das stuende der zurueckgezogene Wareneingang weiter im Blatt
+  // «Export» und damit in jeder Vorlage, die es liest.
+  exportNachziehen();
   return { ok: true };
 }
 
@@ -1934,7 +1949,7 @@ const CSV_SPALTEN = [
  *           `tage` auf die letzten n Tage. Ohne beides kommt alles,
  *           was nicht zurueckgezogen ist.
  */
-function csvExport(p) {
+function csvZeilen(p) {
   p = p || {};
   const nurWe = String(p.we || '').trim();
   const tage  = Number(p.tage || 0);
@@ -1976,10 +1991,71 @@ function csvExport(p) {
     ]);
   }
 
-  return aus.map((z, i) => z.map((feld, j) => {
-    const s = i === 0 ? String(feld) : feldText(CSV_SPALTEN[j], feld);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }).join(',')).join('\n');
+  // Alles als Text, wie es in der CSV steht. Das Anfuehren ist eine Sache
+  // der CSV und gehoert nicht hierher: dieselben Zeilen gehen auch ins
+  // Blatt «Export», und dort waeren Anfuehrungszeichen falsch.
+  return aus.map((z, i) => z.map(
+    (feld, j) => i === 0 ? String(feld) : feldText(CSV_SPALTEN[j], feld)));
+}
+
+/** Dieselben Zeilen, zu einer CSV zusammengelegt. */
+function csvExport(p) {
+  return csvZeilen(p).map(z => z.map(
+    s => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  ).join(',')).join('\n');
+}
+
+/**
+ * Schreibt den Export ins Blatt «Export».
+ *
+ * Warum ueberhaupt: Power Query soll eine DATEI lesen und nicht die Ausgabe
+ * eines Programms. Apps Script beantwortet /exec mit einer Weiterleitung auf
+ * eine Adresse, die einmal und kurz gilt — Excel for Mac stolpert darueber,
+ * und der Abruf dauert dazu Sekunden, weil erst das Skript laufen muss. Ein
+ * veroeffentlichtes Blatt hat nichts davon. Genau so liest die
+ * Spesen-Vorlage ihre Daten, und dort war es nie ein Thema.
+ *
+ * Geschrieben wird nach jedem Schreibvorgang, nicht auf einen Zeitplan: wer
+ * gerade erfasst hat, will den Bogen sofort drucken koennen.
+ */
+/**
+ * Zieht den Export nach und misst, was er kostet.
+ *
+ * Schlaegt er fehl, ist das kein Grund, den Wareneingang scheitern zu
+ * lassen: der steht dann in der Tabelle, und der naechste Schreibvorgang
+ * oder exportNachziehen() von Hand holt das Blatt wieder ein. Andersherum
+ * waere es schlimm — ein verlorener Erfassungsvorgang wegen eines
+ * Hilfsblattes.
+ */
+function exportNachziehen() {
+  const t0 = Date.now();
+  try {
+    const n = exportSchreiben();
+    uhrPunkt('export', t0);
+    return n;
+  } catch (e) {
+    console.error('Export nicht geschrieben: ' + e.message);
+    uhrPunkt('export_fehler', t0);
+    return -1;
+  }
+}
+
+function exportSchreiben() {
+  const zeilen = csvZeilen({ tage: EXPORT_TAGE });
+  const bl = tabelle().getSheetByName(T.ausgabe);
+  if (!bl) return 0;                       // halb eingespielt — setupAnlegen()
+
+  const breite = CSV_SPALTEN.length;
+  if (bl.getMaxRows() < zeilen.length) {
+    bl.insertRowsAfter(bl.getMaxRows(), zeilen.length - bl.getMaxRows());
+  }
+  // Erst raeumen: sonst stuenden unter einem kuerzer gewordenen Export die
+  // Zeilen des laengeren weiter, und die Vorlage faende Wareneingaenge, die
+  // es nicht mehr gibt.
+  const alt = Math.max(bl.getLastRow(), 1);
+  bl.getRange(1, 1, alt, breite).clearContent();
+  bl.getRange(1, 1, zeilen.length, breite).setValues(zeilen);
+  return zeilen.length - 1;
 }
 
 /* ============================================================
@@ -2159,6 +2235,7 @@ function setupAnlegen() {
                          'Sprache'];
   plan[T.sessions]    = ['Token', 'Email', 'GueltigBis'];
   plan[T.parameter]   = ['Schluessel', 'Wert', 'GueltigAb'];
+  plan[T.ausgabe]     = CSV_SPALTEN.slice();
 
   Object.keys(plan).forEach(name => {
     let bl = ss.getSheetByName(name);
@@ -2190,6 +2267,13 @@ function setupAnlegen() {
                          'EinDat', 'EinZeit',
                          'Zeitstempel', 'Gesendet']);
   textSpalten(ss, T.pos, ['MHD']);
+
+  // Im Export steht ausschliesslich Text — genau das, was auch in der CSV
+  // stuende. Ohne das macht Sheets aus «2026-09-09» ein Datum und aus
+  // «3.4» je nach Gebietsschema etwas anderes, und die veroeffentlichte
+  // CSV traegt dann nicht mehr dieselben Zeichen wie die Schnittstelle.
+  const ab = ss.getSheetByName(T.ausgabe);
+  if (ab) ab.getRange(1, 1, ab.getMaxRows(), CSV_SPALTEN.length).setNumberFormat('@');
 
   const par = ss.getSheetByName(T.parameter);
   if (par.getLastRow() < 2) {
@@ -2265,6 +2349,21 @@ function einrichtungPruefen() {
                                    : 'leer — abgeschaltet'));
   });
   zeilen.push('MailAn: ' + (parameter('MailAn') || 'FEHLT — Versand meldet einen Fehler'));
+
+  // Das Blatt, das die Excel-Vorlage liest. Steht es leer da, obwohl es
+  // Wareneingaenge gibt, hat noch kein Schreibvorgang stattgefunden, seit es
+  // existiert — exportNachziehen() von Hand holt es ein.
+  const ab = tabelle().getSheetByName(T.ausgabe);
+  if (!ab) {
+    zeilen.push('Export: Blatt fehlt — setupAnlegen()');
+  } else {
+    const n = Math.max(0, ab.getLastRow() - 1);
+    zeilen.push('Export: ' + n + ' Zeilen' +
+                (n ? '' : ' — exportNachziehen() ausfuehren'));
+    zeilen.push('  Veroeffentlichen: Datei → Im Web veroeffentlichen →');
+    zeilen.push('  Blatt «Export» → Kommagetrennte Werte (.csv)');
+    zeilen.push('  Die Adresse daraus kommt in der Vorlage in «Basis».');
+  }
 
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {

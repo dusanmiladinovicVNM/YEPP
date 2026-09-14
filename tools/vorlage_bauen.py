@@ -119,42 +119,42 @@ def m_typen(namen):
     return ', '.join(teile)
 
 
-def m_abfragen(namen, basis='<Web-App-URL>', token='<TOKEN_READ>'):
+def m_abfragen(namen, basis='<Veroeffentlichte-CSV-Adresse>'):
     """
-    Die Adresse steht NICHT als ein Stueck im Web.Contents.
+    Gelesen wird eine DATEI, nicht die Ausgabe eines Programms.
 
-    Apps Script beantwortet /exec mit einer Weiterleitung auf
-    script.googleusercontent.com/macros/echo?user_content_key=… — und diese
-    zweite Adresse gilt einmal und kurz. Power Query wertet den Ausdruck
-    mehrfach aus (Vorschau, Typerkennung, Laden) und merkt sich dabei die
-    AUFGELOESTE Adresse; der zweite Griff danach findet sie nicht mehr:
+    Der Weg ueber die Apps-Script-Adresse ist daran gescheitert, dass
+    /exec mit einer Weiterleitung auf script.googleusercontent.com/macros/echo
+    antwortet und diese zweite Adresse einmal und kurz gilt. Excel for Mac
+    kommt damit nicht zurecht: erst 404 mitten im Abruf, dann wieder. Dazu
+    musste fuer jeden Abruf erst das Skript laufen — gemessen 40 Sekunden.
 
-        [DataSource.Error] … (404) durch "Web.Contents": Not Found
-
-    Dagegen hilft dreierlei, und alle drei stehen hier:
-
-    `Query` statt Fragezeichen in der Adresse — dann ist /exec die
-    Datenquelle und die Parameter werden bei jedem Griff angehaengt, statt
-    dass die ganze aufgeloeste Adresse zur Quelle wird.
-
-    `IsRetry = true` — sagt Power Query, die eigene Antwortablage zu
-    uebergehen. Ohne das wird die abgelaufene echo-Adresse wiederverwendet.
-
-    `Binary.Buffer` — liest die Antwort EINMAL ganz. Was danach den Text
-    zerlegt, greift in den Speicher und nicht noch einmal ins Netz.
+    Die Spesen-Vorlage hatte das Problem nie, weil sie eine Google-Tabelle
+    liest und kein Skript. Genau das macht diese jetzt auch: das Skript
+    schreibt den fertigen Export ins Blatt «Export», und veroeffentlicht wird
+    NUR dieses eine Blatt. Keine Weiterleitung, kein Skriptlauf, keine
+    Wartezeit — und «Wareneingang», «Positionen» und «Benutzer» bleiben
+    privat.
     """
     daten = (
         'let\n'
         f'    Basis = "{basis}",\n'
-        f'    Token = "{token}",\n'
-        '    Antwort = Binary.Buffer(Web.Contents(Basis, [\n'
-        '        Query   = [ token = Token, format = "csv", tage = "365" ],\n'
-        '        IsRetry = true\n'
-        '    ])),\n'
+        '    Antwort = Binary.Buffer(Web.Contents(Basis)),\n'
         '    Quelle = Csv.Document(Antwort,'
         '[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n'
         '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),\n'
-        f'    Typen = Table.TransformColumnTypes(Kopf,{{{m_typen(namen)}}}, "en-US")\n'
+        # Kam gar keine CSV zurueck, sagt Excel «Die Spalte "WeNr" der Tabelle
+        # wurde nicht gefunden» — und schickt damit jeden zu den Spalten. Dort
+        # ist nichts. Diese Zeile nennt stattdessen die haeufigen Gruende.
+        '    Geprueft = if List.Contains(Table.ColumnNames(Kopf), "WeNr") then Kopf\n'
+        '        else error Error.Record("Keine CSV",\n'
+        '            "Die Adresse liefert keine CSV mit der Spalte WeNr. '
+        'Haeufigste Gruende: die Veroeffentlichung wurde aufgehoben, sie zeigt '
+        'auf ein anderes Blatt als «Export», oder das Format ist nicht CSV. '
+        'In der Tabelle: Datei -> Im Web veroeffentlichen -> Blatt «Export» -> '
+        'Kommagetrennte Werte (CSV).",\n'
+        '            Text.Start(Text.Combine(Table.ColumnNames(Kopf), " | "), 200)),\n'
+        f'    Typen = Table.TransformColumnTypes(Geprueft,{{{m_typen(namen)}}}, "en-US")\n'
         'in\n'
         '    Typen'
     )
@@ -189,15 +189,18 @@ def m_schreiben(namen):
         '// die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern\n'
         '// und Liste bauen auf Daten auf.\n'
         '//\n'
-        '// Zwei Zeilen sind einzusetzen, und nur im Block «Daten»:\n'
-        '//     Basis = "<Web-App-URL>",\n'
-        '//     Token = "<TOKEN_READ>",\n'
-        '// einrichtungPruefen() im Apps Script druckt beide fertig aus.\n'
+        '// EINE Zeile ist einzusetzen, und nur im Block «Daten»:\n'
+        '//     Basis = "<Veroeffentlichte-CSV-Adresse>",\n'
         '//\n'
-        '// Die Adresse steht bewusst nicht als ein Stueck mit Fragezeichen\n'
-        '// da: Apps Script leitet /exec auf eine zweite Adresse weiter, die\n'
-        '// einmal und kurz gilt. Power Query merkt sich die aufgeloeste und\n'
-        '// greift ein zweites Mal danach — dann kommt (404) Not Found.\n'
+        '// Sie kommt aus der Google-Tabelle selbst:\n'
+        '//   Datei -> Im Web veroeffentlichen -> Blatt «Export»\n'
+        '//         -> Kommagetrennte Werte (.csv) -> Veroeffentlichen\n'
+        '//\n'
+        '// NICHT die Apps-Script-Adresse: /exec antwortet mit einer\n'
+        '// Weiterleitung auf eine Adresse, die einmal und kurz gilt, und\n'
+        '// Excel for Mac kommt damit nicht zurecht (404 mitten im Abruf).\n'
+        '// Veroeffentlicht wird nur «Export» — die uebrigen Blaetter,\n'
+        '// darunter «Benutzer», bleiben privat.\n'
         '// Nummern und Liste bekommen keine Adresse: sie lesen Daten.\n'
         '//\n'
         '// ============ Daten ============\n'

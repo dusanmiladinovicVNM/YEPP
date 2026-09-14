@@ -342,24 +342,45 @@ def main():
     for teil in m_text.split('// ============ ')[1:]:
         kopf, _, rumpf = teil.partition(' ============')
         bloecke[kopf] = rumpf
-    for halter in ('<Web-App-URL>', '<TOKEN_READ>'):
-        ok(f'{halter} steht in «Daten»', halter in bloecke.get('Daten', ''))
-        ok(f'{halter} steht sonst in keinem Block',
-           not any(halter in r for n, r in bloecke.items() if n != 'Daten'),
-           str([n for n, r in bloecke.items() if n != 'Daten' and halter in r]))
+    halter = '<Veroeffentlichte-CSV-Adresse>'
+    ok(f'{halter} steht in «Daten»', halter in bloecke.get('Daten', ''))
+    ok(f'{halter} steht sonst in keinem Block',
+       not any(halter in r for n, r in bloecke.items() if n != 'Daten'),
+       str([n for n, r in bloecke.items() if n != 'Daten' and halter in r]))
+    # Kein Token mehr im M-Code: gelesen wird ein veroeffentlichtes Blatt,
+    # nicht die Skriptausgabe. Ein liegengebliebener Token waere ein
+    # Geheimnis in einer Datei, die auf SharePoint jedem offensteht.
+    for weg in ('<TOKEN_READ>', 'token =', 'script.google.com'):
+        ok(f'«{weg}» steht nirgends mehr', weg not in m_text,
+           (m_text[max(0, m_text.find(weg) - 40):m_text.find(weg) + 40]
+            if weg in m_text else ''))
     # Und der Kopf sagt dasselbe, damit man nicht erst suchen muss.
     kopfzeilen = m_text.split('// ============ ')[0]
-    ok('der Kopf schickt zu einrichtungPruefen()',
-       'einrichtungPruefen()' in kopfzeilen and 'fertig aus' in kopfzeilen)
-    # Warum die Adresse nicht als ein Stueck dasteht, muss im Kopf stehen:
-    # sonst setzt der naechste sie beim Aufraeumen wieder zusammen und die
-    # 404 aus dem Betrieb ist zurueck.
-    ok('und erklaert, warum die Adresse geteilt ist',
-       '404' in kopfzeilen and 'weiter' in kopfzeilen)
+    ok('der Kopf sagt, wo die Adresse herkommt',
+       'Im Web veroeffentlichen' in kopfzeilen and 'Export' in kopfzeilen)
+    # Warum NICHT die Apps-Script-Adresse, muss im Kopf stehen: sonst traegt
+    # der naechste sie beim Aufraeumen wieder ein und die 404 ist zurueck.
+    ok('und warum nicht die Apps-Script-Adresse',
+       '404' in kopfzeilen and 'Weiterleitung' in kopfzeilen)
+    ok('und dass nur «Export» veroeffentlicht wird',
+       'bleiben privat' in kopfzeilen)
 
-    # Die drei Griffe gegen die Weiterleitung muessen im Block «Daten» stehen.
-    for stueck in ('Query   = [ token = Token', 'IsRetry = true', 'Binary.Buffer('):
-       ok(f'«{stueck[:20]}…» steht in «Daten»', stueck in bloecke.get('Daten', ''))
+    ok('die Antwort wird einmal ganz gelesen',
+       'Binary.Buffer(' in bloecke.get('Daten', ''))
+
+    # Kam gar keine CSV, meldet Excel von sich aus «Die Spalte WeNr wurde
+    # nicht gefunden» — und schickt damit zu den Spalten, wo nichts ist.
+    # Der Waechter muss VOR dem Typen stehen, sonst kommt er nie dran.
+    daten_block = bloecke.get('Daten', '')
+    ok('ein Waechter prueft, ob ueberhaupt eine CSV kam',
+       'List.Contains(Table.ColumnNames(Kopf), "WeNr")' in daten_block)
+    ok('und er nennt die haeufigen Gruende beim Namen',
+       'Veroeffentlichung wurde aufgehoben' in daten_block and
+       'Im Web veroeffentlichen' in daten_block)
+    ok('er steht vor dem Typen',
+       daten_block.index('Geprueft =') < daten_block.index('Typen ='))
+    ok('und die Typen lesen von ihm, nicht am ihm vorbei',
+       'TransformColumnTypes(Geprueft,' in daten_block)
     ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
        'keine Adresse' in kopfzeilen)
 

@@ -36,42 +36,60 @@ Bez ponovnog osvežavanja, bez čekanja.
 
 ---
 
+## Odakle Power Query čita
+
+**Iz lista, ne iz skripte.** Apps Script upisuje gotov export u list
+**`Export`** u istoj tabeli, i **samo taj list** se objavi:
+
+```
+Datei → Im Web veröffentlichen → Blatt «Export»
+      → Kommagetrennte Werte (.csv) → Veröffentlichen
+```
+
+Dobijena adresa ide u šablon, u red `Basis`. To je sve — bez tokena, bez
+parametara.
+
+### Zašto ne preko Apps Scripta
+
+Prvo je išlo preko `/exec?token=…&format=csv`. Ne radi pouzdano sa Excel for
+Mac:
+
+| | |
+|---|---|
+| `/exec` odgovara **preusmerenjem** na `script.googleusercontent.com/macros/echo` | ta adresa važi **jednom i kratko** |
+| Power Query izraz izračunava više puta | drugi put je više ne nađe → `(404) Not Found` |
+| svaki poziv pokreće skriptu | izmereno **40 s** po osvežavanju |
+
+Spesen taj problem nikad nije imao jer **čita Google tabelu, ne skriptu**.
+Objavljen list nema ni preusmerenje, ni izvršavanje koda, ni čekanje.
+
+CSV izlaz na `/exec` i dalje postoji — koristan je za proveru u browseru — ali
+šablon ga više ne koristi.
+
+### Šta se objavljuje, a šta ne
+
+Objavljuje se **jedan list**, ne cela tabela. `Wareneingang`, `Positionen`,
+`Kunden`, `Kontakte` i pre svega **`Benutzer`** sa `PassHash` i `Salt`
+ostaju privatni.
+
+Adresa objavljenog lista je javna za svakoga ko je ima — to je ista klasa
+zaštite kao token u adresi, ne slabija. Ali ista tri opreza važe: ne deliti
+je van firme, i ne stavljati je u dokument koji ide kupcu.
+
+### Kad se piše
+
+Posle **svakog** upisa — `weSpeichern`, `weSchritt`, `weStorno` — ne po
+rasporedu. Ko je upravo uneo, hoće odmah da odštampa. Cena stoji u odgovoru
+kao `export` u polju `teile`, pa se vidi, ne nagađa.
+
+Padne li upis u `Export`, wareneingang **svejedno prolazi**: obrnuto bi
+značilo izgubljen unos zbog pomoćnog lista. Sledeći upis ga sustigne, ili
+`exportNachziehen()` ručno.
+
 ## CSV — zamrznut ugovor
 
-```
-<Web-App-URL>?token=<TOKEN_READ>&format=csv
-```
-
-`TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
-Pokreni `einrichtungPruefen()` u editoru — pod **„CSV fuer die Vorlage"**
-stoje **dva gotova reda** za blok `Daten`.
-
-**Adresa namerno ne stoji kao jedan niz sa upitnikom.** Apps Script na
-`/exec` odgovara **preusmerenjem** na
-`script.googleusercontent.com/macros/echo?user_content_key=…`, a ta druga
-adresa važi **jednom i kratko**. Power Query izraz izračunava više puta —
-pregled, prepoznavanje tipova, učitavanje — i pamti **razrešenu** adresu;
-drugi put je više ne nalazi:
-
-```
-[DataSource.Error] Fehler beim Abrufen von Inhalten von
-"https://script.googleusercontent.com/macros/echo?user_content_key=…"
-(404) durch "Web.Contents": Not Found
-```
-
-Zato blok `Daten` nosi tri stvari koje to sprečavaju:
-
-| | zašto |
-|---|---|
-| `Query = [ token = …, format = "csv", tage = "365" ]` | izvor je `/exec`, parametri se dodaju pri svakom pozivu — ne pamti se razrešena adresa |
-| `IsRetry = true` | Power Query zaobilazi sopstvenu ostavu odgovora |
-| `Binary.Buffer(…)` | odgovor se čita **jednom, ceo**; razlaganje teksta posle toga ide iz memorije |
-
-Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
-je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
-Pravu uzmi pod **Bereitstellen → Bereitstellungen verwalten**.
-
-Za nov, jak token: `tokenErzeugen()`.
+Ista polja stoje u listu `Export` i na `/exec?format=csv` — jedna funkcija
+ih gradi (`csvZeilen`), pa se ne mogu razići.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
 Stornirani ispadaju. **23 kolone, fiksni redosled:**
@@ -223,11 +241,46 @@ Za svaki upit, u **Daten importieren**:
 
 Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
 
-**Ako je već nastao `Daten (2)`:** ne briši ga prvo. U **Daten → Abfragen und
-Verbindungen** desni klik na upit → **Laden in…** → *Bestehendes
-Arbeitsblatt* → `=Daten!$A$1`. Tek kad podaci stoje u pravom listu, obriši
-prazan `Daten (2)`. Obrnutim redom upit ostaje „nur Verbindung" i moraš da
-ga tražiš.
+**Ako je već nastao `Daten (2)`:**
+
+> **Ne briši list `Daten` i ne preimenuj `Daten (2)` u `Daten`.** Obrišeš li
+> list koji formula pominje, Excel referencu pretvori u `#REF!` **trajno** —
+> pravljenje novog lista istog imena je **ne vraća**. Formule u `Formular` i
+> padajuća lista bi ostale mrtve, i šablon bi morao iz repoa ispočetka.
+
+**Excel for Mac ne ume da učita upit u postojeći list.** Ni jedan ni drugi
+put ne postoji:
+
+| gde bi se očekivalo | šta je stvarno tamo |
+|---|---|
+| **Daten → Abfragen und Verbindungen** | stari prozor *Arbeitsmappenabfragen und -verbindungen* — samo *Entfernen*, *Aktualisieren*, zasivljeno *Eigenschaften…* |
+| **Power Query-Editor → Schließen und laden** | dugme **bez strelice**; nema varijante „…in…". Uporedi `Daten abrufen ⌄`, `Aktualisieren ⌄`, `Transformieren ⌄` — svi imaju `⌄`, ovaj nema |
+
+Znači: **svaki upit na Macu ide u novi list**, i nastaju `Daten (2)`,
+`Nummern (2)`, `Liste (2)`. To se ne izbegava — to se sređuje posle, i
+**redosled je ono što čuva fajl**.
+
+Šta šta gađa:
+
+| list | gađa ga | oprez |
+|---|---|---|
+| `Daten` | formule u `Formular` | da |
+| `Nummern` | provera podataka u `J2` | da |
+| `Liste` | **ništa** | ne — briši i preimenuj slobodno |
+
+Postupak, kad sva tri upita budu učitana:
+
+1. list **`Formular`** → `Ctrl+H`, tražiti u **formulama**:
+   `Daten!` → `'Daten (2)'!` → **Alle ersetzen**
+   *(natpis u `A26` sadrži reči „Blatt Daten" bez uzvičnika i ostaje netaknut)*
+2. **Daten → Datenüberprüfung** u `J2` → izvor na `='Nummern (2)'!$A$2:$A$1000`
+3. sada prazne `Daten`, `Nummern` i `Liste` **ništa ne pominje** → obriši sva tri
+4. preimenuj `Daten (2)` → `Daten`, `Nummern (2)` → `Nummern`,
+   `Liste (2)` → `Liste`
+
+Korak 4 vraća sve na čisto i bezbedan je: **Excel pri preimenovanju lista sam
+ispravlja formule i izvore provere.** Opasno je isključivo brisanje lista na
+koji nešto još pokazuje — zato ovim redom i nijednim drugim.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:

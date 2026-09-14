@@ -1952,6 +1952,66 @@ console.log('\n42) Der Bericht schreibt die Adresse fertig hin');
      ctx.einrichtungPruefen().indexOf('Basis = ') < 0);
 }
 
+console.log('\n43) Der Export steht als Blatt da');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const ex = ss.blaetter.Export;
+
+  const weNr = ctx.weSpeichern({ kunde: 'Kunde AG', lieferant: 'L',
+    positionen: POS }, u).weNr;
+
+  // Geschrieben wird beim Speichern, nicht auf einen Zeitplan: wer gerade
+  // erfasst hat, will den Bogen sofort drucken koennen.
+  ok('nach dem Speichern stehen Zeilen im Blatt', ex.daten.length === 3,
+     ex.daten.length + ' Zeilen');
+  const csvKopf = ctx.csvExport({ tage: 365 }).split('\n')[0];
+  ok('die Kopfzeile ist die CSV-Kopfzeile',
+     ex.daten[0].join(',') === csvKopf, ex.daten[0].join(','));
+
+  // Dieselben Zeichen wie in der CSV — sonst traegt das veroeffentlichte
+  // Blatt etwas anderes als die Schnittstelle, und die Vorlage typt daneben.
+  const csv = ctx.csvExport({ tage: 365 }).split('\n');
+  ok('Zeile fuer Zeile dasselbe wie die CSV',
+     ex.daten[1].join(',') === csv[1], ex.daten[1].join(',') + '  /  ' + csv[1]);
+
+  // Alles Text: sonst macht Sheets aus «2026-09-09» ein Datum und die
+  // veroeffentlichte CSV traegt danach einen Zeitstempel.
+  const k = ctx.spalten(ex.daten[0]);
+  ok('das Datum steht als Text', typeof ex.daten[1][k.AngDat] === 'string',
+     typeof ex.daten[1][k.AngDat]);
+
+  // Zurueckgezogen heisst: weg, auch hier. Sonst stuende der Wareneingang
+  // weiter in jeder Vorlage, die das Blatt liest.
+  ctx.weStorno({ weNr: weNr }, u);
+  ok('ein zurueckgezogener faellt heraus', ex.daten.length === 1,
+     ex.daten.length + ' Zeilen');
+
+  // Und was vom laengeren Stand uebrig war, muss fort sein — nicht unter
+  // dem kuerzeren stehenbleiben.
+  ok('keine Reste unter dem kuerzeren Stand',
+     (ex.daten[1] || []).join('') === '', JSON.stringify(ex.daten[1] || []));
+}
+
+console.log('\n44) Ein kaputter Export kostet keinen Wareneingang');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  // Das Blatt ist fort — eine halb eingespielte Tabelle sieht so aus.
+  delete ss.blaetter.Export;
+
+  const r = ctx.weSpeichern({ kunde: 'K', positionen: POS }, u);
+  ok('der Wareneingang wird trotzdem gespeichert', r.ok === true, JSON.stringify(r));
+  ok('und steht in der Tabelle',
+     ss.blaetter.Wareneingang.daten.length === 2,
+     ss.blaetter.Wareneingang.daten.length + ' Zeilen');
+
+  // Wirft das Schreiben, faengt exportNachziehen() es ab: ein Hilfsblatt
+  // darf keinen Erfassungsvorgang mitreissen.
+  ctx.exportSchreiben = () => { throw new Error('kaputt'); };
+  ok('ein Fehler beim Export wird abgefangen', ctx.exportNachziehen() === -1);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

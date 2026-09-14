@@ -100,6 +100,7 @@ Nastaju ovi, sa ovim kolonama:
 | `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` `Sprache` |
 | `Sessions` | `Token` `Email` `GueltigBis` |
 | `Parameter` | `Schluessel` `Wert` `GueltigAb` |
+| `Export` | 23 kolone CSV ugovora — piše ih skripta, čita ih Excel šablon |
 
 **Kod čita kolone po imenu, ne po poziciji.** Redosled u tabeli smeš da
 menjaš, kolone smeš da dodaješ na kraj — ništa se ne lomi. Imena su izvor
@@ -989,6 +990,11 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 12 | Otvoriti xlsx u Excelu na Macu | raspored kao na papiru, žuta kolona H |
 | 12b | Otvoriti .xlsm sa SharePointa iz Findera | podaci trenutni, padajuća lista puna |
 | 12g | Posle učitavanja pogledati jezičke listova | nema `Daten (2)` — podaci su u `Daten` |
+| 12h | U `Basis` staviti `/dev` adresu namerno | poruka imenuje `/dev` umesto da govori o koloni `WeNr` |
+| 12i | Preusmeriti formule na `(2)`, pa obrisati prazan list, pa preimenovati | formule rade, `#REF!` se nigde ne pojavi |
+| 12j | Na Macu pogledati dugme **Schließen und laden** | nema strelice — varijanta „…in…“ ne postoji, pa svaki upit ide u novi list |
+| 12k | Posle preimenovanja `(2)` listova otvoriti `Formular` | formule glase `Daten!…`, provera u `J2` glasi `Nummern!…` |
+| 12l | Otvoriti CSV adresu šablona u browseru, sa pogrešnim tokenom | stoji `kein Zugriff` — ne Drive strana „Die Datei ist nicht vorhanden“ |
 | 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
 | 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
 | 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
