@@ -36,79 +36,60 @@ Bez ponovnog osvežavanja, bez čekanja.
 
 ---
 
+## Odakle Power Query čita
+
+**Iz lista, ne iz skripte.** Apps Script upisuje gotov export u list
+**`Export`** u istoj tabeli, i **samo taj list** se objavi:
+
+```
+Datei → Im Web veröffentlichen → Blatt «Export»
+      → Kommagetrennte Werte (.csv) → Veröffentlichen
+```
+
+Dobijena adresa ide u šablon, u red `Basis`. To je sve — bez tokena, bez
+parametara.
+
+### Zašto ne preko Apps Scripta
+
+Prvo je išlo preko `/exec?token=…&format=csv`. Ne radi pouzdano sa Excel for
+Mac:
+
+| | |
+|---|---|
+| `/exec` odgovara **preusmerenjem** na `script.googleusercontent.com/macros/echo` | ta adresa važi **jednom i kratko** |
+| Power Query izraz izračunava više puta | drugi put je više ne nađe → `(404) Not Found` |
+| svaki poziv pokreće skriptu | izmereno **40 s** po osvežavanju |
+
+Spesen taj problem nikad nije imao jer **čita Google tabelu, ne skriptu**.
+Objavljen list nema ni preusmerenje, ni izvršavanje koda, ni čekanje.
+
+CSV izlaz na `/exec` i dalje postoji — koristan je za proveru u browseru — ali
+šablon ga više ne koristi.
+
+### Šta se objavljuje, a šta ne
+
+Objavljuje se **jedan list**, ne cela tabela. `Wareneingang`, `Positionen`,
+`Kunden`, `Kontakte` i pre svega **`Benutzer`** sa `PassHash` i `Salt`
+ostaju privatni.
+
+Adresa objavljenog lista je javna za svakoga ko je ima — to je ista klasa
+zaštite kao token u adresi, ne slabija. Ali ista tri opreza važe: ne deliti
+je van firme, i ne stavljati je u dokument koji ide kupcu.
+
+### Kad se piše
+
+Posle **svakog** upisa — `weSpeichern`, `weSchritt`, `weStorno` — ne po
+rasporedu. Ko je upravo uneo, hoće odmah da odštampa. Cena stoji u odgovoru
+kao `export` u polju `teile`, pa se vidi, ne nagađa.
+
+Padne li upis u `Export`, wareneingang **svejedno prolazi**: obrnuto bi
+značilo izgubljen unos zbog pomoćnog lista. Sledeći upis ga sustigne, ili
+`exportNachziehen()` ručno.
+
 ## CSV — zamrznut ugovor
 
-```
-<Web-App-URL>?token=<TOKEN_READ>&format=csv
-```
-
-`TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
-Pokreni `einrichtungPruefen()` u editoru — pod **„CSV fuer die Vorlage"**
-stoje **dva gotova reda** za blok `Daten`.
-
-**Adresa namerno ne stoji kao jedan niz sa upitnikom.** Apps Script na
-`/exec` odgovara **preusmerenjem** na
-`script.googleusercontent.com/macros/echo?user_content_key=…`, a ta druga
-adresa važi **jednom i kratko**. Power Query izraz izračunava više puta —
-pregled, prepoznavanje tipova, učitavanje — i pamti **razrešenu** adresu;
-drugi put je više ne nalazi:
-
-```
-[DataSource.Error] Fehler beim Abrufen von Inhalten von
-"https://script.googleusercontent.com/macros/echo?user_content_key=…"
-(404) durch "Web.Contents": Not Found
-```
-
-### `/dev` nikad ne radi — a greška govori o kolonama
-
-Adresa bereitstellunga ima dva oblika. Za Power Query je upotrebljiv **samo
-jedan**:
-
-| oblik | ko sme | šta dobija Power Query |
-|---|---|---|
-| `…/exec` | svako sa tokenom | CSV |
-| `…/dev` | **samo prijavljeni vlasnik skripte** | Google-ovu stranicu za prijavu |
-
-Kad stigne stranica za prijavu, `Csv.Document` je razloži kao običan tekst,
-`PromoteHeaders` uzme prvi red HTML-a za zaglavlje, i Excel javi:
-
-```
-[Expression.Error] Die Spalte "WeNr" der Tabelle wurde nicht gefunden.
-```
-
-Poruka govori o kolonama, a problem je da odgovor **uopšte nije CSV**. Zato
-blok `Daten` nosi **čuvara** ispred tipovanja: ako u zaglavlju nema `WeNr`,
-stane sa rečenicom koja imenuje pravi uzrok umesto da pusti Excel da govori
-o kolonama.
-
-Prava adresa stoji pod **Bereitstellen → Bereitstellungen verwalten**, ili
-gotova u izveštaju `einrichtungPruefen()`.
-
-### Protiv preusmerenja
-
-Blok `Daten` nosi tri stvari koje to sprečavaju:
-
-| | zašto |
-|---|---|
-| `Query = [ token = …, format = "csv", tage = "365" ]` | izvor je `/exec`, parametri se dodaju pri svakom pozivu — ne pamti se razrešena adresa |
-| `IsRetry = true` | Power Query zaobilazi sopstvenu ostavu odgovora |
-| `Binary.Buffer(…)` | odgovor se čita **jednom, ceo**; razlaganje teksta posle toga ide iz memorije |
-
-Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
-je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
-Pravu uzmi pod **Bereitstellen → Bereitstellungen verwalten**.
-
-**Kontrolna tačka koja ne laže:** adresa u `index.html`, red sa
-`url: 'https://script.google.com/macros/s/…/exec'`. Aplikacija preko nje
-radi svakog dana — ako se ona iz šablona razlikuje, šablon je na pogrešnom
-bereitstellungu, ma odakle da je adresa prepisana.
-
-Kako se to poznaje: otvori adresu u browseru. Živ bereitstellung sa
-pogrešnim tokenom vrati **`kein Zugriff`** (obična strana sa tekstom).
-Mrtav vrati Google Drive stranu **„Die Datei ist nicht vorhanden"** — tada
-ne tražiš grešku u Excelu, nego u adresi.
-
-Za nov, jak token: `tokenErzeugen()`.
+Ista polja stoje u listu `Export` i na `/exec?format=csv` — jedna funkcija
+ih gradi (`csvZeilen`), pa se ne mogu razići.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
 Stornirani ispadaju. **23 kolone, fiksni redosled:**

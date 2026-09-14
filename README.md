@@ -100,6 +100,7 @@ Nastaju ovi, sa ovim kolonama:
 | `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` `Sprache` |
 | `Sessions` | `Token` `Email` `GueltigBis` |
 | `Parameter` | `Schluessel` `Wert` `GueltigAb` |
+| `Export` | 23 kolone CSV ugovora — piše ih skripta, čita ih Excel šablon |
 
 **Kod čita kolone po imenu, ne po poziciji.** Redosled u tabeli smeš da
 menjaš, kolone smeš da dodaješ na kraj — ništa se ne lomi. Imena su izvor
