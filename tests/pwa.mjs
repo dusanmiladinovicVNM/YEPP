@@ -93,6 +93,15 @@ const attrappe = () => {
                     kontakte: DB.kontakte.filter(k => k.aktiv)
                                 .map(k => ({ name: k.name, email: k.email })),
                     empfaenger: stammEmpf() };
+    // Eine Stelle fuer die Einstellungen: «admin_liste» und «admin_parameter»
+    // geben dieselben zurueck, und eine Attrappe, in der die zwei
+    // auseinanderlaufen koennen, prueft nichts mehr.
+    const einstellungen = () => ({
+      werte: DB.par || { MailAn: 'lager@firma.ch', ArchivOrdner: '1Arch',
+                         FotoOrdner: '', SicherungOrdner: '' },
+      ordner: { ArchivOrdner: 'Wareneingang Archiv', FotoOrdner: '',
+                SicherungOrdner: '' } });
+
     const startDaten = () => ({ ok: true, liste: liste(), sprache: DB.sprache || 'de',
                                 kunden: stamm.kunden, lieferanten: stamm.lieferanten,
                                 kontakte: stamm.kontakte, empfaenger: stamm.empfaenger });
@@ -192,19 +201,16 @@ const attrappe = () => {
         return A({ ok: true, an: 'lager@firma.ch', url: '' });
       case 'admin_parameter':
         if (d.werte) DB.par = d.werte;
-        return A({ ok: true,
-          werte: DB.par || { MailAn: 'lager@firma.ch', ArchivOrdner: '1Arch',
-                             FotoOrdner: '', SicherungOrdner: '' },
-          ordner: { ArchivOrdner: 'Wareneingang Archiv', FotoOrdner: '',
-                    SicherungOrdner: '' } });
+        return A(Object.assign({ ok: true }, einstellungen()));
       case 'admin_liste':
-        // Wie im echten Code.gs: Benutzer, Kontakte und Kunden in einer
-        // Antwort — der Adminbereich zeigt sie auf demselben Schirm.
-        return A({ ok: true,
+        // Wie im echten Code.gs: Benutzer, Kontakte, Kunden UND die
+        // Einstellungen in einer Antwort — der Adminbereich zeigt alles auf
+        // demselben Schirm, und der Weg zum Server ist hier das Teure.
+        return A(Object.assign({ ok: true,
           benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
                        aktiv: true, admin: true, neu: false, gesperrt: false,
                        sprache: DB.sprache || 'de' }],
-          kontakte: DB.kontakte, kunden: DB.kundenStamm });
+          kontakte: DB.kontakte, kunden: DB.kundenStamm }, einstellungen()));
       case 'admin_aktion':
         if (d.was === 'sprache') { DB.sprache = d.sprache; return A({ ok: true }); }
         return A({ ok: true });
@@ -1741,11 +1747,12 @@ ok('und jede Charge traegt ihre eigene Menge',
    chargen.positionen[0].anzahl === 60 && chargen.positionen[1].anzahl === 40);
 await ch.close();
 
-// --- 26) Eine Meldung im verborgenen Bereich waere keine ---------------------
-// Beim Oeffnen liest adminParameter(), waehrend «Benutzer» steht. Schlaegt
-// das fehl, laege die Meldung in zwei versteckten Bereichen — sichtbar wird
-// sie erst, wenn jemand zufaellig den richtigen Reiter waehlt.
-console.log('\n26) Eine Meldung im verborgenen Bereich waere keine');
+// --- 26) Waehrend gespeichert wird, geht kein Reiterwechsel -----------------
+// In #22 stand hier ein Toast fuer den Fall, dass die Meldung in einem
+// verborgenen Bereich landet. Den Fall gibt es nicht: gelesen wird beim
+// Oeffnen nicht mehr (das kommt mit «admin_liste»), und beim Speichern liegt
+// der Zustor ueber dem ganzen Schirm. Geprueft wird jetzt genau das.
+console.log('\n26) Waehrend gespeichert wird, geht kein Reiterwechsel');
 const vb = await browser.newPage();
 vb.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
 await vb.addInitScript(attrappe);
@@ -1755,39 +1762,44 @@ await vb.fill('#lg-pass', 'geheim123');
 await vb.click('#lg-senden');
 await vb.waitForSelector('#scr-start.aktiv');
 
-// Nur admin_parameter faellt aus, alles andere laeuft weiter.
 await vb.evaluate(() => {
   const echt = window.fetch;
   window.fetch = async (url, opt) => {
     const d = JSON.parse(opt.body);
-    if (d.action === 'admin_parameter') {
-      const a = { ok: false, error: 'kaputt' };
-      return { text: async () => JSON.stringify(a), json: async () => a };
+    if (d.action === 'admin_parameter' && d.werte) {
+      await new Promise(r => setTimeout(r, 400));
+      const x = { ok: false, error: 'kaputt' };
+      return { text: async () => JSON.stringify(x), json: async () => x };
     }
     return echt(url, opt);
   };
 });
 await vb.click('#st-admin');
 await vb.waitForSelector('#scr-admin.aktiv');
-await vb.waitForFunction(() =>
-  document.getElementById('toast').textContent.includes('kaputt'));
-ok('der Fehlschlag beim Lesen wird trotzdem gemeldet',
-   (await vb.textContent('#toast')).includes('kaputt'),
-   await vb.textContent('#toast'));
-ok('und «Benutzer» steht weiterhin',
-   (await vb.$eval('#adm-reiter [data-reiter="benutzer"]',
-                   e => e.getAttribute('aria-pressed'))) === 'true');
+await vb.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
+ok('das Oeffnen braucht einen einzigen Aufruf',
+   (await vb.evaluate(() => window.__gesendet.filter(
+     x => x.action === 'admin_liste' || x.action === 'admin_parameter').length)) === 1,
+   await vb.evaluate(() => JSON.stringify(window.__gesendet.map(x => x.action))));
 
-// Steht der Bereich dagegen offen, genuegt die Meldung darin — kein Toast
-// obendrauf, der dasselbe zweimal sagt.
-await vb.evaluate(() => { document.getElementById('toast').textContent = ''; });
 await vb.click('#adm-reiter [data-reiter="verwalter"]');
 await vb.click('#adm-par');
+await vb.waitForSelector('#sperre:not([hidden])');
+// Der Reiterknopf liegt unter dem Zustor: was hier zaehlt, ist nicht ob der
+// Klick ankommt, sondern dass der Finger ihn gar nicht erreicht.
+ok('der Zustor liegt ueber den Reitern', await vb.evaluate(() => {
+  const k = document.querySelector('#adm-reiter [data-reiter="benutzer"]')
+              .getBoundingClientRect();
+  const oben = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2);
+  return oben !== null && !oben.closest('#adm-reiter');
+}));
+
 await vb.waitForSelector('#adm-par-meldung.zeigen');
-ok('im offenen Bereich steht sie im Feld',
+ok('die Meldung steht im Bereich, aus dem gespeichert wurde',
    (await vb.textContent('#adm-par-meldung')).includes('kaputt'));
-ok('und nicht zusaetzlich als Toast',
-   (await vb.textContent('#toast')) === '', await vb.textContent('#toast'));
+ok('und «Verwalter» steht immer noch offen',
+   (await vb.$eval('#adm-reiter [data-reiter="verwalter"]',
+                   e => e.getAttribute('aria-pressed'))) === 'true');
 await vb.close();
 
 // --- 27) Drei Sprachen -------------------------------------------------------

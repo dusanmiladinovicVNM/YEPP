@@ -693,6 +693,24 @@ tri. Sada je i jedno i drugo **jedan poziv**:
 - `login` nosi iste podatke u istom odgovoru, pa se posle prijave ne ide
   ponovo na mrežu
 
+**Einstellungen su bile dva poziva.** Prvo parametri, pa liste — i spisak
+korisnika se pojavljivao tek posle drugog. Sada `admin_liste` nosi **sve**:
+korisnike, kontakte, kupce i parametre sa imenima foldera.
+
+Uz to su tamo stajala još tri troška:
+
+| šta | bilo | sada |
+|---|---|---|
+| čitanje lista `Parameter` | **jednom po ključu** — četiri ključa, četiri čitanja | jednom, `parameterAlle()` |
+| imena Drive foldera | **tri poziva ka Drive-u** pri svakom otvaranju | keširana 6 h po ID-u |
+| `Benutzer` | zasebno `getDataRange()` | u istom `batchGet` sa `Kontakte` i `Kunden` |
+
+Ime foldera stoji ispod polja samo kao **provera za čoveka** — da vidi da li
+zalepljeni ID pogađa pravi folder. Preimenuje li se folder bez promene ID-a,
+staro ime stoji do šest sati. To je nagoveštaj, ne podatak koji mora da bude
+tačan. Neuspeh se takođe kešira: nedostižan ID inače košta isti uzaludan put
+pri svakom otvaranju.
+
 `we_liste` i `stammdaten` ostaju: pretraga traži samo listu, a starija
 verzija aplikacije mora i dalje moći da se prijavi. Ako Apps Script još ne
 zna za `start`, aplikacija to prepozna po `unbekannte Aktion` i pređe na

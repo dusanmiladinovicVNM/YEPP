@@ -170,6 +170,9 @@ function laden(ss) {
         }
       }),
       getFolderById: id => {
+        // Jeder Aufruf ist ein Weg zu Drive und kostet im Betrieb
+        // Hunderte Millisekunden — darum gezaehlt.
+        ctx.__driveAufrufe++;
         // Eine ID, die es nicht gibt, wirft — daran haengt die Rueckmeldung
         // «Ordner nicht erreichbar» im Adminbereich.
         if (String(id).indexOf('kaputt') >= 0) throw new Error('not found');
@@ -229,6 +232,7 @@ function laden(ss) {
     // laesst er sich hier von Hand (__cache.leeren()) — der Ablauf nach
     // einer Minute ist sonst nicht pruefbar, und genau daran haengt, ob
     // eine Aenderung in der Tabelle jemals ankommt.
+    __driveAufrufe: 0,
     CacheService: { getScriptCache: () => ctx.__cache },
     ContentService: {
       MimeType: { JSON: 'json', CSV: 'csv' },
