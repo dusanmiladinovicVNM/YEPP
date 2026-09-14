@@ -212,7 +212,7 @@ Wareneingang/                  ← tu gde je i tabela
 ```
 
 Ostaje samo **`MailAn`** — adresa koja dobija popunjeni `.xlsx`. Upiši je u
-**Verwaltung** u aplikaciji, ili u list `Parameter`.
+**Einstellungen → Verwalter** u aplikaciji, ili u list `Parameter`.
 
 | `Schluessel` | `Wert` | Čemu služi |
 |---|---|---|
@@ -474,19 +474,40 @@ se nasleđuje na sve podfoldere, i to je jedina postavka koju treba dirati.
 **Radnicima ne treba pristup Driveu ni za slike** — folder sme da ostane
 potpuno zatvoren.
 
-## Verwaltung
+## Einstellungen
 
-Dugme **Verwaltung** vidi samo admin. Tu su dve stvari: podešavanja slanja i
-korisnici. U tabelu se ne mora ulaziti ni za jedno.
+Dugme **Einstellungen** vidi samo admin. U tabelu se ne mora ulaziti ni za
+šta od ovoga.
 
-### Slanje
+Ekran je podeljen na **četiri oblasti**, istim chipovima kao lista — jedna
+forma manje za učenje. Otvara se uvek na `Benutzer`: zapamćen izbor zvuči
+udobno, ali znači da ekran svaki put izgleda drugačije, a nalozi se ovde
+otvaraju najčešće.
+
+| Oblast | Šta je unutra |
+|---|---|
+| **Benutzer** | novi nalog i spisak postojećih |
+| **Kunden** | kupci sa Haupt/Stellvertretung — i **Kontakte**, adresar iz kog kupci biraju |
+| **Verwalter** | `MailAn` — adresa koja uskače kad kod kupca nema nijedne |
+| **Speicherorte** | tri Drive foldera |
+
+Ranije je sve to stajalo u jednoj dugačkoj rolni, pa je put do polja za
+folder vodio pored tri tuđa odeljka. Sada druge oblasti nisu niže — **nema
+ih**.
+
+### Verwalter i Speicherorte
 
 | Polje | Šta je |
 |---|---|
-| Empfänger der Excel-Datei | `MailAn` — adresa koja dobija popunjeni `.xlsx` |
+| Empfänger der Excel-Datei | `MailAn` — uskače kad kod kupca nema ni Haupt ni Stellvertretung |
 | Drive-Ordner für die Excel-Ablage | `ArchivOrdner` — prazno znači: samo mejl |
 | Drive-Ordner für die Lieferschein-Fotos | `FotoOrdner` — prazno znači: slika se preskače |
 | Drive-Ordner für die wöchentliche Sicherung | `SicherungOrdner` — prazno znači: nema kopije |
+
+**Oba dugmeta „Einstellungen speichern" šalju sva četiri polja.** Polja iz
+druge oblasti stoje u DOM-u i nose ono što je server poslednje dao, pa se
+ništa ne gubi — a prelazak između oblasti ne košta poziv. Dva odvojena
+poziva bila bi dva puta do servera za jednu stvar, a put je ovde skup.
 
 Kod oba foldera sme se **zalepiti cela Drive adresa** — server iz nje izvuče
 ID. Ispod polja stoji **ime foldera** koji taj ID stvarno pogađa; ako piše da
@@ -565,7 +586,7 @@ sledećoj izmeni teksta.
 toga prikazuje **samo jednom**, za slučaj da mejl ne prođe; tekst poruke se
 može kopirati dugmetom. Pri prvoj prijavi aplikacija traži sopstvenu lozinku.
 
-**Ako ne vidiš dugme Verwaltung:** u koloni `Rolle` u listu `Benutzer` ne
+**Ako ne vidiš dugme Einstellungen:** u koloni `Rolle` u listu `Benutzer` ne
 piše `admin`, ili si se prijavio pre nego što je upisano. Rola se čita pri
 prijavi — odjavi se i prijavi ponovo.
 
@@ -896,7 +917,10 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 12f | Odštampan mejl-xlsx | natpisi u zaglavlju čitljivi, nijedan red preko pola strane |
 | 21 | Admin zalepi celu Drive adresu u polje za folder | sačuva se ID, ispod stoji ime foldera |
 | 22 | Admin upiše `lager.firma.ch` bez `@` | odbijeno, stari unos ostaje |
-| 23 | Novi korisnik iz Verwaltung, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
+| 23 | Novi korisnik iz Einstellungen, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
+| 23f | Otvoriti Einstellungen | stoji `Benutzer`, ostale tri oblasti se ne vide |
+| 23g | Upisati `MailAn` u `Verwalter`, preći u `Speicherorte`, snimiti tamo | i adresa je sačuvana |
+| 23h | Chipovi na 390 px | sva četiri staju ili se prelamaju, strana se ne širi |
 | 23b | Novi kontakt bez `@` | odbijen, poruka pored polja |
 | 23c | Kod kupca upisati Haupt i Stellvertretung | *Als Excel senden* nudi obe |
 | 23d | U ekranu za slanje upisati treću adresu | ide na nju, ne na vrednost |
@@ -950,7 +974,7 @@ Test 1 zaključava nalog na 15 minuta — radi ga sa testnim nalogom.
 **Aplikacija nikad ne šalje dva poziva istovremeno.** Za Apps Script su to
 dva izvršavanja istog skripta, i drugo ume da se vrati sa HTML stranicom
 greške umesto sa JSON-om. Prijava je do sada radila baš to — `ladeListe()`
-bez `await`, pa odmah `stammdaten` — kao i otvaranje Verwaltung. Sada idu
+bez `await`, pa odmah `stammdaten` — kao i otvaranje Einstellungen. Sada idu
 jedan za drugim, i test to čuva: attrapa broji koliko ih je u letu i tvrdi
 da nikad nije više od jednog.
 

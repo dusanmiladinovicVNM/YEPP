@@ -430,19 +430,58 @@ await page.waitForFunction(() => !document.querySelector('[data-schritt="angenom
 ok('nach dem Nachtragen kein Knopf mehr',
    !(await page.$('[data-schritt="angenommen"]')));
 
-// --- 9) Verwaltung ---------------------------------------------------------
-console.log('\n9) Verwaltung');
+// --- 9) Einstellungen -------------------------------------------------------
+console.log('\n9) Einstellungen');
 await page.click('#dt-zurueck');
 await page.waitForSelector('#scr-start.aktiv');
+ok('der Knopf heisst jetzt «Einstellungen»',
+   (await page.textContent('#st-admin')) === 'Einstellungen');
 await page.click('#st-admin');
 await page.waitForSelector('#scr-admin.aktiv');
 await page.waitForFunction(() => document.getElementById('adm-mailan').value !== '');
 
-ok('auch die Verwaltung ruft nacheinander',
+ok('auch die Einstellungen rufen nacheinander',
    (await page.evaluate(() => window.__hoechstens)) === 1,
    'hoechstens ' + (await page.evaluate(() => window.__hoechstens)) + ' gleichzeitig');
+
+// Vier Bereiche, und beim Oeffnen steht «Benutzer». Die drei anderen sind
+// fort, nicht bloss weiter unten — sonst waere nichts gewonnen.
+const reiter = n => page.$eval(`#adm-reiter [data-reiter="${n}"]`,
+                              e => e.getAttribute('aria-pressed'));
+const feldOffen = n => page.$eval(`#scr-admin .reiter-feld[data-feld="${n}"]`,
+                                  e => !e.hidden);
+ok('beim Oeffnen steht «Benutzer»', (await reiter('benutzer')) === 'true');
+ok('und nur dieser Bereich ist da',
+   (await feldOffen('benutzer')) && !(await feldOffen('kunden')) &&
+   !(await feldOffen('verwalter')) && !(await feldOffen('ablage')));
+ok('die Benutzerliste steht darin',
+   (await page.textContent('.reiter-feld[data-feld="benutzer"]')).includes('Anna Muster'));
+
+// Die Kontakte stehen bei den Kunden — die Kunden waehlen aus ihnen.
+await page.click('#adm-reiter [data-reiter="kunden"]');
+ok('Kunden und Kontakte liegen zusammen',
+   (await feldOffen('kunden')) &&
+   (await page.$eval('.reiter-feld[data-feld="kunden"] #adm-kontakte', e => !!e)) &&
+   (await page.$eval('.reiter-feld[data-feld="kunden"] #adm-kunden', e => !!e)));
+ok('und «Benutzer» ist fort', !(await feldOffen('benutzer')));
+
+// Die Mailadresse steht beim Verwalter, nicht mehr bei den Ordnern: sie ist
+// die Vorgabe fuer den Fall, dass beim Kunden nichts hinterlegt ist.
+await page.click('#adm-reiter [data-reiter="verwalter"]');
+ok('die Empfaengeradresse steht unter «Verwalter»',
+   await page.$eval('.reiter-feld[data-feld="verwalter"] #adm-mailan', e => !!e));
+ok('und kein Ordnerfeld steht dort',
+   await page.$eval('.reiter-feld[data-feld="verwalter"]',
+                    e => !e.querySelector('#adm-archiv')));
 ok('Empfaengeradresse geladen',
    (await page.inputValue('#adm-mailan')) === 'lager@firma.ch');
+
+await page.click('#adm-reiter [data-reiter="ablage"]');
+ok('die drei Ordner stehen unter «Speicherorte»',
+   await page.$eval('.reiter-feld[data-feld="ablage"]',
+                    e => !!(e.querySelector('#adm-archiv') &&
+                            e.querySelector('#adm-foto') &&
+                            e.querySelector('#adm-sicherung'))));
 ok('Ordner-ID geladen', (await page.inputValue('#adm-archiv')) === '1Arch');
 ok('Ordnername statt blosser ID',
    (await page.textContent('#adm-archiv-name')).includes('Wareneingang Archiv'));
@@ -451,9 +490,13 @@ ok('leerer Ordner erklaert sich',
 ok('Sicherungsordner wird gewarnt',
    (await page.textContent('#adm-sicherung-name')).includes('niemandem'));
 
+// Der Ordnerknopf schickt auch die Adresse mit, die im anderen Reiter steht.
+// Sonst verloere ein Wechsel des Reiters die eben getippte Aenderung.
+await page.click('#adm-reiter [data-reiter="verwalter"]');
 await page.fill('#adm-mailan', 'neu@firma.ch');
+await page.click('#adm-reiter [data-reiter="ablage"]');
 await page.fill('#adm-foto', 'https://drive.google.com/drive/folders/1Foto');
-await page.click('#adm-par');
+await page.click('#adm-ord');
 await page.waitForFunction(() =>
   window.__gesendet.some(x => x.action === 'admin_parameter' && x.werte));
 const par = await page.evaluate(() =>
@@ -466,6 +509,7 @@ ok('Sicherungsordner mitgeschickt', par.werte.SicherungOrdner === '',
    JSON.stringify(par.werte.SicherungOrdner));
 
 // Der Weg, der schon da war: Benutzer anlegen und Zugangsmail verschicken
+await page.click('#adm-reiter [data-reiter="benutzer"]');
 await page.fill('#adm-name', 'Bob Meier');
 await page.fill('#adm-email', 'bob@firma.ch');
 await page.check('#adm-mail');
@@ -594,6 +638,8 @@ await page.evaluate(() => {
                                 json: async () => ({ ok: false, error: 'session' }) });
 });
 // Ein Klick, der wirklich zum Server geht — «Zurück» allein tut es nicht.
+// Der Speicherknopf liegt im Reiter «Verwalter»; sichtbar muss er sein.
+await page.click('#adm-reiter [data-reiter="verwalter"]');
 await page.click('#adm-par');
 await page.waitForSelector('#scr-login.aktiv');
 ok('faellt auf den Login zurueck', await sichtbar('#scr-login'));
@@ -1363,6 +1409,7 @@ ok('die Kontakte stehen als Vorschlag bereit',
 
 await kt.click('#st-admin');
 await kt.waitForSelector('#scr-admin.aktiv');
+await kt.click('#adm-reiter [data-reiter="kunden"]');
 await kt.waitForFunction(() => document.querySelectorAll('#adm-kunden .stamm').length > 0);
 ok('der Adminbereich zeigt die Kontakte',
    (await kt.textContent('#adm-kontakte')).includes('eva@firma.ch'));
@@ -1655,6 +1702,55 @@ ok('gleicher Artikel, verschiedenes MHD',
 ok('und jede Charge traegt ihre eigene Menge',
    chargen.positionen[0].anzahl === 60 && chargen.positionen[1].anzahl === 40);
 await ch.close();
+
+// --- 26) Eine Meldung im verborgenen Bereich waere keine ---------------------
+// Beim Oeffnen liest adminParameter(), waehrend «Benutzer» steht. Schlaegt
+// das fehl, laege die Meldung in zwei versteckten Bereichen — sichtbar wird
+// sie erst, wenn jemand zufaellig den richtigen Reiter waehlt.
+console.log('\n26) Eine Meldung im verborgenen Bereich waere keine');
+const vb = await browser.newPage();
+vb.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await vb.addInitScript(attrappe);
+await vb.goto(APP);
+await vb.fill('#lg-email', 'anna@firma.ch');
+await vb.fill('#lg-pass', 'geheim123');
+await vb.click('#lg-senden');
+await vb.waitForSelector('#scr-start.aktiv');
+
+// Nur admin_parameter faellt aus, alles andere laeuft weiter.
+await vb.evaluate(() => {
+  const echt = window.fetch;
+  window.fetch = async (url, opt) => {
+    const d = JSON.parse(opt.body);
+    if (d.action === 'admin_parameter') {
+      const a = { ok: false, error: 'kaputt' };
+      return { text: async () => JSON.stringify(a), json: async () => a };
+    }
+    return echt(url, opt);
+  };
+});
+await vb.click('#st-admin');
+await vb.waitForSelector('#scr-admin.aktiv');
+await vb.waitForFunction(() =>
+  document.getElementById('toast').textContent.includes('kaputt'));
+ok('der Fehlschlag beim Lesen wird trotzdem gemeldet',
+   (await vb.textContent('#toast')).includes('kaputt'),
+   await vb.textContent('#toast'));
+ok('und «Benutzer» steht weiterhin',
+   (await vb.$eval('#adm-reiter [data-reiter="benutzer"]',
+                   e => e.getAttribute('aria-pressed'))) === 'true');
+
+// Steht der Bereich dagegen offen, genuegt die Meldung darin — kein Toast
+// obendrauf, der dasselbe zweimal sagt.
+await vb.evaluate(() => { document.getElementById('toast').textContent = ''; });
+await vb.click('#adm-reiter [data-reiter="verwalter"]');
+await vb.click('#adm-par');
+await vb.waitForSelector('#adm-par-meldung.zeigen');
+ok('im offenen Bereich steht sie im Feld',
+   (await vb.textContent('#adm-par-meldung')).includes('kaputt'));
+ok('und nicht zusaetzlich als Toast',
+   (await vb.textContent('#toast')) === '', await vb.textContent('#toast'));
+await vb.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
