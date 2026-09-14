@@ -43,10 +43,13 @@ Bez ponovnog osvežavanja, bez čekanja.
 ```
 
 `TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
-Ako ga nemaš pri ruci, pokreni `einrichtungPruefen()` u editoru — poslednji
-red izveštaja nosi **gotov rep** `?token=…&format=csv&tage=365`. Adresu
-ispred njega izveštaj **ne zna** i ostavlja `<Web-App-URL>`: to je adresa
-bereitstellunga koja se završava na `/exec`, ista s kojom aplikacija priča.
+Pokreni `einrichtungPruefen()` u editoru — pod **„CSV fuer die Vorlage"**
+stoji **cela adresa, gotova za lepljenje**, sa adresom i tokenom.
+
+Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
+je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
+Pravu uzmi pod **Bereitstellen → Bereitstellungen verwalten**.
+
 Za nov, jak token: `tokenErzeugen()`.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
@@ -169,9 +172,9 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. zameni oba placeholdera — ima ih **samo u bloku `Daten`**:
-   `<Web-App-URL>` je adresa bereitstellunga koja se završava na `/exec`,
-   a `<TOKEN_READ>` ispisuje **`einrichtungPruefen()`** u Apps Scriptu.
+3. zameni **jedan jedini** niz — postoji **samo u bloku `Daten`**:
+   `<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365` u celini,
+   gotovom adresom koju ispisuje **`einrichtungPruefen()`**.
    `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje

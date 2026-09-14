@@ -6,11 +6,11 @@
 // die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern
 // und Liste bauen auf Daten auf.
 //
-// Zwei Platzhalter, und beide NUR im Block «Daten»:
-//   <Web-App-URL>  die Adresse der Bereitstellung, die auf /exec
-//                  endet — dieselbe, mit der die App spricht.
-//   <TOKEN_READ>   schreibt einrichtungPruefen() im Apps Script
-//                  fertig hin, in der letzten Zeile des Berichts.
+// Eine einzige Zeile ist einzusetzen, und nur im Block «Daten»:
+// die Adresse mit Token. einrichtungPruefen() im Apps Script
+// schreibt sie fertig hin — unter «CSV fuer die Vorlage».
+// Sie ersetzt <Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365
+// als Ganzes; von Hand zusammensetzen muss man nichts.
 // Nummern und Liste bekommen keine Adresse: sie lesen Daten.
 //
 // ============ Daten ============

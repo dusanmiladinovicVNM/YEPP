@@ -2268,8 +2268,32 @@ function einrichtungPruefen() {
 
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {
-    zeilen.push('CSV fuer die Vorlage: <Web-App-URL>?token=' + token +
-                '&format=csv&tage=365');
+    // Die ganze Adresse, nicht die Haelfte. Sie von Hand zusammenzusetzen
+    // war der letzte Handgriff am Vorlagenbau, den niemand pruefen konnte:
+    // ein vertippter Buchstabe faellt erst auf, wenn Power Query nichts
+    // findet — und dann sucht man ihn im M-Code statt in der Adresse.
+    //
+    // getUrl() gibt die Adresse der Bereitstellung. Aus dem Editor heraus
+    // kann das die /dev-Adresse sein; die gilt nur fuer den Angemeldeten und
+    // waere in der Vorlage wertlos. Darum wird sie nicht stillschweigend
+    // eingesetzt, sondern benannt.
+    let adresse = '';
+    try { adresse = String(ScriptApp.getService().getUrl() || ''); } catch (e) { adresse = ''; }
+    const schwanz = '?token=' + token + '&format=csv&tage=365';
+
+    if (adresse.slice(-5) === '/exec') {
+      zeilen.push('CSV fuer die Vorlage — fertig zum Einfuegen:');
+      zeilen.push(adresse + schwanz);
+    } else if (adresse) {
+      zeilen.push('ACHTUNG: die Adresse endet nicht auf /exec, sondern:');
+      zeilen.push('  ' + adresse);
+      zeilen.push('Diese gilt nur fuer dich. Die richtige steht unter');
+      zeilen.push('Bereitstellen → Bereitstellungen verwalten. Daran haengen:');
+      zeilen.push('  <Web-App-URL>' + schwanz);
+    } else {
+      zeilen.push('Noch keine Bereitstellung. Danach steht hier die fertige');
+      zeilen.push('Adresse. Bis dahin: <Web-App-URL>' + schwanz);
+    }
   }
 
   const text = zeilen.join('\n');

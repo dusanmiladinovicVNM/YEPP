@@ -1911,6 +1911,44 @@ console.log('\n41) Die Einstellungen oeffnen sich in EINEM Aufruf');
      ctx.__driveAufrufe + ' statt ' + nachKaputt);
 }
 
+console.log('\n42) Der Bericht schreibt die Adresse fertig hin');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  ctx.__eigenschaften.TOKEN_READ = 'tok-abc';
+
+  // Der Regelfall: bereitgestellt, Adresse endet auf /exec.
+  const gut = ctx.einrichtungPruefen();
+  ok('die ganze Adresse steht da',
+     gut.indexOf('https://script.google.com/macros/s/AKfycb-test/exec' +
+                 '?token=tok-abc&format=csv&tage=365') >= 0, gut);
+  ok('und kein Platzhalter mehr', gut.indexOf('<Web-App-URL>?token=') < 0, gut);
+
+  // Aus dem Editor heraus kann getUrl() die /dev-Adresse geben. Die gilt nur
+  // fuer den Angemeldeten — in der Vorlage waere sie wertlos, und still
+  // eingesetzt waere sie eine Falle.
+  ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/dev';
+  const dev = ctx.einrichtungPruefen();
+  ok('eine /dev-Adresse wird benannt, nicht eingesetzt',
+     dev.indexOf('ACHTUNG') >= 0 && dev.indexOf('<Web-App-URL>?token=tok-abc') >= 0,
+     dev);
+  ok('und sie steht trotzdem da, damit man sie erkennt',
+     dev.indexOf('/dev') >= 0);
+
+  // Noch gar nicht bereitgestellt: der Platzhalter bleibt, mit Ansage.
+  ctx.__webAppUrl = '';
+  const ohne = ctx.einrichtungPruefen();
+  ok('ohne Bereitstellung bleibt der Platzhalter',
+     ohne.indexOf('Noch keine Bereitstellung') >= 0 &&
+     ohne.indexOf('<Web-App-URL>?token=tok-abc') >= 0, ohne);
+
+  // Ohne Token steht die Zeile gar nicht da — eine Adresse ohne Token
+  // liefert «kein Zugriff», und die einzufuegen waere ein Umweg.
+  ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/exec';
+  ctx.__eigenschaften.TOKEN_READ = '';
+  ok('ohne Token keine CSV-Zeile',
+     ctx.einrichtungPruefen().indexOf('format=csv') < 0);
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

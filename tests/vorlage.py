@@ -349,7 +349,10 @@ def main():
            str([n for n, r in bloecke.items() if n != 'Daten' and halter in r]))
     # Und der Kopf sagt dasselbe, damit man nicht erst suchen muss.
     kopfzeilen = m_text.split('// ============ ')[0]
-    ok('der Kopf nennt /exec als die Adresse', '/exec' in kopfzeilen)
+    ok('der Kopf schickt zu einrichtungPruefen()',
+       'einrichtungPruefen()' in kopfzeilen and 'fertig hin' in kopfzeilen)
+    ok('und sagt, dass nichts von Hand zusammenzusetzen ist',
+       'von Hand zusammensetzen muss man nichts' in kopfzeilen)
     ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
        'keine Adresse' in kopfzeilen)
 
