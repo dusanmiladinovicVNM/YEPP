@@ -181,8 +181,29 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 5. prvi put pita za pristup izvoru → **Anonym**, i za nivoe privatnosti →
    **Ignorieren** ili sve na *Öffentlich*
 
-Zatim učitati svaki u istoimeni list, ćelija `A1`: `Daten` → `Daten`,
-`Nummern` → `Nummern`, `Liste` → `Liste`.
+### Učitavanje — ovde Excel bira pogrešno
+
+Listovi `Daten`, `Nummern` i `Liste` **već postoje** u šablonu, i formule ih
+gađaju **po imenu**: `Daten!$A$2:$A$20001`, padajuća lista
+`Nummern!$A$2:$A$1000`. Excel u dijalogu za učitavanje podrazumevano nudi
+*Neues Arbeitsblatt* — pritisneš li OK, nastane **`Daten (2)`**, podaci odu
+tamo, a nijedna formula ih ne vidi. Obrazac ostaje prazan i ništa to ne
+javlja.
+
+Za svaki upit, u **Daten importieren**:
+
+| pitanje | izbor |
+|---|---|
+| *Wie sollen diese Daten angezeigt werden?* | **Tabelle** |
+| *Wo sollen die Daten eingefügt werden?* | **Bestehendes Arbeitsblatt** → `=Daten!$A$1` |
+
+Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
+
+**Ako je već nastao `Daten (2)`:** ne briši ga prvo. U **Daten → Abfragen und
+Verbindungen** desni klik na upit → **Laden in…** → *Bestehendes
+Arbeitsblatt* → `=Daten!$A$1`. Tek kad podaci stoje u pravom listu, obriši
+prazan `Daten (2)`. Obrnutim redom upit ostaje „nur Verbindung" i moraš da
+ga tražiš.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:
@@ -204,9 +225,10 @@ tipuju identično, pa Windows i Mac ne mogu da se raziđu.
 
 Na kraju sačuvati kao `.xlsm` i dodati `Workbook_Open` kao gore.
 
-**Bitno pri učitavanju:** u svojstvima upita
-*Wenn die Anzahl der Zeilen sich ändert* postaviti na **Zellen überschreiben**,
-ne *Zeilen einfügen*. Inače se pri osvežavanju redovi pomeraju.
+**I još jedno u istom dijalogu:** desni klik u učitanu tabelu → *Eigenschaften
+des externen Datenbereichs* (ili **Daten → Eigenschaften**) →
+*Wenn die Anzahl der Zeilen sich ändert* → **Zellen überschreiben**, ne
+*Zeilen einfügen*. Inače se pri osvežavanju redovi pomeraju ispod formula.
 
 ### Provera odmah
 
