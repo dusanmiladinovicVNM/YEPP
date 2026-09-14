@@ -109,7 +109,7 @@ function neueTabelle() {
   B('Kontakte', ['Name', 'Email', 'Aktiv']);
   B('Lieferanten', ['Name', 'Aktiv', 'Sortierung']);
   B('Benutzer', ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',
-    'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle']);
+    'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle', 'Sprache']);
   B('Sessions', ['Token', 'Email', 'GueltigBis']);
   B('Parameter', ['Schluessel', 'Wert', 'GueltigAb']);
   return ss;
@@ -281,9 +281,9 @@ function laden(ss) {
 
 function mitBenutzer(ctx, ss) {
   ss.blaetter.Benutzer.appendRow(
-    ['anna@firma.ch', 'Anna Muster', '', '', true, 0, '', '', true, 'admin']);
+    ['anna@firma.ch', 'Anna Muster', '', '', true, 0, '', '', true, 'admin', '']);
   ss.blaetter.Benutzer.appendRow(
-    ['bob@firma.ch', 'Bob Meier', '', '', true, 0, '', '', true, '']);
+    ['bob@firma.ch', 'Bob Meier', '', '', true, 0, '', '', true, '', '']);
   ss.blaetter.Sessions.appendRow(['tokA', 'anna@firma.ch', new Date(Date.now() + 8.64e7)]);
   ss.blaetter.Sessions.appendRow(['tokB', 'bob@firma.ch', new Date(Date.now() + 8.64e7)]);
   return ctx.sitzungPruefen('tokA');

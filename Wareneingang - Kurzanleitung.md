@@ -81,6 +81,16 @@ Lieferant soll nicht warten müssen.
 
 Eines von beiden genügt. Beide leer lassen geht nicht.
 
+### Deine Sprache
+
+Die App spricht **Deutsch, Englisch oder Französisch** — je nachdem, was bei
+deinem Zugang eingetragen ist. Passt es nicht, sag es der Person, die dir den
+Zugang eingerichtet hat; sie stellt es unter **Einstellungen → Benutzer** um.
+Beim nächsten Öffnen steht es.
+
+**Der Excel-Bogen bleibt immer deutsch.** Er geht an den Kunden, und die
+Vorlage auf SharePoint rechnet mit den deutschen Spaltenüberschriften.
+
 ### Die Positionen
 
 Fünf leere Blöcke stehen bereit, wie die fünf Zeilen auf dem Papier.

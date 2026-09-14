@@ -93,7 +93,7 @@ const attrappe = () => {
                     kontakte: DB.kontakte.filter(k => k.aktiv)
                                 .map(k => ({ name: k.name, email: k.email })),
                     empfaenger: stammEmpf() };
-    const startDaten = () => ({ ok: true, liste: liste(),
+    const startDaten = () => ({ ok: true, liste: liste(), sprache: DB.sprache || 'de',
                                 kunden: stamm.kunden, lieferanten: stamm.lieferanten,
                                 kontakte: stamm.kontakte, empfaenger: stamm.empfaenger });
 
@@ -103,11 +103,13 @@ const attrappe = () => {
         // Anmelden sofort ein zweiter Weg fuer genau diese Zeilen.
         {
           const rolle = window.__nichtAdmin ? '' : 'admin';
+          const sprache = DB.sprache || 'de';
           return A(window.__ohneStart
             ? { ok: true, session: 'tok', name: 'Anna Muster',
-                rolle: rolle, pwGeaendert: true }
+                rolle: rolle, sprache: sprache, pwGeaendert: true }
             : { ok: true, session: 'tok', name: 'Anna Muster',
-                rolle: rolle, pwGeaendert: true, start: startDaten() });
+                rolle: rolle, sprache: sprache, pwGeaendert: true,
+                start: startDaten() });
         }
       case 'start':
         // Eine aeltere Bereitstellung kennt die Aktion nicht.
@@ -200,8 +202,12 @@ const attrappe = () => {
         // Antwort — der Adminbereich zeigt sie auf demselben Schirm.
         return A({ ok: true,
           benutzer: [{ email: 'anna@firma.ch', name: 'Anna Muster',
-                       aktiv: true, admin: true, neu: false, gesperrt: false }],
+                       aktiv: true, admin: true, neu: false, gesperrt: false,
+                       sprache: DB.sprache || 'de' }],
           kontakte: DB.kontakte, kunden: DB.kundenStamm });
+      case 'admin_aktion':
+        if (d.was === 'sprache') { DB.sprache = d.sprache; return A({ ok: true }); }
+        return A({ ok: true });
       case 'admin_neu':
         return A({ ok: true, passwort: 'Xy7k9m2Qw4', text: 'Guten Tag …',
                    wem: d.name + ' <' + d.email + '>' });
@@ -1751,6 +1757,106 @@ ok('im offenen Bereich steht sie im Feld',
 ok('und nicht zusaetzlich als Toast',
    (await vb.textContent('#toast')) === '', await vb.textContent('#toast'));
 await vb.close();
+
+// --- 27) Drei Sprachen -------------------------------------------------------
+// Die Sprache steht beim Benutzer, nicht am Geraet: wer sich anmeldet,
+// bekommt seine. Der Excel-Bogen bleibt davon unberuehrt — er ist ein
+// Dokument fuer den Kunden, kein Bildschirm fuer den Erfasser.
+console.log('\n27) Drei Sprachen');
+const sp = await browser.newPage();
+sp.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await sp.addInitScript(() => { sessionStorage.setItem('__db', JSON.stringify({
+  kopf: null, positionen: [], sprache: 'fr' })); });
+await sp.addInitScript(attrappe);
+await sp.goto(APP);
+
+ok('vor dem Anmelden steht Deutsch', (await sp.textContent('#lg-senden')) === 'Anmelden');
+await sp.fill('#lg-email', 'anna@firma.ch');
+await sp.fill('#lg-pass', 'geheim123');
+await sp.click('#lg-senden');
+await sp.waitForSelector('#scr-start.aktiv');
+
+ok('nach dem Anmelden steht Franzoesisch',
+   (await sp.textContent('#st-neu')) === 'Nouvelle réception',
+   await sp.textContent('#st-neu'));
+ok('auch das, was die App selbst zeichnet',
+   (await sp.textContent('#st-titel')) === 'En cours et récentes',
+   await sp.textContent('#st-titel'));
+ok('und das Dokument sagt, welche Sprache es ist',
+   (await sp.$eval('html', e => e.lang)) === 'fr');
+
+// Das Formular wird beim Oeffnen gezeichnet — dort sitzt der Text in t(),
+// nicht in data-t, und genau das muss zusammenpassen.
+await sp.click('#st-neu');
+await sp.waitForSelector('#scr-form.aktiv');
+ok('die Positionskarte ist franzoesisch',
+   (await sp.textContent('.pos[data-i="0"] .nr')) === 'POSTE 1',
+   await sp.textContent('.pos[data-i="0"] .nr'));
+ok('und die Beschriftungen auch',
+   (await sp.textContent('.pos[data-i="0"] label')) === "Désignation de l'article",
+   await sp.textContent('.pos[data-i="0"] label'));
+// Ein Schraegstrich hiess: zwei Sprachen in einem Feld. Dafuer gibt es jetzt
+// die Wahl — auf Franzoesisch hat er nichts mehr zu suchen.
+ok('kein Schraegstrich mehr im Etikett',
+   !(await sp.textContent('#scr-form')).includes('Article description'));
+
+await sp.click('#fm-zurueck');
+await sp.reload();
+await sp.waitForSelector('#scr-start.aktiv');
+ok('die Sprache ueberlebt das Neuladen',
+   (await sp.textContent('#st-neu')) === 'Nouvelle réception');
+
+// Abmelden raeumt den Speicher — die Sprache ist aber keine Sitzung, sondern
+// eine Einstellung des Geraets. Sonst staende der Anmeldeschirm auf Deutsch.
+await sp.click('#st-abmelden');
+await sp.waitForSelector('#scr-login.aktiv');
+ok('und das Abmelden auch', (await sp.textContent('#lg-senden')) === 'Se connecter',
+   await sp.textContent('#lg-senden'));
+await sp.close();
+
+// Der Admin stellt um: bei sich selbst gilt es sofort, sonst beim naechsten
+// Oeffnen des anderen.
+const su = await browser.newPage();
+su.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await su.addInitScript(attrappe);
+await su.goto(APP);
+await su.fill('#lg-email', 'anna@firma.ch');
+await su.fill('#lg-pass', 'geheim123');
+await su.click('#lg-senden');
+await su.waitForSelector('#scr-start.aktiv');
+await su.click('#st-admin');
+await su.waitForSelector('#scr-admin.aktiv');
+await su.waitForFunction(() => document.querySelector('.sprachwahl'));
+
+ok('die Liste zeigt die Sprache je Benutzer',
+   (await su.$eval('.sprachwahl', e => e.value)) === 'de');
+ok('und nennt sie in ihrer eigenen Sprache',
+   (await su.$$eval('.sprachwahl option', o => o.map(x => x.textContent).join(','))) ===
+   'Deutsch,English,Français');
+
+await su.selectOption('.sprachwahl', 'en');
+await su.waitForFunction(() =>
+  document.getElementById('st-admin') &&
+  document.querySelector('#adm-reiter [data-reiter="benutzer"]').textContent === 'Users');
+const gestellt = await su.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_aktion').pop());
+ok('die Umstellung geht als admin_aktion raus',
+   gestellt.was === 'sprache' && gestellt.sprache === 'en', JSON.stringify(gestellt));
+ok('die eigene Umstellung gilt sofort',
+   (await su.textContent('#adm-reiter [data-reiter="ablage"]')) === 'Storage locations',
+   await su.textContent('#adm-reiter [data-reiter="ablage"]'));
+
+// Und ein neuer Zugang bekommt die gewaehlte Sprache mit — schon fuers Mail.
+await su.fill('#adm-name', 'Pierre Dupont');
+await su.fill('#adm-email', 'pierre@firma.ch');
+await su.selectOption('#adm-sprache', 'fr');
+await su.click('#adm-neu');
+await su.waitForSelector('#dlg-pw.zeigen');
+const angelegt = await su.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'admin_neu').pop());
+ok('die Sprache geht beim Anlegen mit', angelegt.sprache === 'fr',
+   JSON.stringify(angelegt.sprache));
+await su.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
