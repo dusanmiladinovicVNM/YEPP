@@ -98,6 +98,16 @@ Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
 je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
 Pravu uzmi pod **Bereitstellen → Bereitstellungen verwalten**.
 
+**Kontrolna tačka koja ne laže:** adresa u `index.html`, red sa
+`url: 'https://script.google.com/macros/s/…/exec'`. Aplikacija preko nje
+radi svakog dana — ako se ona iz šablona razlikuje, šablon je na pogrešnom
+bereitstellungu, ma odakle da je adresa prepisana.
+
+Kako se to poznaje: otvori adresu u browseru. Živ bereitstellung sa
+pogrešnim tokenom vrati **`kein Zugriff`** (obična strana sa tekstom).
+Mrtav vrati Google Drive stranu **„Die Datei ist nicht vorhanden"** — tada
+ne tražiš grešku u Excelu, nego u adresi.
+
 Za nov, jak token: `tokenErzeugen()`.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.

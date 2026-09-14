@@ -993,6 +993,7 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 12i | Preusmeriti formule na `(2)`, pa obrisati prazan list, pa preimenovati | formule rade, `#REF!` se nigde ne pojavi |
 | 12j | Na Macu pogledati dugme **Schließen und laden** | nema strelice — varijanta „…in…“ ne postoji, pa svaki upit ide u novi list |
 | 12k | Posle preimenovanja `(2)` listova otvoriti `Formular` | formule glase `Daten!…`, provera u `J2` glasi `Nummern!…` |
+| 12l | Otvoriti CSV adresu šablona u browseru, sa pogrešnim tokenom | stoji `kein Zugriff` — ne Drive strana „Die Datei ist nicht vorhanden“ |
 | 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
 | 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
 | 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
