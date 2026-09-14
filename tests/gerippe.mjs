@@ -182,6 +182,10 @@ function laden(ss) {
     UrlFetchApp: { fetch: () => ({ getBlob: () => ({ setName: n => ({ name: n }) }) }) },
     ScriptApp: {
       getOAuthToken: () => 'tok',
+      // Ohne diese Attrappe faellt einrichtungPruefen() in seinen
+      // catch-Zweig, und der Test wuerde gruen, ohne je den Fall zu
+      // beruehren, um den es geht.
+      getService: () => ({ getUrl: () => ctx.__webAppUrl }),
       WeekDay: { SUNDAY: 'SUNDAY' },
       getProjectTriggers: () => ctx.__ausloeser.slice(),
       deleteTrigger: t => {
@@ -233,6 +237,7 @@ function laden(ss) {
     // einer Minute ist sonst nicht pruefbar, und genau daran haengt, ob
     // eine Aenderung in der Tabelle jemals ankommt.
     __driveAufrufe: 0,
+    __webAppUrl: 'https://script.google.com/macros/s/AKfycb-test/exec',
     CacheService: { getScriptCache: () => ctx.__cache },
     ContentService: {
       MimeType: { JSON: 'json', CSV: 'csv' },

@@ -119,10 +119,39 @@ def m_typen(namen):
     return ', '.join(teile)
 
 
-def m_abfragen(namen, quelle='<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365'):
+def m_abfragen(namen, basis='<Web-App-URL>', token='<TOKEN_READ>'):
+    """
+    Die Adresse steht NICHT als ein Stueck im Web.Contents.
+
+    Apps Script beantwortet /exec mit einer Weiterleitung auf
+    script.googleusercontent.com/macros/echo?user_content_key=… — und diese
+    zweite Adresse gilt einmal und kurz. Power Query wertet den Ausdruck
+    mehrfach aus (Vorschau, Typerkennung, Laden) und merkt sich dabei die
+    AUFGELOESTE Adresse; der zweite Griff danach findet sie nicht mehr:
+
+        [DataSource.Error] … (404) durch "Web.Contents": Not Found
+
+    Dagegen hilft dreierlei, und alle drei stehen hier:
+
+    `Query` statt Fragezeichen in der Adresse — dann ist /exec die
+    Datenquelle und die Parameter werden bei jedem Griff angehaengt, statt
+    dass die ganze aufgeloeste Adresse zur Quelle wird.
+
+    `IsRetry = true` — sagt Power Query, die eigene Antwortablage zu
+    uebergehen. Ohne das wird die abgelaufene echo-Adresse wiederverwendet.
+
+    `Binary.Buffer` — liest die Antwort EINMAL ganz. Was danach den Text
+    zerlegt, greift in den Speicher und nicht noch einmal ins Netz.
+    """
     daten = (
         'let\n'
-        f'    Quelle = Csv.Document(Web.Contents("{quelle}"),'
+        f'    Basis = "{basis}",\n'
+        f'    Token = "{token}",\n'
+        '    Antwort = Binary.Buffer(Web.Contents(Basis, [\n'
+        '        Query   = [ token = Token, format = "csv", tage = "365" ],\n'
+        '        IsRetry = true\n'
+        '    ])),\n'
+        '    Quelle = Csv.Document(Antwort,'
         '[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n'
         '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),\n'
         f'    Typen = Table.TransformColumnTypes(Kopf,{{{m_typen(namen)}}}, "en-US")\n'
@@ -160,11 +189,15 @@ def m_schreiben(namen):
         '// die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern\n'
         '// und Liste bauen auf Daten auf.\n'
         '//\n'
-        '// Zwei Platzhalter, und beide NUR im Block «Daten»:\n'
-        '//   <Web-App-URL>  die Adresse der Bereitstellung, die auf /exec\n'
-        '//                  endet — dieselbe, mit der die App spricht.\n'
-        '//   <TOKEN_READ>   schreibt einrichtungPruefen() im Apps Script\n'
-        '//                  fertig hin, in der letzten Zeile des Berichts.\n'
+        '// Zwei Zeilen sind einzusetzen, und nur im Block «Daten»:\n'
+        '//     Basis = "<Web-App-URL>",\n'
+        '//     Token = "<TOKEN_READ>",\n'
+        '// einrichtungPruefen() im Apps Script druckt beide fertig aus.\n'
+        '//\n'
+        '// Die Adresse steht bewusst nicht als ein Stueck mit Fragezeichen\n'
+        '// da: Apps Script leitet /exec auf eine zweite Adresse weiter, die\n'
+        '// einmal und kurz gilt. Power Query merkt sich die aufgeloeste und\n'
+        '// greift ein zweites Mal danach — dann kommt (404) Not Found.\n'
         '// Nummern und Liste bekommen keine Adresse: sie lesen Daten.\n'
         '//\n'
         '// ============ Daten ============\n'

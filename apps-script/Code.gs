@@ -2268,8 +2268,34 @@ function einrichtungPruefen() {
 
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {
-    zeilen.push('CSV fuer die Vorlage: <Web-App-URL>?token=' + token +
-                '&format=csv&tage=365');
+    // Zwei Zeilen, fertig zum Einfuegen — genau die beiden, die im Block
+    // «Daten» stehen. Von Hand zusammensetzen muss man nichts.
+    //
+    // Die Adresse steht im M-Code NICHT als ein Stueck mit Fragezeichen:
+    // Apps Script beantwortet /exec mit einer Weiterleitung, und diese
+    // zweite Adresse gilt einmal und kurz. Power Query merkt sich die
+    // aufgeloeste und greift ein zweites Mal danach — dann 404. Darum
+    // /exec als Quelle und die Parameter getrennt.
+    //
+    // getUrl() gibt aus dem Editor heraus manchmal die /dev-Adresse. Die
+    // gilt nur fuer den Angemeldeten und waere in einer Vorlage auf
+    // SharePoint wertlos — sie wird darum benannt, nicht eingesetzt.
+    let adresse = '';
+    try { adresse = String(ScriptApp.getService().getUrl() || ''); } catch (e) { adresse = ''; }
+
+    zeilen.push('CSV fuer die Vorlage — diese zwei Zeilen in den Block «Daten»:');
+    if (adresse.slice(-5) === '/exec') {
+      zeilen.push('    Basis = "' + adresse + '",');
+    } else if (adresse) {
+      zeilen.push('    Basis = "<Web-App-URL>",     <-- NICHT die Adresse unten!');
+      zeilen.push('ACHTUNG: getUrl() gab eine Adresse, die nicht auf /exec endet:');
+      zeilen.push('  ' + adresse);
+      zeilen.push('Diese gilt nur fuer dich. Die richtige steht unter');
+      zeilen.push('Bereitstellen -> Bereitstellungen verwalten.');
+    } else {
+      zeilen.push('    Basis = "<Web-App-URL>",     <-- noch keine Bereitstellung');
+    }
+    zeilen.push('    Token = "' + token + '",');
   }
 
   const text = zeilen.join('\n');

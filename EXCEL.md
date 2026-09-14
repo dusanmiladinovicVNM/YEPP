@@ -43,10 +43,34 @@ Bez ponovnog osvežavanja, bez čekanja.
 ```
 
 `TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
-Ako ga nemaš pri ruci, pokreni `einrichtungPruefen()` u editoru — poslednji
-red izveštaja nosi **gotov rep** `?token=…&format=csv&tage=365`. Adresu
-ispred njega izveštaj **ne zna** i ostavlja `<Web-App-URL>`: to je adresa
-bereitstellunga koja se završava na `/exec`, ista s kojom aplikacija priča.
+Pokreni `einrichtungPruefen()` u editoru — pod **„CSV fuer die Vorlage"**
+stoje **dva gotova reda** za blok `Daten`.
+
+**Adresa namerno ne stoji kao jedan niz sa upitnikom.** Apps Script na
+`/exec` odgovara **preusmerenjem** na
+`script.googleusercontent.com/macros/echo?user_content_key=…`, a ta druga
+adresa važi **jednom i kratko**. Power Query izraz izračunava više puta —
+pregled, prepoznavanje tipova, učitavanje — i pamti **razrešenu** adresu;
+drugi put je više ne nalazi:
+
+```
+[DataSource.Error] Fehler beim Abrufen von Inhalten von
+"https://script.googleusercontent.com/macros/echo?user_content_key=…"
+(404) durch "Web.Contents": Not Found
+```
+
+Zato blok `Daten` nosi tri stvari koje to sprečavaju:
+
+| | zašto |
+|---|---|
+| `Query = [ token = …, format = "csv", tage = "365" ]` | izvor je `/exec`, parametri se dodaju pri svakom pozivu — ne pamti se razrešena adresa |
+| `IsRetry = true` | Power Query zaobilazi sopstvenu ostavu odgovora |
+| `Binary.Buffer(…)` | odgovor se čita **jednom, ceo**; razlaganje teksta posle toga ide iz memorije |
+
+Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
+je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
+Pravu uzmi pod **Bereitstellen → Bereitstellungen verwalten**.
+
 Za nov, jak token: `tokenErzeugen()`.
 
 Jedan red po poziciji; podaci zaglavlja se ponavljaju u svakom redu.
@@ -169,17 +193,41 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. zameni oba placeholdera — ima ih **samo u bloku `Daten`**:
-   `<Web-App-URL>` je adresa bereitstellunga koja se završava na `/exec`,
-   a `<TOKEN_READ>` ispisuje **`einrichtungPruefen()`** u Apps Scriptu.
+3. zameni **dva reda** — postoje **samo u bloku `Daten`** — onima koje
+   ispisuje **`einrichtungPruefen()`**:
+   ```m
+   Basis = "<Web-App-URL>",
+   Token = "<TOKEN_READ>",
+   ```
    `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje
 5. prvi put pita za pristup izvoru → **Anonym**, i za nivoe privatnosti →
    **Ignorieren** ili sve na *Öffentlich*
 
-Zatim učitati svaki u istoimeni list, ćelija `A1`: `Daten` → `Daten`,
-`Nummern` → `Nummern`, `Liste` → `Liste`.
+### Učitavanje — ovde Excel bira pogrešno
+
+Listovi `Daten`, `Nummern` i `Liste` **već postoje** u šablonu, i formule ih
+gađaju **po imenu**: `Daten!$A$2:$A$20001`, padajuća lista
+`Nummern!$A$2:$A$1000`. Excel u dijalogu za učitavanje podrazumevano nudi
+*Neues Arbeitsblatt* — pritisneš li OK, nastane **`Daten (2)`**, podaci odu
+tamo, a nijedna formula ih ne vidi. Obrazac ostaje prazan i ništa to ne
+javlja.
+
+Za svaki upit, u **Daten importieren**:
+
+| pitanje | izbor |
+|---|---|
+| *Wie sollen diese Daten angezeigt werden?* | **Tabelle** |
+| *Wo sollen die Daten eingefügt werden?* | **Bestehendes Arbeitsblatt** → `=Daten!$A$1` |
+
+Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
+
+**Ako je već nastao `Daten (2)`:** ne briši ga prvo. U **Daten → Abfragen und
+Verbindungen** desni klik na upit → **Laden in…** → *Bestehendes
+Arbeitsblatt* → `=Daten!$A$1`. Tek kad podaci stoje u pravom listu, obriši
+prazan `Daten (2)`. Obrnutim redom upit ostaje „nur Verbindung" i moraš da
+ga tražiš.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:
@@ -201,9 +249,10 @@ tipuju identično, pa Windows i Mac ne mogu da se raziđu.
 
 Na kraju sačuvati kao `.xlsm` i dodati `Workbook_Open` kao gore.
 
-**Bitno pri učitavanju:** u svojstvima upita
-*Wenn die Anzahl der Zeilen sich ändert* postaviti na **Zellen überschreiben**,
-ne *Zeilen einfügen*. Inače se pri osvežavanju redovi pomeraju.
+**I još jedno u istom dijalogu:** desni klik u učitanu tabelu → *Eigenschaften
+des externen Datenbereichs* (ili **Daten → Eigenschaften**) →
+*Wenn die Anzahl der Zeilen sich ändert* → **Zellen überschreiben**, ne
+*Zeilen einfügen*. Inače se pri osvežavanju redovi pomeraju ispod formula.
 
 ### Provera odmah
 

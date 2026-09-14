@@ -988,6 +988,7 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 11 | Slanje pre nego što je sve kvitirano | prolazi, prazna polja u xlsx-u |
 | 12 | Otvoriti xlsx u Excelu na Macu | raspored kao na papiru, žuta kolona H |
 | 12b | Otvoriti .xlsm sa SharePointa iz Findera | podaci trenutni, padajuća lista puna |
+| 12g | Posle učitavanja pogledati jezičke listova | nema `Daten (2)` — podaci su u `Daten` |
 | 12c | Dokument sa 12 pozicija u šablonu | prvih 10, crveno upozorenje u `A26` |
 | 12d | `kg 3.4` na nemački podešenom Excelu | ostaje 3.4, ne postane 34 |
 | 12e | Polje *Uhrzeit* u aplikaciji i u Excelu | `08:30`, ne datum iz 1899. |
