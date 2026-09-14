@@ -982,6 +982,8 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 23k | Nov nalog sa `fr` i čekiranim mejlom | mejl stiže na francuskom, i dalje pominje Safari |
 | 23l | Prijaviti se kao `fr`, pa se odjaviti | ekran za prijavu ostaje francuski |
 | 23m | Upisati `Klingonisch` u kolonu `Sprache` | prijava prolazi, ekran nemački |
+| 39 | Izvući mrežu, pa pritisnuti **Nochmal versuchen** u crvenoj traci | lista se osveži, bez `F5` |
+| 39b | Ista traka dok učitavanje još traje | nema dugmeta — nema šta da se ponavlja |
 | 23f | Otvoriti Einstellungen | stoji `Benutzer`, ostale tri oblasti se ne vide |
 | 23g | Upisati `MailAn` u `Verwalter`, preći u `Speicherorte`, snimiti tamo | i adresa je sačuvana |
 | 23h | Chipovi na 390 px | sva četiri staju ili se prelamaju, strana se ne širi |
@@ -1087,6 +1089,27 @@ upisano, nijedan mejl poslat. Zato se `404`, `429`, `502`, `503` i `504`
 ponavljaju **i kod poziva koji se inače ne smeju ponavljati**: nema šta da se
 udvostruči. `500` nije na spisku — greška u samom skriptu može nastupiti
 pošto je već nešto uradio.
+
+**Jedan ponovni pokušaj nije bio dovoljan.** Iz pogona: „sve radi, samo nekad
+mora refresh". Zato ova grupa statusa dobija **dva** ponovna pokušaja, drugi
+posle duže pauze:
+
+```js
+const PAUSEN = [0, 700, 1800];
+```
+
+Prekinuta veza ostaje na **jednom** ponovnom pokušaju — tamo se ne zna da li
+je poziv stigao, pa svaki dalji nosi rizik udvostručavanja. Kod `404` se to
+zna: ništa se nije desilo.
+
+**I poruka sada vodi čestim slučajem, ne retkim.** Ranije je počinjala sa
+„proveri adresu u Apps Scriptu" — a adresa je skoro uvek ispravna. Sada prvo
+kaže da je prolazno i da treba pokušati odmah ponovo; savet o `CONFIG.url`
+stoji tek iza toga.
+
+**I ne mora se osvežavati cela strana.** Crvena traka iznad liste (`Stand vom
+Gerät …`) nosi dugme **Nochmal versuchen**. Ranije je jedini put nazad bio
+`F5`, sa svime što se pri tome gubi — otkucan formular pre svega.
 
 `200` sa HTML-om i `403` se ne ponavljaju: tu je skript odgovorio, samo
 pogrešno, ili nema prava. Drugi pokušaj tu ne menja ništa.

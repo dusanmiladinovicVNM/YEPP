@@ -291,6 +291,10 @@ select{
 .trenn{color:var(--rand);font-weight:400;padding:0 2px}
 .leer{color:var(--grau);text-align:center;padding:48px 0;font-size:14px}
 .alt{color:var(--fehler);font-size:12px;padding:6px 0;text-align:center}
+/* Aus dem Betrieb: «sve radi, samo nekad mora refresh». Ein Nachschlag
+   reicht nicht immer, und ohne Knopf blieb nur, die ganze Seite neu zu
+   laden — mit allem, was dabei verlorengeht. */
+.alt .nochmal{display:block;margin:6px auto 0}
 .marke{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
 .marke.offen{background:rgba(143,164,38,.18);color:var(--akzent)}
 .marke.fertig{background:rgba(255,255,255,.08);color:var(--grau)}
@@ -1096,7 +1100,7 @@ const TEXTE = {
     diag_neue_version: 'den aktuellen Code.gs einfügen und unter «Bereitstellungen verwalten» eine neue Version veröffentlichen.',
     diag_leer_noch: 'Der Aufruf kam beim Server ohne Inhalt an. Bitte noch einmal versuchen.',
     diag_leer_grund: 'Der Aufruf kam beim Server ohne Inhalt an — das passiert, wenn Google die Anfrage umleitet. Bitte noch einmal versuchen.',
-    diag_404: 'Auch der zweite Versuch kam nicht an (404). In Apps Script ',
+    diag_404: 'Google hat den Aufruf dreimal mit 404 abgewiesen — meistens ist das vorübergehend, also gleich nochmal versuchen. Bleibt es dabei: in Apps Script ',
     diag_url_leer: 'CONFIG.url in index.html ist leer.',
     ad_aus: 'Deaktivieren',
     ad_an: 'Aktivieren',
@@ -1319,7 +1323,7 @@ const TEXTE = {
     diag_neue_version: 'paste the current Code.gs and publish a new version under «Manage deployments».',
     diag_leer_noch: 'The call reached the server without content. Please try again.',
     diag_leer_grund: 'The call reached the server without content — that happens when Google redirects the request. Please try again.',
-    diag_404: 'The second attempt did not arrive either (404). In Apps Script ',
+    diag_404: 'Google turned the call away with 404 three times — that is usually temporary, so try again right away. If it persists: in Apps Script ',
     diag_url_leer: 'CONFIG.url in index.html is empty.',
     ad_aus: 'Deactivate',
     ad_an: 'Activate',
@@ -1534,15 +1538,15 @@ const TEXTE = {
     zeit_server: ' ms — serveur ',
     zeit_weg: ', réseau ',
     diag_nicht_verbunden: 'Cette application n\'est pas encore reliée au backend : ',
-    diag_url_eintragen: 'à inscrire dans CONFIG.url — « Nouveau déploiement » attribue chaque fois une nouvelle adresse, « Nouvelle version » garde l\'ancienne.',
+    diag_url_eintragen: 'inscris-la dans CONFIG.url — « Nouveau déploiement » attribue chaque fois une nouvelle adresse, « Nouvelle version » garde l\'ancienne.',
     diag_url_holen: 'récupère l\'URL actuelle sous « Gérer les déploiements » et ',
     diag_kein_json: 'Le serveur n\'a pas renvoyé de JSON. Vérifie le déploiement : ',
     diag_zugriff: 'Accès « Tout le monde », adresse se terminant par /exec.',
-    diag_unbekannt: 'Le déploiement ne connaît pas encore cette fonction. Dans Apps Script ',
+    diag_unbekannt: 'Le déploiement ne connaît pas encore cette fonction. Dans Apps Script, ',
     diag_neue_version: 'colle le Code.gs actuel et publie une nouvelle version sous « Gérer les déploiements ».',
     diag_leer_noch: 'L\'appel est arrivé au serveur sans contenu. Réessaie.',
     diag_leer_grund: 'L\'appel est arrivé au serveur sans contenu — cela arrive quand Google redirige la requête. Réessaie.',
-    diag_404: 'La deuxième tentative n\'est pas arrivée non plus (404). Dans Apps Script ',
+    diag_404: 'Google a refusé l\'appel trois fois avec 404 — c\'est le plus souvent passager, réessaie tout de suite. Si cela persiste : dans Apps Script, ',
     diag_url_leer: 'CONFIG.url dans index.html est vide.',
     ad_aus: 'Désactiver',
     ad_an: 'Activer',
@@ -1807,12 +1811,28 @@ async function post(payload) {
   }
 }
 
+/**
+ * Drei Anlaeufe, aber nicht fuer dasselbe.
+ *
+ * Riss die Verbindung unterwegs ab, weiss niemand, ob der Aufruf angekommen
+ * ist — da wird genau einmal wiederholt, und nur dort, wo ein zweites Mal
+ * nichts anrichtet.
+ *
+ * Kam dagegen eine Statuszahl zurueck, die sagt «das Skript lief gar nicht»
+ * (404 und Konsorten), ist ein weiterer Versuch immer unbedenklich: es ist
+ * nichts gelesen, nichts geschrieben, keine Mail verschickt. Genau dieser
+ * Fall ist aus dem Betrieb gemeldet worden — «sve radi, samo nekad mora
+ * refresh» —, und bei einem einzigen Nachschlag nach 700 ms blieb er zu oft
+ * uebrig. Darum zwei Nachschlaege, der zweite nach laengerer Pause.
+ */
+const PAUSEN = [0, 700, 1800];
+
 async function postRoh(payload) {
   const sicher = WIEDERHOLBAR.indexOf(payload.action) >= 0;
   let letzter = null;
 
-  for (let i = 0; i < 2; i++) {
-    if (i) await warten(700);
+  for (let i = 0; i < PAUSEN.length; i++) {
+    if (i) await warten(PAUSEN[i]);
 
     let res, text;
     const begonnen = Date.now();
@@ -1838,7 +1858,9 @@ async function postRoh(payload) {
       letzter = e;
       console.warn('Aufruf «' + payload.action + '» Versuch ' + (i + 1) +
                    ' gescheitert:', e.name, '/', e.message);
-      if (!sicher) break;
+      // Hier ist unklar, ob der Aufruf angekommen ist: genau ein zweiter
+      // Versuch, und nur bei Aktionen, die ein zweites Mal nichts anrichten.
+      if (!sicher || i > 0) break;
       continue;
     }
 
@@ -1847,7 +1869,7 @@ async function postRoh(payload) {
       antwort = JSON.parse(text);
     } catch (e) {
       console.error('Antwort war kein JSON:', res.status, text.slice(0, 500));
-      if (NICHT_ANGEKOMMEN.indexOf(res.status) >= 0 && i === 0) {
+      if (NICHT_ANGEKOMMEN.indexOf(res.status) >= 0 && i < PAUSEN.length - 1) {
         console.warn('HTTP ' + res.status + ' — das Skript lief nicht, ' +
                      'zweiter Versuch.');
         continue;
@@ -2164,7 +2186,7 @@ async function start(vorab) {
  * darueber sagt dann aber, dass sie alt ist und warum sie es bleibt.
  */
 function nichtErneuert(grund, zuletzt) {
-  if (zuletzt) { altZeigen('st-alt', zuletzt.zeit, grund); return; }
+  if (zuletzt) { altZeigen('st-alt', zuletzt.zeit, grund, () => ladeListe()); return; }
   altVerbergen('st-alt');
   $('st-zahl').textContent = '';
   $('st-liste').innerHTML = '<div class="leer">' + esc(grund) + '</div>';
@@ -2218,10 +2240,23 @@ function altText(zeit) {
   return 'vor ' + tage + (tage === 1 ? ' Tag' : ' Tagen');
 }
 
-function altZeigen(id, zeit, grund) {
-  $(id).hidden = false;
-  $(id).textContent = t('stand_geraet') + altText(zeit) + '. ' +
-                      (grund || t('wird_aktualisiert'));
+/**
+ * Der Stand vom Geraet, und warum er noch steht. Ist ein Grund dabei, ging
+ * das Nachladen schief — dann gehoert ein Knopf dazu: die ganze Seite neu zu
+ * laden ist ein grober Weg fuer einen Aufruf, der beim zweiten Mal klappt.
+ */
+function altZeigen(id, zeit, grund, nochmal) {
+  const leiste = $(id);
+  leiste.hidden = false;
+  leiste.textContent = t('stand_geraet') + altText(zeit) + '. ' +
+                       (grund || t('wird_aktualisiert'));
+  if (!grund || !nochmal) return;
+  const knopf = document.createElement('button');
+  knopf.type = 'button';
+  knopf.className = 'klein nochmal';
+  knopf.textContent = t('err_nochmal');
+  knopf.addEventListener('click', () => { leiste.hidden = true; nochmal(); });
+  leiste.appendChild(knopf);
 }
 
 function altVerbergen(id) { $(id).hidden = true; }
@@ -2947,7 +2982,8 @@ async function detailOeffnen(weNr) {
   try {
     const r = await post({ action: 'we_detail', session: S.session, weNr: weNr });
     if (!antwortOk(r)) {
-      if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, abgelehntText(r));
+      if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, abgelehntText(r),
+                              () => detailOeffnen(weNr));
       else detailFehler(abgelehntText(r), weNr);
       return;
     }
@@ -2957,7 +2993,8 @@ async function detailOeffnen(weNr) {
     altVerbergen('dt-alt');
     $('dt-aktionen').hidden = false;
   } catch (e) {
-    if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, verbindungText(e));
+    if (gemerkt) altZeigen('dt-alt', gemerkt.zeit, verbindungText(e),
+                            () => detailOeffnen(weNr));
     else detailFehler(verbindungText(e), weNr);
   }
 }

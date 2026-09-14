@@ -868,17 +868,49 @@ const bekannt = await page.evaluate(async () => {
 ok('bekannter Grund bekommt einen Satz statt eines Codes',
    bekannt.includes('ohne Inhalt') && !bekannt.includes('nur_post'), bekannt);
 
-// Bleibt es auch beim zweiten Mal bei 404, sagt die Meldung, was zu tun ist
-const zweimal404 = await page.evaluate(async () => {
-  window.fetch = async () => ({ status: 404, text: async () => '<!DOCTYPE html>' });
+// 404 heisst: das Skript hat gar nicht gelaufen. Wiederholen ist dabei
+// unbedenklich, und aus dem Betrieb kam, dass EIN Nachschlag zu oft nicht
+// reicht. Also drei Anlaeufe — und die Meldung fuehrt danach mit dem
+// haeufigen Fall, nicht mit dem seltenen.
+const dreimal404 = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 404, text: async () => '<!DOCTYPE html>' }; };
+  let text = '';
   try { await post({ action: 'we_liste', session: 'tok' }); }
-  catch (e) { return verbindungText(e); }
-  return '';
+  catch (e) { text = verbindungText(e); }
+  return { n: n, text: text };
 });
-ok('anhaltendes 404 nennt CONFIG.url',
-   zweimal404.includes('404') && zweimal404.includes('CONFIG.url'), zweimal404);
-ok('und sagt, dass auch der zweite Versuch scheiterte',
-   zweimal404.includes('zweite Versuch'), zweimal404);
+ok('404 wird zweimal nachgeschlagen', dreimal404.n === 3, dreimal404.n + ' Aufrufe');
+ok('die Meldung nennt zuerst den haeufigen Fall',
+   dreimal404.text.includes('vorübergehend'), dreimal404.text);
+ok('und danach erst CONFIG.url',
+   dreimal404.text.indexOf('vorübergehend') < dreimal404.text.indexOf('CONFIG.url'),
+   dreimal404.text);
+
+// Eine Aktion, die kein zweites Mal hinausgehen darf, wird trotzdem
+// wiederholt — bei 404 ist nichts geschehen, es gibt nichts zu verdoppeln.
+const senden404 = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; return { status: 404, text: async () => '<!DOCTYPE html>' }; };
+  try { await post({ action: 'we_senden', session: 'tok' }); } catch (e) {}
+  return n;
+});
+ok('auch das Senden wird bei 404 wiederholt', senden404 === 3, senden404 + ' Aufrufe');
+
+// Ein Abriss unterwegs ist etwas anderes: da weiss niemand, ob der Aufruf
+// angekommen ist. Genau ein zweiter Versuch, und nur wo er nichts anrichtet.
+const abriss = await page.evaluate(async () => {
+  let n = 0;
+  window.fetch = async () => { n++; throw new Error('offline'); };
+  try { await post({ action: 'we_liste', session: 'tok' }); } catch (e) {}
+  const lesen = n;
+  n = 0;
+  try { await post({ action: 'we_senden', session: 'tok' }); } catch (e) {}
+  return { lesen: lesen, senden: n };
+});
+ok('ein Abriss beim Lesen wird genau einmal wiederholt', abriss.lesen === 2,
+   abriss.lesen + ' Aufrufe');
+ok('und beim Senden gar nicht', abriss.senden === 1, abriss.senden + ' Aufrufe');
 ok('Detail nennt die Bereitstellung', flaechen.detail.includes('Bereitstellung'), flaechen.detail);
 
 // --- 15) Aeltere Bereitstellung ---------------------------------------------
@@ -1857,6 +1889,59 @@ const angelegt = await su.evaluate(() =>
 ok('die Sprache geht beim Anlegen mit', angelegt.sprache === 'fr',
    JSON.stringify(angelegt.sprache));
 await su.close();
+
+// --- 28) Statt die ganze Seite neu zu laden ---------------------------------
+// Aus dem Betrieb: «sve radi, samo nekad mora refresh». Die Liste stand vom
+// Geraet, darueber die rote Zeile — und der einzige Weg zurueck war F5, mit
+// allem, was dabei verlorengeht.
+console.log('\n28) Statt die ganze Seite neu zu laden');
+const nl = await browser.newPage();
+nl.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await nl.addInitScript(attrappe);
+await nl.goto(APP);
+await nl.fill('#lg-email', 'anna@firma.ch');
+await nl.fill('#lg-pass', 'geheim123');
+await nl.click('#lg-senden');
+await nl.waitForSelector('#scr-start.aktiv');
+
+// Ein Eintrag, damit das Geraet etwas zu merken hat
+await nl.click('#st-neu');
+await nl.waitForSelector('#scr-form.aktiv');
+await nl.fill('#fm-kunde', 'Kunde AG');
+await nl.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await nl.fill('.pos[data-i="0"] [data-f="kg"]', '1');
+await nl.click('#fm-speichern');
+await nl.waitForSelector('#scr-detail.aktiv');
+await nl.click('#dt-zurueck');
+await nl.waitForSelector('#scr-start.aktiv');
+
+// Jetzt faellt das Nachladen aus — die Liste bleibt, die Leiste erklaert es
+await nl.evaluate(() => {
+  window.__echt = window.fetch;
+  window.fetch = async () => { throw new Error('offline'); };
+  ladeListe();
+});
+await nl.waitForSelector('#st-alt:not([hidden])');
+ok('die Liste bleibt stehen',
+   (await nl.textContent('#st-liste')).includes('WE-2026-0001'));
+ok('und die Leiste bietet einen Weg zurueck',
+   !!(await nl.$('#st-alt .nochmal')),
+   await nl.textContent('#st-alt'));
+
+// Der Knopf laedt neu — ohne die Seite anzufassen
+await nl.evaluate(() => { window.fetch = window.__echt; });
+await nl.click('#st-alt .nochmal');
+await nl.waitForFunction(() => document.getElementById('st-alt').hidden);
+ok('nach dem Nachschlag ist die Leiste fort',
+   await nl.$eval('#st-alt', e => e.hidden));
+ok('und die Liste steht immer noch',
+   (await nl.textContent('#st-liste')).includes('WE-2026-0001'));
+
+// Ohne Grund — also waehrend das Nachladen noch laeuft — kein Knopf: es gibt
+// nichts zu wiederholen, es ist schon unterwegs.
+await nl.evaluate(() => altZeigen('st-alt', Date.now() - 60000));
+ok('ohne Fehlschlag steht kein Knopf da', !(await nl.$('#st-alt .nochmal')));
+await nl.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));
