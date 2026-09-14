@@ -634,6 +634,20 @@ function weSpeichern(d, u) {
   if (!kunde && !lieferant) return { ok: false, error: 'kunde_lieferant' };
   if (!pos.length)          return { ok: false, error: 'keine_positionen' };
 
+  // kg ist Pflicht, ausser bei «Bestehend»: die Ware liegt schon im Lager
+  // und wird nicht noch einmal gewogen. Die App prueft dasselbe und meldet
+  // es besser — sie kennt die Nummer auf der Karte. Hier steht es trotzdem,
+  // aus demselben Grund wie bei den Adminrechten: was der Client schickt,
+  // bestimmt der Client.
+  for (let i = 0; i < pos.length; i++) {
+    const name = String(pos[i].artikel || '').trim();
+    if (!name) continue;                        // leere Formularzeile
+    if (pos[i].bestehend === true) continue;
+    if (zahl(pos[i].kg) === '') {
+      return { ok: false, error: 'kg_fehlt', artikel: name };
+    }
+  }
+
   const sperre = LockService.getScriptLock();
   sperre.waitLock(20000);
   try {

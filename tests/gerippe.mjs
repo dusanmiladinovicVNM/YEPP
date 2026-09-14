@@ -372,7 +372,7 @@ function felder(zeile) {
 const POS = [
   { artikel: 'Schrauben M6', anzahl: 120, kg: 3.4, mhd: '10.2027', bemerkung: '', bestehend: true },
   { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false },
-  { artikel: 'Kartonage', anzahl: 8, kg: '', mhd: '', bemerkung: 'Ecke gedrückt', bestehend: false }
+  { artikel: 'Kartonage', anzahl: 8, kg: 12.5, mhd: '', bemerkung: 'Ecke gedrückt', bestehend: false }
 ];
 
 

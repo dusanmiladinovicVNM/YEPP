@@ -108,7 +108,14 @@ select{
 .pos-kopf h2{margin:0;font-size:15px;font-weight:600}
 .pos-kopf .zahl{font-size:12px;color:var(--grau)}
 .kopf-rechts{display:flex;align-items:center;gap:10px}
-.klein[aria-pressed="true"]{border-color:var(--akzent);color:var(--akzent)}
+.chips{display:flex;gap:6px}
+/* Der aktive Chip bekommt Flaeche, nicht nur einen Rand: zwei Knoepfe
+   nebeneinander, von denen einer bloss anders umrandet ist, liest sich
+   auf dem Telefon nicht als «dieser gilt gerade». */
+.klein[aria-pressed="true"]{
+  border-color:var(--akzent);color:var(--akzent);
+  background:rgba(143,164,38,.14);font-weight:600;
+}
 #bild-schau{
   position:fixed;inset:0;z-index:60;background:#000;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -183,6 +190,17 @@ select{
   color:var(--grau);font-size:16px;line-height:1;
 }
 .pos-weg:active{color:var(--fehler)}
+/* Dieselbe Ware, anderes MHD: eine eigene Charge und damit eine
+   eigene Zeile — im Excel genauso. Der Knopf steht in der Kopfzeile
+   der Karte, weil er die ganze Karte betrifft und nicht ein Feld. */
+.pos .kopftasten{display:flex;align-items:center;gap:4px}
+.pos-mhd{
+  background:none;border:1px solid var(--rand);border-radius:3px;
+  padding:3px 8px;cursor:pointer;color:var(--grau);
+  font-family:inherit;font-size:11px;line-height:1.4;white-space:nowrap;
+}
+.pos-mhd:active{color:var(--akzent);border-color:var(--akzent)}
+.pos-mhd[disabled]{opacity:.35;cursor:default}
 .pos .drei{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .pos label{font-size:12px;margin:10px 0 4px}
 .pos input:not([type=checkbox]){height:44px}
@@ -198,6 +216,12 @@ select{
   accent-color:var(--akzent);background:transparent;border:0;border-radius:0;
 }
 .haken.bestehend input{accent-color:var(--gelb)}
+/* kg ist Pflicht — ausser bei «Bestehend». Der Hinweis haengt am
+   Zustand der Karte, nicht an neu gebautem Text: so steht er sofort
+   da, wenn der Haken faellt, ohne dass die Zeile neu gezeichnet wird
+   und dabei den Tippcursor verliert. */
+.kg-frei{display:none;color:var(--grau);font-weight:400}
+.pos.ist-bestehend .kg-frei{display:inline}
 .haken .marker{color:var(--gelb);font-weight:600}
 
 /* ---------- Foto ---------- */
@@ -446,7 +470,10 @@ select{
       <h2 id="st-titel">Offene und letzte</h2>
       <span class="kopf-rechts">
         <span class="zahl" id="st-zahl"></span>
-        <button id="st-alle" class="klein" hidden aria-pressed="false">Alle</button>
+        <span class="chips" id="st-chips" hidden>
+          <button id="st-offen" class="klein" aria-pressed="true">Nur offene</button>
+          <button id="st-alle" class="klein" aria-pressed="false">Alle</button>
+        </span>
       </span>
     </div>
 
@@ -1396,19 +1423,30 @@ function altZeigen(id, zeit, grund) {
 function altVerbergen(id) { $(id).hidden = true; }
 
 /**
- * Der Umschalter steht nur beim Admin — und das ist Bequemlichkeit, keine
+ * Die Chips stehen nur beim Admin — und das ist Bequemlichkeit, keine
  * Sicherung: die Rolle wird auf dem Server aus der Sitzung geprueft.
+ *
+ * Zwei Chips, nicht ein Umschalter. Ein Knopf, dessen Aufschrift zwischen
+ * «Alle» und «Nur offene» springt, zeigt das GEGENTEIL dessen, was gerade
+ * gilt — er nennt das Ziel, nicht den Stand. Wer ihn ansieht, weiss nicht,
+ * welche Liste vor ihm liegt. Zwei Chips zeigen beide Moeglichkeiten, und
+ * der aktive traegt Farbe.
  */
 function alleKnopf() {
   const admin = S.rolle === 'admin';
-  $('st-alle').hidden = !admin;
+  $('st-chips').hidden = !admin;
   if (!admin) S.alle = false;
+  $('st-offen').setAttribute('aria-pressed', S.alle ? 'false' : 'true');
   $('st-alle').setAttribute('aria-pressed', S.alle ? 'true' : 'false');
-  $('st-alle').textContent = S.alle ? 'Nur offene' : 'Alle';
 }
 
-function alleUmschalten() {
-  S.alle = !S.alle;
+/**
+ * Den schon aktiven Chip anzutippen kostet keinen Aufruf. Der Weg zum
+ * Server ist hier das Teure, und die Liste waere danach dieselbe.
+ */
+function alleWaehlen(alle) {
+  if (!!S.alle === !!alle) return;
+  S.alle = !!alle;
   localStorage.setItem('alle', S.alle ? '1' : '0');
   alleKnopf();
   ladeListe();
@@ -1592,11 +1630,18 @@ function leerePosition() {
 function zeichnePositionen() {
   const ziel = $('fm-positionen');
   ziel.innerHTML = S.positionen.map((p, i) =>
-    '<div class="pos" data-i="' + i + '">' +
+    '<div class="pos' + (p.bestehend ? ' ist-bestehend' : '') +
+        '" data-i="' + i + '">' +
       '<div class="zeile1">' +
         '<span class="nr">POSITION ' + (i + 1) + '</span>' +
-        '<button type="button" class="pos-weg" data-i="' + i + '"' +
-          ' aria-label="Position entfernen">&times;</button>' +
+        '<span class="kopftasten">' +
+          '<button type="button" class="pos-mhd" data-i="' + i + '"' +
+            (String(p.artikel).trim() ? '' : ' disabled') +
+            ' title="Gleiche Ware, anderes MHD"' +
+            ' aria-label="Gleiche Ware, anderes MHD">+ MHD</button>' +
+          '<button type="button" class="pos-weg" data-i="' + i + '"' +
+            ' aria-label="Position entfernen">&times;</button>' +
+        '</span>' +
       '</div>' +
 
       '<label>Artikelbezeichnung / Article description</label>' +
@@ -1606,7 +1651,7 @@ function zeichnePositionen() {
         '<div><label>Anzahl / QTY</label>' +
           '<input type="text" inputmode="decimal" data-f="anzahl" value="' +
             esc(p.anzahl) + '"></div>' +
-        '<div><label>kg</label>' +
+        '<div><label>kg<span class="kg-frei"> · nicht nötig</span></label>' +
           '<input type="text" inputmode="decimal" data-f="kg" value="' +
             esc(p.kg) + '"></div>' +
         '<div><label>MHD</label>' +
@@ -1637,7 +1682,14 @@ function zeichnePositionen() {
       const merken = () => {
         S.positionen[i][feld.dataset.f] =
           feld.type === 'checkbox' ? feld.checked : feld.value;
-        if (feld.dataset.f === 'artikel') zaehlePositionen();
+        if (feld.dataset.f === 'artikel') {
+          zaehlePositionen();
+          const mhdTaste = karte.querySelector('.pos-mhd');
+          if (mhdTaste) mhdTaste.disabled = !feld.value.trim();
+        }
+        if (feld.dataset.f === 'bestehend') {
+          karte.classList.toggle('ist-bestehend', feld.checked);
+        }
       };
       feld.addEventListener('input', merken);
       feld.addEventListener('change', merken);
@@ -1646,6 +1698,9 @@ function zeichnePositionen() {
 
   ziel.querySelectorAll('.pos-weg').forEach(btn =>
     btn.addEventListener('click', () => positionWeg(Number(btn.dataset.i))));
+
+  ziel.querySelectorAll('.pos-mhd').forEach(btn =>
+    btn.addEventListener('click', () => positionMhd(Number(btn.dataset.i))));
 
   zaehlePositionen();
 }
@@ -1660,6 +1715,44 @@ function positionWeg(i) {
   if (S.positionen.length <= 1) S.positionen[0] = leerePosition();
   else S.positionen.splice(i, 1);
   zeichnePositionen();
+}
+
+/**
+ * Dieselbe Ware, ein anderes Mindesthaltbarkeitsdatum. Das ist eine eigene
+ * Charge: eine eigene Zeile in der Tabelle und im Excel, keine Bemerkung an
+ * einer bestehenden.
+ *
+ * Kopiert wird, was die Ware beschreibt — Bezeichnung, Bemerkung, der Haken
+ * und der Regalplatz. Leer bleiben Anzahl, kg und MHD: gerade die
+ * unterscheiden die Charge. Eine mitkopierte Menge, die niemand korrigiert,
+ * waere ein stiller Fehler in den Daten; ein leeres Feld verlangt eine
+ * Entscheidung.
+ *
+ * Das Foto wandert nicht mit. Es ist der Beleg fuer DIESE Ware, so wie sie
+ * ankam — an der naechsten Charge wuerde es etwas behaupten, was niemand
+ * aufgenommen hat.
+ */
+function positionMhd(i) {
+  const p = S.positionen[i];
+  if (!p || !String(p.artikel).trim()) return;
+
+  S.positionen.splice(i + 1, 0, {
+    artikel:    p.artikel,
+    anzahl:     '',
+    kg:         '',
+    mhd:        '',
+    regalplatz: p.regalplatz,
+    bemerkung:  p.bemerkung,
+    bestehend:  p.bestehend === true,
+    bild:       null
+  });
+  zeichnePositionen();
+
+  const karte = $('fm-positionen').querySelector('.pos[data-i="' + (i + 1) + '"]');
+  if (karte) {
+    karte.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    karte.querySelector('[data-f=mhd]').focus();
+  }
 }
 
 function positionDazu() {
@@ -1685,6 +1778,26 @@ async function speichern() {
   }
   if (!gefuellt.length) {
     toast('Mindestens eine Position mit Artikelbezeichnung.', 'err'); return;
+  }
+
+  // kg ist Pflicht. Ausgenommen ist «Bestehend»: die Ware liegt schon im
+  // Lager und wird nicht noch einmal gewogen.
+  //
+  // Gesucht wird in S.positionen, nicht in `gefuellt` — die Meldung soll die
+  // Nummer nennen, die auf der Karte steht, und `gefuellt` hat die leeren
+  // Zeilen dazwischen schon weggeworfen.
+  const ohneKg = S.positionen.findIndex(p =>
+    String(p.artikel).trim() && p.bestehend !== true && zahl(p.kg) === '');
+  if (ohneKg >= 0) {
+    toast('Position ' + (ohneKg + 1) + ': kg fehlt. ' +
+          'Leer bleibt es nur bei «Bestehend».', 'err');
+    const feld = $('fm-positionen')
+      .querySelector('.pos[data-i="' + ohneKg + '"] [data-f=kg]');
+    if (feld) {
+      feld.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      feld.focus();
+    }
+    return;
   }
 
   // Was der Erfasser selbst getan hat. Der Server setzt dazu seinen Namen
@@ -1729,7 +1842,11 @@ async function speichern() {
     } else if (!antwortOk(r)) {
       const text = {
         kunde_lieferant:  'Kunde oder Lieferant ist erforderlich.',
-        keine_positionen: 'Mindestens eine Position ist erforderlich.'
+        keine_positionen: 'Mindestens eine Position ist erforderlich.',
+        // Den Namen statt der Nummer: der Server sieht nur die gefuellten
+        // Zeilen, seine Nummer waere nicht die auf der Karte.
+        kg_fehlt: 'kg fehlt' + (r.artikel ? ' bei «' + r.artikel + '»' : '') +
+                  '. Leer bleibt es nur bei «Bestehend».'
       }[r.error];
       if (text) toast(text, 'err');
       else if (r.error !== 'session' && r.error !== 'passwort_noetig') {
@@ -2564,7 +2681,8 @@ $('st-suche').addEventListener('input', () => {
   ladeListe._t = setTimeout(ladeListe, 300);
 });
 $('st-neu').addEventListener('click', formularNeu);
-$('st-alle').addEventListener('click', alleUmschalten);
+$('st-offen').addEventListener('click', () => alleWaehlen(false));
+$('st-alle').addEventListener('click', () => alleWaehlen(true));
 $('st-admin').addEventListener('click', adminOeffnen);
 $('st-passwort').addEventListener('click', () => zeigePasswort(false));
 $('st-abmelden').addEventListener('click', abmelden);
