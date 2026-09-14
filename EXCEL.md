@@ -257,13 +257,29 @@ Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
 > pravljenje novog lista istog imena je **ne vraća**. Formule u `Formular` i
 > padajuća lista bi ostale mrtve, i šablon bi morao iz repoa ispočetka.
 
-Ide se obrnuto — premesti se **upit**, ne list:
+**Daten → Abfragen und Verbindungen na Macu ne pomaže.** Otvara stari prozor
+*Arbeitsmappenabfragen und -verbindungen*, gde postoje samo *Entfernen*,
+*Aktualisieren* i zasivljeno *Eigenschaften…* — **nema „Laden in…"**. To je
+Windows-ov panel za upite, koji Mac nema.
 
-1. **Daten → Abfragen und Verbindungen**
-2. desni klik na upit `Daten` → **Laden in…**
-3. *Tabelle* + **Bestehendes Arbeitsblatt** → `=Daten!$A$1`
-4. tek kad podaci **stoje u listu `Daten`**, obriši prazan `Daten (2)` — njega
-   nijedna formula ne pominje
+**Prvo probaj:** *Daten → Daten abrufen (Power Query) → Abfrage-Editor
+starten* → izaberi `Daten` → **Schließen & Laden** (strelica) →
+**Schließen & Laden in…** → *Bestehendes Arbeitsblatt* → `=Daten!$A$1`.
+
+**Ako je i to zasivljeno,** ide se obrnuto: ne seli se tabela nego se
+**formule preusmere**, pa tek onda briše — tim redom, jer se referenca na
+obrisan list više ne popravlja.
+
+1. list **`Formular`** → `Ctrl+H` →
+   traži `Daten!` → zameni `'Daten (2)'!` → **Alle ersetzen**
+2. **Daten → Datenüberprüfung** u ćeliji `J2` → izvor na
+   `='Nummern (2)'!$A$2:$A$1000` *(tek kad i `Nummern` bude učitan)*
+3. sad prazan `Daten` **više nijedna formula ne pominje** → obriši ga
+4. preimenuj `Daten (2)` → **`Daten`**
+
+Korak 4 je bezbedan i sve vraća na čisto: **Excel pri preimenovanju lista
+sam ispravlja formule i izvore provere podataka.** Opasno je samo brisanje,
+ne preimenovanje.
 
 Isto za `Nummern` i `Liste`.
 
