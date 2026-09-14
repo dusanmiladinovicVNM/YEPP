@@ -109,6 +109,9 @@ select{
 .pos-kopf .zahl{font-size:12px;color:var(--grau)}
 .kopf-rechts{display:flex;align-items:center;gap:10px}
 .chips{display:flex;gap:6px}
+/* Vier Reiter muessen auch auf ein schmales Telefon passen: lieber
+   umbrechen als die Seite breiter machen. */
+.reiter{flex-wrap:wrap;margin:0 0 4px}
 /* Der aktive Chip bekommt Flaeche, nicht nur einen Rand: zwei Knoepfe
    nebeneinander, von denen einer bloss anders umrandet ist, liest sich
    auf dem Telefon nicht als «dieser gilt gerade». */
@@ -485,7 +488,7 @@ select{
 
     <hr class="trennlinie">
     <div class="knopfzeile" style="margin-top:8px">
-      <button id="st-admin" class="gross sekundaer" hidden>Verwaltung</button>
+      <button id="st-admin" class="gross sekundaer" hidden>Einstellungen</button>
       <button id="st-passwort" class="gross sekundaer">Passwort ändern</button>
       <button id="st-abmelden" class="gross sekundaer">Abmelden</button>
     </div>
@@ -640,114 +643,147 @@ select{
   </div>
 </section>
 
-<!-- ============ ADMIN ============ -->
+<!-- ============ EINSTELLUNGEN ============ -->
 <section id="scr-admin" class="screen">
   <header class="kopf-liste">
     <button class="zurueck" id="adm-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1>Verwaltung</h1>
+    <h1>Einstellungen</h1>
   </header>
 
   <div class="scroll">
-    <div class="pos-kopf" style="margin-top:0">
-      <h2>Versand</h2>
-      <span class="zahl">Mail und Ablage</span>
+    <!-- Vier Bereiche statt einer langen Rolle. Wer hier hereinkommt, will
+         genau eine Sache: einen Zugang anlegen, eine Adresse richten. Vorher
+         lag alles untereinander, und der Weg zum Ordnerfeld ging an drei
+         fremden Abschnitten vorbei. Dieselben Chips wie oben in der Liste —
+         eine Form, die man nicht zweimal lernen muss. -->
+    <div class="chips reiter" id="adm-reiter">
+      <button class="klein" data-reiter="benutzer"  aria-pressed="true">Benutzer</button>
+      <button class="klein" data-reiter="kunden"    aria-pressed="false">Kunden</button>
+      <button class="klein" data-reiter="verwalter" aria-pressed="false">Verwalter</button>
+      <button class="klein" data-reiter="ablage"    aria-pressed="false">Speicherorte</button>
     </div>
 
-    <label for="adm-mailan">Empfänger der Excel-Datei</label>
-    <input id="adm-mailan" type="email" inputmode="email"
-           autocapitalize="off" placeholder="lager@firma.ch">
-    <p class="hinweis">Leer heisst: «Als Excel senden» meldet einen Fehler.</p>
+    <!-- ---------- Benutzer ---------- -->
+    <div class="reiter-feld" data-feld="benutzer">
+      <div class="pos-kopf" style="margin-top:0">
+        <h2>Neuer Benutzer</h2>
+        <span class="zahl">bekommt ein Zugangsmail</span>
+      </div>
 
-    <label for="adm-archiv">Drive-Ordner für die Excel-Ablage</label>
-    <input id="adm-archiv" type="text" placeholder="Ordner-Adresse einfügen">
-    <p class="hinweis" id="adm-archiv-name">Leer heisst: nur Mail, kein Archiv.</p>
+      <label for="adm-name">Name</label>
+      <input id="adm-name" type="text" placeholder="Vorname Nachname">
 
-    <label for="adm-foto">Drive-Ordner für die Lieferschein-Fotos</label>
-    <input id="adm-foto" type="text" placeholder="Ordner-Adresse einfügen">
-    <p class="hinweis" id="adm-foto-name">Leer heisst: Fotos werden übersprungen.</p>
+      <label for="adm-email">E-Mail</label>
+      <input id="adm-email" type="email" inputmode="email"
+             autocapitalize="off" placeholder="name@firma.ch">
 
-    <label for="adm-sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
-    <input id="adm-sicherung" type="text" placeholder="Ordner-Adresse einfügen">
-    <p class="hinweis" id="adm-sicherung-name">Leer heisst: keine Sicherung.
-       Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.</p>
+      <label class="haken" for="adm-mail">
+        <input type="checkbox" id="adm-mail">
+        <span>Zugangsmail verschicken</span>
+      </label>
 
-    <div id="adm-par-meldung" class="meldung err"></div>
+      <div id="adm-meldung" class="meldung err"></div>
 
-    <div class="knopfzeile">
-      <button id="adm-par" class="gross primaer">Einstellungen speichern</button>
+      <div class="knopfzeile">
+        <button id="adm-neu" class="gross primaer">Benutzer anlegen</button>
+      </div>
+
+      <hr class="trennlinie">
+      <div id="adm-liste"></div>
     </div>
 
-    <hr class="trennlinie">
+    <!-- ---------- Kunden, und die Kontakte, aus denen sie wählen ---------- -->
+    <div class="reiter-feld" data-feld="kunden" hidden>
+      <div class="pos-kopf" style="margin-top:0">
+        <h2>Kunden</h2>
+        <span class="zahl">je Kunde zwei Adressen</span>
+      </div>
 
-    <div class="pos-kopf" style="margin-top:0">
-      <h2>Neuer Benutzer</h2>
-      <span class="zahl">bekommt ein Zugangsmail</span>
+      <label for="adm-kd-name">Neuer Kunde</label>
+      <input id="adm-kd-name" type="text" placeholder="Firma AG">
+
+      <div id="adm-kd-meldung" class="meldung err"></div>
+
+      <div class="knopfzeile">
+        <button id="adm-kd-neu" class="gross primaer">Kunde anlegen</button>
+      </div>
+
+      <p class="hinweis">Haupt und Stellvertretung sind die Vorgabe beim Senden.
+         Beide bekommen die Mail — wer nur bei Abwesenheit davon erfährt,
+         erfährt es zu spät. Im Sendedialog lässt sich beides ändern.</p>
+
+      <div id="adm-kunden"></div>
+
+      <hr class="trennlinie">
+
+      <div class="pos-kopf" style="margin-top:0">
+        <h2>Kontakte</h2>
+        <span class="zahl">daraus wählen die Kunden</span>
+      </div>
+
+      <label for="adm-k-name">Name</label>
+      <input id="adm-k-name" type="text" placeholder="Vorname Nachname">
+
+      <label for="adm-k-mail">E-Mail</label>
+      <input id="adm-k-mail" type="email" inputmode="email"
+             autocapitalize="off" placeholder="name@firma.ch">
+
+      <div id="adm-k-meldung" class="meldung err"></div>
+
+      <div class="knopfzeile">
+        <button id="adm-k-neu" class="gross primaer">Kontakt anlegen</button>
+      </div>
+
+      <div id="adm-kontakte"></div>
     </div>
 
-    <label for="adm-name">Name</label>
-    <input id="adm-name" type="text" placeholder="Vorname Nachname">
+    <!-- ---------- Verwalter ---------- -->
+    <div class="reiter-feld" data-feld="verwalter" hidden>
+      <div class="pos-kopf" style="margin-top:0">
+        <h2>Verwalter</h2>
+        <span class="zahl">wenn beim Kunden nichts steht</span>
+      </div>
 
-    <label for="adm-email">E-Mail</label>
-    <input id="adm-email" type="email" inputmode="email"
-           autocapitalize="off" placeholder="name@firma.ch">
+      <label for="adm-mailan">Empfänger der Excel-Datei</label>
+      <input id="adm-mailan" type="email" inputmode="email"
+             autocapitalize="off" placeholder="lager@firma.ch">
+      <p class="hinweis">Diese Adresse springt ein, wenn beim Kunden weder
+         Haupt noch Stellvertretung hinterlegt ist. Leer heisst: «Als Excel
+         senden» meldet dann einen Fehler.</p>
 
-    <label class="haken" for="adm-mail">
-      <input type="checkbox" id="adm-mail">
-      <span>Zugangsmail verschicken</span>
-    </label>
+      <div id="adm-par-meldung" class="meldung err"></div>
 
-    <div id="adm-meldung" class="meldung err"></div>
-
-    <div class="knopfzeile">
-      <button id="adm-neu" class="gross primaer">Benutzer anlegen</button>
+      <div class="knopfzeile">
+        <button id="adm-par" class="gross primaer">Einstellungen speichern</button>
+      </div>
     </div>
 
-    <hr class="trennlinie">
-    <div id="adm-liste"></div>
+    <!-- ---------- Speicherorte ---------- -->
+    <div class="reiter-feld" data-feld="ablage" hidden>
+      <div class="pos-kopf" style="margin-top:0">
+        <h2>Speicherorte</h2>
+        <span class="zahl">drei Ordner im Drive</span>
+      </div>
 
-    <hr class="trennlinie">
+      <label for="adm-archiv">Drive-Ordner für die Excel-Ablage</label>
+      <input id="adm-archiv" type="text" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-archiv-name">Leer heisst: nur Mail, kein Archiv.</p>
 
-    <div class="pos-kopf" style="margin-top:0">
-      <h2>Kontakte</h2>
-      <span class="zahl">Empfänger für den Versand</span>
+      <label for="adm-foto">Drive-Ordner für die Lieferschein-Fotos</label>
+      <input id="adm-foto" type="text" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-foto-name">Leer heisst: Fotos werden übersprungen.</p>
+
+      <label for="adm-sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
+      <input id="adm-sicherung" type="text" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-sicherung-name">Leer heisst: keine Sicherung.
+         Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.</p>
+
+      <div id="adm-ord-meldung" class="meldung err"></div>
+
+      <div class="knopfzeile">
+        <button id="adm-ord" class="gross primaer">Einstellungen speichern</button>
+      </div>
     </div>
-
-    <label for="adm-k-name">Name</label>
-    <input id="adm-k-name" type="text" placeholder="Vorname Nachname">
-
-    <label for="adm-k-mail">E-Mail</label>
-    <input id="adm-k-mail" type="email" inputmode="email"
-           autocapitalize="off" placeholder="name@firma.ch">
-
-    <div id="adm-k-meldung" class="meldung err"></div>
-
-    <div class="knopfzeile">
-      <button id="adm-k-neu" class="gross primaer">Kontakt anlegen</button>
-    </div>
-
-    <div id="adm-kontakte"></div>
-
-    <hr class="trennlinie">
-
-    <div class="pos-kopf" style="margin-top:0">
-      <h2>Kunden</h2>
-      <span class="zahl">je Kunde zwei Adressen</span>
-    </div>
-
-    <label for="adm-kd-name">Neuer Kunde</label>
-    <input id="adm-kd-name" type="text" placeholder="Firma AG">
-
-    <div id="adm-kd-meldung" class="meldung err"></div>
-
-    <div class="knopfzeile">
-      <button id="adm-kd-neu" class="gross primaer">Kunde anlegen</button>
-    </div>
-
-    <p class="hinweis">Haupt und Stellvertretung sind die Vorgabe beim Senden.
-       Beide bekommen die Mail — wer nur bei Abwesenheit davon erfährt,
-       erfährt es zu spät. Im Sendedialog lässt sich beides ändern.</p>
-
-    <div id="adm-kunden"></div>
   </div>
 </section>
 
@@ -2411,7 +2447,7 @@ function regalSenden() {
 /**
  * Kein Ja/Nein mehr, sondern ein Schirm: an wen es geht, gehoert vor das
  * Senden und nicht danach. Vorbelegt ist, was beim Kunden hinterlegt ist —
- * geaendert wird es hier, nicht in der Verwaltung.
+ * geaendert wird es hier, nicht in den Einstellungen.
  */
 function sendenKlick() {
   // Die Knopfzeile ist verborgen, solange nichts geladen ist — das hier
@@ -2449,7 +2485,7 @@ async function sendenAusfuehren() {
       await detailOeffnen(S.detail.kopf.WeNr);
     } else if (!antwortOk(r)) {
       const text = r.error === 'kein_empfaenger'
-        ? 'Keine Empfängeradresse — hier eintragen, oder in der Verwaltung ' +
+        ? 'Keine Empfängeradresse — hier eintragen, oder in den Einstellungen ' +
           'beim Kunden hinterlegen.'
         : abgelehntText(r, 'Nicht gesendet');
       $('sd-meldung').textContent = text;
@@ -2497,16 +2533,63 @@ function frage(text, dann) {
 
 async function adminOeffnen() {
   $('adm-meldung').classList.remove('zeigen');
-  $('adm-par-meldung').classList.remove('zeigen');
+  parMeldung('');
   $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
   $('adm-k-meldung').classList.remove('zeigen');
   $('adm-kd-meldung').classList.remove('zeigen');
+  // Immer bei «Benutzer» beginnen. Einen gemerkten Reiter wiederzufinden
+  // klingt bequem, heisst aber, dass der Bildschirm mal so und mal anders
+  // aussieht — und Zugaenge werden hier am oeftesten angelegt.
+  adminReiter('benutzer');
   zeigeScreen('scr-admin');
   await adminParameter();          // nacheinander, siehe start()
   await adminLaden();
 }
 
 /* ---------- Einstellungen ---------- */
+
+/**
+ * Ein Bereich steht, die anderen sind fort — nicht bloss weiter unten. Wer
+ * einen Zugang anlegt, soll die Ordnerfelder gar nicht erst sehen; wer eine
+ * Ordner-ID einsetzt, nicht an der Benutzerliste vorbeiscrollen.
+ */
+function adminReiter(name) {
+  $('adm-reiter').querySelectorAll('[data-reiter]').forEach(b =>
+    b.setAttribute('aria-pressed', b.dataset.reiter === name ? 'true' : 'false'));
+  document.querySelectorAll('#scr-admin .reiter-feld').forEach(f => {
+    f.hidden = f.dataset.feld !== name;
+  });
+  const sc = $('scr-admin').querySelector('.scroll');
+  if (sc) sc.scrollTop = 0;
+}
+
+/**
+ * «Verwalter» und «Speicherorte» schreiben dieselben vier Werte. Zwei
+ * getrennte Aufrufe waeren zwei Wege zum Server fuer eine Sache, und der Weg
+ * ist hier das Teure — also schickt jeder der beiden Knoepfe alle vier
+ * Felder. Die des anderen Reiters stehen im DOM und tragen, was der Server
+ * zuletzt gab; verloren geht dabei nichts.
+ *
+ * Aus demselben Grund tragen beide Bereiche eine Meldung, und beide zeigen
+ * dieselbe: welcher Reiter beim Fehlschlag offen steht, weiss hier niemand.
+ */
+const PAR_MELDUNGEN = ['adm-par-meldung', 'adm-ord-meldung'];
+const PAR_KNOEPFE   = ['adm-par', 'adm-ord'];
+
+function parMeldung(text) {
+  let gesehen = false;
+  PAR_MELDUNGEN.forEach(id => {
+    const m = $(id);
+    m.textContent = text || '';
+    m.classList.toggle('zeigen', !!text);
+    const bereich = m.closest('.reiter-feld');
+    if (text && bereich && !bereich.hidden) gesehen = true;
+  });
+  // Steht ein anderer Reiter offen — beim Oeffnen ist das «Benutzer», weil
+  // adminParameter() dann liest, ohne dass jemand einen Knopf gedrueckt hat —
+  // liegt die Meldung im Verborgenen. Der Toast steht ueber allen Bereichen.
+  if (text && !gesehen) toast(text, 'err');
+}
 
 const PAR_FELDER = { MailAn: 'adm-mailan', ArchivOrdner: 'adm-archiv',
                      FotoOrdner: 'adm-foto', SicherungOrdner: 'adm-sicherung' };
@@ -2520,19 +2603,19 @@ const PAR_LEER = {
 
 /** Ohne `werte` nur lesen, mit `werte` speichern — dieselbe Antwort. */
 async function adminParameter(werte) {
-  const btn = $('adm-par');
-  const m   = $('adm-par-meldung');
-  m.classList.remove('zeigen');
-  if (werte) { btn.disabled = true; btn.textContent = 'Wird gespeichert …'; }
+  const knoepfe = PAR_KNOEPFE.map($);
+  parMeldung('');
+  if (werte) {
+    knoepfe.forEach(b => { b.disabled = true; b.textContent = 'Wird gespeichert …'; });
+  }
 
   try {
     const r = await post({ action: 'admin_parameter', session: S.session,
                            werte: werte || null });
     if (!antwortOk(r)) {
-      m.textContent = r.error === 'mail_ungueltig'
+      parMeldung(r.error === 'mail_ungueltig'
         ? 'Die Empfängeradresse sieht nicht wie eine E-Mail aus.'
-        : 'Nicht möglich: ' + r.error;
-      m.classList.add('zeigen');
+        : 'Nicht möglich: ' + r.error);
       return;
     }
     Object.keys(PAR_FELDER).forEach(s => { $(PAR_FELDER[s]).value = r.werte[s] || ''; });
@@ -2547,11 +2630,12 @@ async function adminParameter(werte) {
     });
     if (werte) toast('Einstellungen gespeichert.', 'ok');
   } catch (e) {
-    m.textContent = verbindungText(e);
-    m.classList.add('zeigen');
+    parMeldung(verbindungText(e));
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Einstellungen speichern';
+    knoepfe.forEach(b => {
+      b.disabled = false;
+      b.textContent = 'Einstellungen speichern';
+    });
   }
 }
 
@@ -2733,11 +2817,17 @@ $('sd-zurueck').addEventListener('click', () => zeigeScreen('scr-detail'));
 
 $('adm-zurueck').addEventListener('click', () => zeigeScreen('scr-start'));
 $('adm-neu').addEventListener('click', adminNeu);
-$('adm-par').addEventListener('click', () => {
+$('adm-reiter').addEventListener('click', e => {
+  const knopf = e.target.closest('[data-reiter]');
+  if (knopf) adminReiter(knopf.dataset.reiter);
+});
+
+function parameterSpeichern() {
   const werte = {};
   Object.keys(PAR_FELDER).forEach(s => { werte[s] = $(PAR_FELDER[s]).value.trim(); });
   adminParameter(werte);
-});
+}
+PAR_KNOEPFE.forEach(id => $(id).addEventListener('click', parameterSpeichern));
 
 $('pw-fertig').addEventListener('click', () => $('dlg-pw').classList.remove('zeigen'));
 $('pw-kopieren').addEventListener('click', async () => {

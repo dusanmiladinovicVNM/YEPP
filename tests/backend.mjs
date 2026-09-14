@@ -1692,6 +1692,36 @@ console.log('\n36) Dieselbe Ware in zwei Chargen');
      zelle(17, 5) === '01.02.2027', zelle(17, 2) + ' / ' + zelle(17, 5));
 }
 
+console.log('\n37) «Verwaltung» heisst jetzt «Einstellungen»');
+{
+  // Ein halb umbenannter Bereich ist schlimmer als der alte Name: der Knopf
+  // sagt das eine, die Ueberschrift das andere, und in der Anleitung steht
+  // ein drittes. Geprueft wird darum der sichtbare Text, nicht die IDs —
+  // die heissen weiter `adm-*`, weil sie niemand liest.
+  const sichtbar = fs.readFileSync('index.html', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n').map(z => z.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n');
+  ok('in der App steht das Wort nicht mehr', !/Verwaltung/.test(sichtbar),
+     (sichtbar.match(/.*Verwaltung.*/) || [''])[0].trim());
+  ok('und die Pruefung wuerde es finden', /Verwaltung/.test(sichtbar + '\nVerwaltung'));
+
+  for (const datei of ['README.md', 'Wareneingang - Kurzanleitung.md']) {
+    const text = fs.readFileSync(datei, 'utf8');
+    ok(datei + ' spricht von Einstellungen', !/Verwaltung/.test(text),
+       (text.match(/.*Verwaltung.*/) || [''])[0].trim());
+  }
+
+  // Die vier Bereiche muessen da sein, und jeder mit seinem Feld.
+  const roh = fs.readFileSync('index.html', 'utf8');
+  for (const [reiter, feld] of [['benutzer', 'adm-name'], ['kunden', 'adm-kd-name'],
+                                ['verwalter', 'adm-mailan'], ['ablage', 'adm-archiv']]) {
+    ok('der Bereich «' + reiter + '» steht im Markup',
+       roh.includes('data-reiter="' + reiter + '"') &&
+       roh.includes('data-feld="' + reiter + '"') && roh.includes('id="' + feld + '"'));
+  }
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);
