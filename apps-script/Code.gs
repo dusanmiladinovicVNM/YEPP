@@ -2350,9 +2350,9 @@ function einrichtungPruefen() {
   });
   zeilen.push('MailAn: ' + (parameter('MailAn') || 'FEHLT — Versand meldet einen Fehler'));
 
-  // Das Blatt, das die Excel-Vorlage liest. Steht es leer da, obwohl es
-  // Wareneingaenge gibt, hat noch kein Schreibvorgang stattgefunden, seit es
-  // existiert — exportNachziehen() von Hand holt es ein.
+  // Das Blatt «Export». Die Vorlage liest es NICHT — sie liest /exec, wie
+  // die Spesen-Vorlage. Es steht trotzdem hier: an ihm sieht man in einem
+  // Blick, was der Endpunkt lieferte, ohne ihn aufzurufen.
   const ab = tabelle().getSheetByName(T.ausgabe);
   if (!ab) {
     zeilen.push('Export: Blatt fehlt — setupAnlegen()');
@@ -2360,38 +2360,33 @@ function einrichtungPruefen() {
     const n = Math.max(0, ab.getLastRow() - 1);
     zeilen.push('Export: ' + n + ' Zeilen' +
                 (n ? '' : ' — exportNachziehen() ausfuehren'));
-    zeilen.push('  Veroeffentlichen: Datei → Im Web veroeffentlichen →');
-    zeilen.push('  Blatt «Export» → Kommagetrennte Werte (.csv)');
-    zeilen.push('  Die Adresse daraus kommt in der Vorlage in «Basis».');
   }
 
   const token = eigenschaft('TOKEN_READ', true);
-  if (token) {
-    // Die Vorlage liest das veroeffentlichte Blatt, NICHT diese Adresse.
-    // Sie steht hier trotzdem: im Browser aufgerufen zeigt sie in einem
-    // Zug, ob Bereitstellung, Token und Export zusammenpassen — und eine
-    // lebende Bereitstellung mit falschem Token antwortet «kein Zugriff»,
-    // eine tote mit der Drive-Seite. Diese beiden zu unterscheiden ist das,
-    // wonach man sonst lange sucht.
-    //
-    // Frueher stand hier, was in den M-Code gehoert. Das gilt nicht mehr,
-    // und zwei Anleitungen nebeneinander sind schlimmer als eine.
+  if (!token) {
+    zeilen.push('Vorlage: ohne TOKEN_READ keine Adresse — tokenSetzen()');
+  } else {
+    // Die zwei Stellen, die im Block «Daten» einzusetzen sind, fertig
+    // hingeschrieben. Sie von Hand zusammenzusetzen war die Stelle, an der
+    // /dev statt /exec in den M-Code kam — und /dev verlangt eine
+    // Anmeldung, worauf Power Query die Anmeldeseite als HTML bekommt.
     let adresse = '';
     try { adresse = String(ScriptApp.getService().getUrl() || ''); } catch (e) { adresse = ''; }
-    const schwanz = '?token=' + token + '&format=csv&tage=365';
 
-    zeilen.push('Zum Nachsehen im Browser — die Vorlage benutzt das NICHT:');
+    zeilen.push('Fuer die Vorlage, in den Block «Daten»:');
     if (adresse.slice(-5) === '/exec') {
-      zeilen.push('  ' + adresse + schwanz);
+      zeilen.push('  "' + adresse + '",');
     } else if (adresse) {
-      // getUrl() gibt aus dem Editor heraus die /dev-Adresse. Die verlangt
-      // eine Anmeldung und taugt zum Nachsehen nicht.
-      zeilen.push('  getUrl() gab eine /dev-Adresse; die richtige steht unter');
-      zeilen.push('  Bereitstellen -> Bereitstellungen verwalten. Daran haengen:');
-      zeilen.push('  ' + schwanz);
+      // getUrl() gibt aus dem Editor heraus die /dev-Adresse. Die taugt
+      // nicht: sie verlangt eine Anmeldung.
+      zeilen.push('  getUrl() gab eine /dev-Adresse. Die richtige steht unter');
+      zeilen.push('  Bereitstellen -> Bereitstellungen verwalten und endet auf /exec.');
     } else {
-      zeilen.push('  noch keine Bereitstellung. Daran haengen: ' + schwanz);
+      zeilen.push('  noch keine Bereitstellung — Bereitstellen -> Neue Bereitstellung');
     }
+    zeilen.push('  [Query = [token = "' + token + '", format = "csv"]]');
+    zeilen.push('  Zum Nachsehen im Browser: dieselbe Adresse mit');
+    zeilen.push('  ?token=' + token + '&format=csv');
   }
 
   const text = zeilen.join('\n');

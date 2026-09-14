@@ -25,7 +25,6 @@ Option Explicit
 ' ---- hier eintragen -----------------------------------------
 Private Const WEB_APP_URL As String = ""      ' .../exec aus Apps Script
 Private Const TOKEN       As String = ""      ' TOKEN_READ aus Code.gs
-Private Const TAGE        As Long = 365       ' Fenster; 0 = alles
 ' -------------------------------------------------------------
 
 Private Const Q_DATEN   As String = "Daten"
@@ -33,8 +32,6 @@ Private Const Q_NUMMERN As String = "Nummern"
 
 
 Public Sub AbfragenAnlegen()
-    Dim quelle As String
-
     If WEB_APP_URL = "" Or TOKEN = "" Then
         MsgBox "Bitte zuerst WEB_APP_URL und TOKEN oben im Modul eintragen.", _
                vbExclamation, "Wareneingang"
@@ -43,13 +40,10 @@ Public Sub AbfragenAnlegen()
 
     If Not BlaetterDa() Then Exit Sub
 
-    quelle = WEB_APP_URL & "?token=" & TOKEN & "&format=csv"
-    If TAGE > 0 Then quelle = quelle & "&tage=" & TAGE
-
     On Error GoTo Fehler
     Application.ScreenUpdating = False
 
-    AbfrageSetzen Q_DATEN, MDaten(quelle)
+    AbfrageSetzen Q_DATEN, MDaten(WEB_APP_URL, TOKEN)
     AbfrageSetzen Q_NUMMERN, MNummern()
 
     ' Beide Blaetter zeigen dieselbe Abfrage; `Liste` ist nur die
@@ -89,17 +83,27 @@ End Sub
 ' das Tausendertrennzeichen, und aus 3.4 kg wird 34 kg oder ein Fehler - je
 ' nach Version, ohne Meldung, und nur auf manchen Arbeitsplaetzen. Die CSV
 ' liefert immer den Punkt, also wird die Kultur hier festgenagelt.
-Private Function MDaten(ByVal quelle As String) As String
+Private Function MDaten(ByVal url As String, ByVal token As String) As String
     ' ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.
     ' Mehrere Anweisungen statt einer langen: VBA laesst je logischer
     ' Zeile nur 1024 Zeichen zu, und die Typenliste waechst mit den
     ' Spalten. Derselbe Text steht in vorlage/Abfragen.m.
+    '
+    ' Die Parameter stehen in einem Query-Satz, nicht als Fragezeichen
+    ' in der Adresse: so bleibt /exec die Datenquelle. Und kein Schritt
+    ' nennt einen anderen zweimal - sonst wird zweimal abgerufen, und
+    ' die Weiterleitung von /exec gilt nur einmal (404).
     Dim m As String
     m = "let" & vbLf
-    m = m & "    Quelle = Csv.Document(Web.Contents(""" & quelle & """),"
-    m = m & "[Delimiter="","", Encoding=65001, QuoteStyle=QuoteStyle.Csv])," & vbLf
-    m = m & "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true])," & vbLf
-    m = m & "    Typen = Table.TransformColumnTypes(Kopf,{"
+    m = m & "    Quelle = Csv.Document(" & vbLf
+    m = m & "        Web.Contents(" & vbLf
+    m = m & "            """ & url & """," & vbLf
+    m = m & "            [Query = [token = """ & token & """, format = ""csv""]]" & vbLf
+    m = m & "        )," & vbLf
+    m = m & "        [Delimiter = "","", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]" & vbLf
+    m = m & "    )," & vbLf
+    m = m & "    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars = true])," & vbLf
+    m = m & "    Typen = Table.TransformColumnTypes(Kopf, {"
     m = m & "{""WeNr"", type text}, {""Kunde"", type text}, {""Lieferant"", type text}, {""LagerM2"", type number}, "
     m = m & "{""KopfBemerkung"", type text}, {""AngNam"", type text}, {""AngDat"", type text}, {""AngZeit"", type text}, "
     m = m & "{""GezNam"", type text}, {""GezDat"", type text}, {""GezZeit"", type text}, {""EinNam"", type text}, {""EinDat"", type text}, "

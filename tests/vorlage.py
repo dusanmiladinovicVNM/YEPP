@@ -109,6 +109,66 @@ def auswerten(formel, blatt, wahl, pos_nr, zeilen_da):
     return ''                                   # IFERROR faengt #NV ab
 
 
+def vba_text(rest, werte):
+    """
+    Wertet die rechte Seite einer VBA-Zuweisung aus: "a" & vbLf & url.
+
+    Gebraucht wird das, um Windows und Mac WIRKLICH zu vergleichen. Ein
+    Vergleich der Typenliste allein liess durchgehen, dass das Makro die
+    Parameter ans Fragezeichen haengte und die M-Datei einen Query-Satz
+    benutzte.
+    """
+    aus, i = '', 0
+    while i < len(rest):
+        c = rest[i]
+        if c == '"':
+            j, stueck = i + 1, ''
+            while j < len(rest):
+                if rest[j] == '"':
+                    if rest[j:j + 2] == '""':
+                        stueck += '"'
+                        j += 2
+                        continue
+                    break
+                stueck += rest[j]
+                j += 1
+            if j >= len(rest):
+                sys.exit('vba_text: Anfuehrungszeichen nicht geschlossen in '
+                         + rest)
+            aus += stueck
+            i = j + 1
+        elif c in ' &':
+            i += 1
+        else:
+            j = i
+            while j < len(rest) and (rest[j].isalnum() or rest[j] == '_'):
+                j += 1
+            name = rest[i:j]
+            if name == 'vbLf':
+                aus += '\n'
+            elif name != 'm':                      # `m` ist das schon Gebaute
+                if name not in werte:
+                    sys.exit(f'vba_text kennt «{name}» nicht')
+                aus += werte[name]
+            i = j
+    return aus
+
+
+def mdaten_ausrechnen(bas, url, token):
+    """Fuehrt MDaten() aus dem Makro im Kopf aus und gibt den M-Code."""
+    m = re.search(r'Private Function MDaten\(.*?End Function', bas, re.S)
+    if not m:
+        sys.exit('MDaten im Makro nicht gefunden')
+    aus = ''
+    for zeile in m.group(0).replace('\r\n', '\n').split('\n'):
+        zeile = zeile.strip()
+        if zeile.startswith('m = m & '):
+            aus += vba_text(zeile[len('m = m & '):], {'url': url, 'token': token})
+        elif zeile.startswith('m = '):
+            aus = vba_text(zeile[len('m = '):], {'url': url, 'token': token})
+    return aus
+
+
 def main():
     if not VORLAGE.exists():
         sys.exit('Vorlage fehlt — zuerst tools/vorlage_bauen.py laufen lassen')
@@ -342,60 +402,75 @@ def main():
     for teil in m_text.split('// ============ ')[1:]:
         kopf, _, rumpf = teil.partition(' ============')
         bloecke[kopf] = rumpf
-    halter = '<Veroeffentlichte-CSV-Adresse>'
+    halter = '<Web-App-URL>'
     ok(f'{halter} steht in «Daten»', halter in bloecke.get('Daten', ''))
     ok(f'{halter} steht sonst in keinem Block',
        not any(halter in r for n, r in bloecke.items() if n != 'Daten'),
        str([n for n, r in bloecke.items() if n != 'Daten' and halter in r]))
-    # Kein Token mehr im M-Code: gelesen wird ein veroeffentlichtes Blatt,
-    # nicht die Skriptausgabe. Ein liegengebliebener Token waere ein
-    # Geheimnis in einer Datei, die auf SharePoint jedem offensteht.
-    for weg in ('<TOKEN_READ>', 'token =', 'script.google.com'):
-        ok(f'«{weg}» steht nirgends mehr', weg not in m_text,
-           (m_text[max(0, m_text.find(weg) - 40):m_text.find(weg) + 40]
-            if weg in m_text else ''))
-    # Und der Kopf sagt dasselbe, damit man nicht erst suchen muss.
-    kopfzeilen = m_text.split('// ============ ')[0]
-    ok('der Kopf sagt, wo die Adresse herkommt',
-       'Im Web veroeffentlichen' in kopfzeilen and 'Export' in kopfzeilen)
-    # Warum NICHT die Apps-Script-Adresse, muss im Kopf stehen: sonst traegt
-    # der naechste sie beim Aufraeumen wieder ein und die 404 ist zurueck.
-    ok('und warum nicht die Apps-Script-Adresse',
-       '404' in kopfzeilen and 'Weiterleitung' in kopfzeilen)
-    ok('und dass nur «Export» veroeffentlicht wird',
-       'bleiben privat' in kopfzeilen)
+    ok('der Token steht in «Daten»', '<TOKEN_READ>' in bloecke.get('Daten', ''))
+    ok('und sonst in keinem Block',
+       not any('<TOKEN_READ>' in r for n, r in bloecke.items() if n != 'Daten'))
 
-    ok('die Antwort wird einmal ganz gelesen',
-       'Binary.Buffer(' in bloecke.get('Daten', ''))
-
-    # Die Anleitung und der erzeugte M-Code muessen VON DENSELBEN
-    # Platzhaltern sprechen. Als die Quelle vom Skript auf das
-    # veroeffentlichte Blatt umgestellt wurde, blieb in EXCEL.md ein Schritt
-    # stehen, der weiter Basis UND Token einzusetzen verlangte — zwei
-    # Anleitungen nebeneinander, und die zweite galt nicht mehr.
-    excel_md = (WURZEL / 'EXCEL.md').read_text(encoding='utf-8')
-    ok('EXCEL.md nennt den Platzhalter, den es wirklich gibt',
-       halter in excel_md, halter)
-    for tot in ('<Web-App-URL>', '<TOKEN_READ>'):
-        ok(f'und nicht mehr den alten {tot}', tot not in excel_md,
-           (excel_md[max(0, excel_md.find(tot) - 60):excel_md.find(tot) + 40]
-            if tot in excel_md else ''))
-
-    # Kam gar keine CSV, meldet Excel von sich aus «Die Spalte WeNr wurde
-    # nicht gefunden» — und schickt damit zu den Spalten, wo nichts ist.
-    # Der Waechter muss VOR dem Typen stehen, sonst kommt er nie dran.
+    # ---- Die Form, die in Spesen laeuft ----
+    #
+    # Gelesen wird /exec. Das ging lange nicht, und der Grund lag nicht an
+    # Apps Script: /exec antwortet mit einer Weiterleitung auf eine Adresse,
+    # die einmal und kurz gilt. Wird genau einmal abgerufen, stoert das
+    # niemanden. Vier Dinge standen hier, die in Spesen nicht stehen, und
+    # erst sie erzeugten den zweiten Griff.
     daten_block = bloecke.get('Daten', '')
-    ok('ein Waechter prueft, ob ueberhaupt eine CSV kam',
-       'List.Contains(Table.ColumnNames(Kopf), "WeNr")' in daten_block)
-    ok('und er nennt die haeufigen Gruende beim Namen',
-       'Veroeffentlichung wurde aufgehoben' in daten_block and
-       'Im Web veroeffentlichen' in daten_block)
-    ok('er steht vor dem Typen',
-       daten_block.index('Geprueft =') < daten_block.index('Typen ='))
-    ok('und die Typen lesen von ihm, nicht am ihm vorbei',
-       'TransformColumnTypes(Geprueft,' in daten_block)
+
+    # 1) Die Adresse als TEXT im Web.Contents, nicht in einer Variablen.
+    #    Sonst ist die Datenquelle nicht statisch bestimmbar («dynamic data
+    #    source») und die Aktualisierung bricht ausserhalb des Editors.
+    ok('die Adresse steht als Text im Web.Contents',
+       f'Web.Contents(\n            "{halter}"' in daten_block, daten_block)
+    ok('und nicht in einer Variablen',
+       'Basis =' not in daten_block, daten_block)
+
+    # 2) und 3) IsRetry geht bei jedem Griff neu ans Netz, Binary.Buffer
+    #    half dagegen nicht. Beides steht in Spesen nicht.
+    for tot in ('IsRetry', 'Binary.Buffer('):
+        ok(f'«{tot}» steht nicht mehr da', tot not in daten_block)
+
+    # 4) Der Waechter nannte «Kopf» ZWEIMAL. Power Query wertet dann auch
+    #    zweimal aus — und der zweite Griff geht auf die abgelaufene
+    #    Weiterleitung: 404. Die Meldung erzeugte den Fehler, den sie
+    #    erklaeren wollte.
+    ok('die Typen lesen unmittelbar von «Kopf»',
+       'TransformColumnTypes(Kopf, ' in daten_block)
+
+    # Kein Schritt darf einen anderen zweimal nennen — das ist die Regel
+    # hinter 4), und sie gilt fuer jeden Schritt, nicht nur fuer «Kopf».
+    # Als Wort gezaehlt: «KopfBemerkung» ist eine Spalte, kein Schritt.
+    for schritt in ('Quelle', 'Kopf'):
+        wie_oft = len(re.findall(r'\b' + schritt + r'\b', daten_block))
+        ok(f'«{schritt}» wird genau einmal gelesen', wie_oft == 2,
+           f'{schritt}: {wie_oft}x')
+
+    # Der Kopf der Datei muss dasselbe sagen, sonst traegt der naechste die
+    # entfernten Zeilen beim Aufraeumen wieder ein.
+    kopfzeilen = m_text.split('// ============ ')[0]
+    ok('der Kopf nennt beide einzusetzenden Stellen',
+       '<Web-App-URL>' in kopfzeilen and '<TOKEN_READ>' in kopfzeilen)
+    ok('und sagt, dass die Adresse auf /exec enden muss',
+       '/exec' in kopfzeilen and '/dev' in kopfzeilen)
+    ok('und warum sie nicht in eine Variable gehoert',
+       'statisch bestimmbar' in kopfzeilen)
+    ok('und warum kein Schritt zweimal genannt werden darf',
+       'zweimal' in kopfzeilen and '404' in kopfzeilen)
     ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
        'keine Adresse' in kopfzeilen)
+
+    # Die Anleitung und der erzeugte M-Code muessen VON DENSELBEN
+    # Platzhaltern sprechen. Als die Quelle einmal umgestellt wurde, blieb in
+    # EXCEL.md ein Schritt stehen, der noch die alten verlangte — zwei
+    # Anleitungen nebeneinander, und die zweite galt nicht mehr.
+    excel_md = (WURZEL / 'EXCEL.md').read_text(encoding='utf-8')
+    for da in ('<Web-App-URL>', '<TOKEN_READ>'):
+        ok(f'EXCEL.md nennt {da}', da in excel_md, da)
+    ok('und nicht mehr den alten Platzhalter',
+       '<Veroeffentlichte-CSV-Adresse>' not in excel_md)
 
     # Windows (Makro) und Mac (eingefuegt) muessen denselben Text laden.
     # VBA: 1024 Zeichen und 24 Fortsetzungen je LOGISCHER Zeile. Die alte
@@ -419,6 +494,14 @@ def main():
        str({n: (bas_typen.get(n), getypt.get(n))
             for n in set(list(bas_typen) + list(getypt))
             if bas_typen.get(n) != getypt.get(n)}))
+
+    # Die Typen allein reichen nicht. Sie waren gleich, waehrend das Makro
+    # `?token=…` an die Adresse haengte und die M-Datei einen Query-Satz
+    # benutzte — zwei verschiedene Abfragen, und der Test war gruen. Also
+    # wird jetzt der GANZE Text verglichen: MDaten() wird ausgerechnet.
+    ok('MDaten baut denselben Text wie der Block «Daten»',
+       mdaten_ausrechnen(bas, halter, '<TOKEN_READ>') == daten_block.strip(),
+       mdaten_ausrechnen(bas, halter, '<TOKEN_READ>'))
 
     print('\n' + '=' * 46)
     print(f'{bestanden} bestanden, {fehler} gescheitert')

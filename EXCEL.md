@@ -38,43 +38,62 @@ Bez ponovnog osvežavanja, bez čekanja.
 
 ## Odakle Power Query čita
 
-**Iz lista, ne iz skripte.** Apps Script upisuje gotov export u list
-**`Export`** u istoj tabeli, i **samo taj list** se objavi:
+**Sa `/exec`, isto kao Spesen.** Ista adresa, isti token, isti oblik upita:
 
+```m
+Quelle = Csv.Document(
+    Web.Contents(
+        "<Web-App-URL>",
+        [Query = [token = "<TOKEN_READ>", format = "csv"]]
+    ),
+    [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]
+),
 ```
-Datei → Im Web veröffentlichen → Blatt «Export»
-      → Kommagetrennte Werte (.csv) → Veröffentlichen
-```
 
-Dobijena adresa ide u šablon, u red `Basis`. To je sve — bez tokena, bez
-parametara.
+### Zašto je ranije padalo na 404
 
-### Zašto ne preko Apps Scripta
+Ne zbog Apps Scripta. `/exec` odgovara **preusmerenjem** na
+`script.googleusercontent.com/macros/echo?user_content_key=…`, i ta druga
+adresa važi **jednom i kratko**. Dok se traži tačno jednom, to nikoga ne
+dira. Ovde su stajale četiri stvari kojih u Spesenu nema, i tek one su
+napravile drugi poziv:
 
-Prvo je išlo preko `/exec?token=…&format=csv`. Ne radi pouzdano sa Excel for
-Mac:
-
-| | |
+| stajalo je | šta je radilo |
 |---|---|
-| `/exec` odgovara **preusmerenjem** na `script.googleusercontent.com/macros/echo` | ta adresa važi **jednom i kratko** |
-| Power Query izraz izračunava više puta | drugi put je više ne nađe → `(404) Not Found` |
-| svaki poziv pokreće skriptu | izmereno **40 s** po osvežavanju |
+| `Basis = "…"` pa `Web.Contents(Basis, …)` | izvor nije **statički odrediv** — „dynamic data source", osvežavanje van editora puca |
+| `IsRetry = true` | izričito zaobilazi već dobijen odgovor i ide ponovo na mrežu |
+| `Geprueft = if … ColumnNames(Kopf) … then Kopf` | pominje `Kopf` **dvaput** → Power Query ga izračuna dvaput → **drugi poziv ide na istrošeno preusmerenje** |
+| `Binary.Buffer(…)` | trebalo je da pročita jednom; protiv gornjeg nije pomoglo |
 
-Spesen taj problem nikad nije imao jer **čita Google tabelu, ne skriptu**.
-Objavljen list nema ni preusmerenje, ni izvršavanje koda, ni čekanje.
+Treći red je bio moj: poruka koja je trebalo da objasni grešku pravila je
+grešku koju objašnjava. Sada je nema — kad CSV ne stigne, Excel javi
+`Die Spalte "WeNr" wurde nicht gefunden`, a šta to znači piše dole.
 
-CSV izlaz na `/exec` i dalje postoji — koristan je za proveru u browseru — ali
-šablon ga više ne koristi.
+### Dva pravila koja iz ovoga slede
 
-### Šta se objavljuje, a šta ne
+1. **Adresa stoji kao tekst** unutar `Web.Contents`, ne u promenljivoj.
+2. **Nijedan korak ne sme dvaput da pomene drugi korak.**
 
-Objavljuje se **jedan list**, ne cela tabela. `Wareneingang`, `Positionen`,
-`Kunden`, `Kontakte` i pre svega **`Benutzer`** sa `PassHash` i `Salt`
-ostaju privatni.
+### Adresa mora na `/exec`
 
-Adresa objavljenog lista je javna za svakoga ko je ima — to je ista klasa
-zaštite kao token u adresi, ne slabija. Ali ista tri opreza važe: ne deliti
-je van firme, i ne stavljati je u dokument koji ide kupcu.
+`/dev` traži prijavu; Power Query za nju dobije HTML stranicu za login, ne
+CSV. Simptom je isti kao gore — `Die Spalte "WeNr" wurde nicht gefunden`.
+Gotova adresa i token stoje u protokolu `einrichtungPruefen()`.
+
+### Token stoji u arbeitsmappi
+
+Ko ima `.xlsm`, ima i token, a token daje **čitanje celog exporta**. To je
+prihvatljivo jer taj isti čovek ionako u fajlu vidi sve te podatke — ali
+znači da arbeitsmappa ne ide van firme i ne šalje se kupcu. Za to služi
+**Als Excel senden**, koji nosi jedan dokument i nijedan token.
+
+### List `Export`
+
+Skripta i dalje upisuje gotov export u list `Export` posle svakog upisa.
+**Šablon ga ne čita** — čita `/exec`. List je ostao kao brz način da se
+pogleda šta bi endpoint vratio, i kao osnova ako se jednog dana pređe na
+objavljenu tabelu. Košta jedan upis po wareneingangu; ako smeta, briše se
+zajedno sa pozivima `exportNachziehen()`.
 
 ### Kad se piše
 
@@ -173,7 +192,9 @@ ipak generisan — vidi `Abfragen.m`.
 
 1. `Wareneingang-Vorlage.xlsx` otvoriti
 2. `Alt+F11` → **Datei → Datei importieren** → `Vorlage-Aufbau.bas`
-3. Na vrhu modula upisati `WEB_APP_URL` i `TOKEN`; `TAGE` po potrebi
+3. Na vrhu modula upisati `WEB_APP_URL` (na `/exec`) i `TOKEN` — to su
+   iste dve stvari koje Mac put nalepi ručno, i makro gradi **isti
+   tekst** (pinuje `tests/vorlage.py`)
 4. Kursor u `AbfragenAnlegen`, `F5`
 5. Prvi put Excel pita za pristup izvoru → **Anonym**, i za nivoe
    privatnosti → **Ignorieren** ili sve na *Öffentlich*
@@ -211,13 +232,13 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. zameni **jedan red** — postoji **samo u bloku `Daten`** — adresom
-   objavljenog lista `Export`:
+3. zameni **dve stavke** — postoje **samo u bloku `Daten`**:
    ```m
-   Basis = "<Veroeffentlichte-CSV-Adresse>",
+   "<Web-App-URL>",
+   [Query = [token = "<TOKEN_READ>", format = "csv"]]
    ```
-   Adresu daje **Datei → Im Web veröffentlichen → list `Export` →
-   Kommagetrennte Werte (.csv)**. **Nema tokena** — šablon ne čita skriptu.
+   Oboje stoji gotovo u protokolu `einrichtungPruefen()`. Adresa mora da se
+   završava na **`/exec`**, ne `/dev`. Navodnici ostaju.
    `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje

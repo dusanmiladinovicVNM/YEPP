@@ -41,8 +41,7 @@ DATEN_ZEILEN = 20000     # Suchbereich in `Daten`
 # Begrenzte Bereiche statt ganzer Spalten (Daten!A:A). Excel optimiert ganze
 # Spalten auf den benutzten Bereich, andere Rechner nicht — dort laeuft jede
 # der rund achtzig Formeln ueber eine Million Zeilen. Reicht der Bereich
-# nicht mehr, hier erhoehen und neu bauen; `&tage=` am Endpunkt haelt die
-# Datenmenge ohnehin klein.
+# nicht mehr, hier erhoehen und neu bauen.
 
 ROT   = 'C00000'         # Warnzeile, nur sichtbar wenn sie etwas zu sagen hat
 
@@ -119,42 +118,43 @@ def m_typen(namen):
     return ', '.join(teile)
 
 
-def m_abfragen(namen, basis='<Veroeffentlichte-CSV-Adresse>'):
+def m_abfragen(namen, basis='<Web-App-URL>', token='<TOKEN_READ>'):
     """
-    Gelesen wird eine DATEI, nicht die Ausgabe eines Programms.
+    Dieselbe Form wie in der Spesen-Vorlage, die seit Langem laeuft.
 
-    Der Weg ueber die Apps-Script-Adresse ist daran gescheitert, dass
-    /exec mit einer Weiterleitung auf script.googleusercontent.com/macros/echo
-    antwortet und diese zweite Adresse einmal und kurz gilt. Excel for Mac
-    kommt damit nicht zurecht: erst 404 mitten im Abruf, dann wieder. Dazu
-    musste fuer jeden Abruf erst das Skript laufen — gemessen 40 Sekunden.
+    Gelesen wird /exec. Das ging hier lange nicht, und der Grund lag nicht
+    an Apps Script, sondern an vier Dingen, die hier standen und in Spesen
+    nicht:
 
-    Die Spesen-Vorlage hatte das Problem nie, weil sie eine Google-Tabelle
-    liest und kein Skript. Genau das macht diese jetzt auch: das Skript
-    schreibt den fertigen Export ins Blatt «Export», und veroeffentlicht wird
-    NUR dieses eine Blatt. Keine Weiterleitung, kein Skriptlauf, keine
-    Wartezeit — und «Wareneingang», «Positionen» und «Benutzer» bleiben
-    privat.
+    Die Adresse stand in einer Variablen (`Basis = "..."`) statt als Text im
+    Web.Contents. Fuer Power Query ist die Datenquelle dann nicht mehr
+    statisch bestimmbar, und ausserhalb des Editors bricht die
+    Aktualisierung.
+
+    `IsRetry = true` liess jeden Griff neu ans Netz gehen, statt die Antwort
+    zu nehmen, die schon da war.
+
+    Ein Waechter `Geprueft = if List.Contains(Table.ColumnNames(Kopf), ...)
+    then Kopf else error ...` nannte `Kopf` ZWEIMAL. Power Query wertet dann
+    auch zweimal aus, und der zweite Griff geht auf die Weiterleitung von
+    /exec, die einmal und kurz gilt: 404. Die Meldung war gut gemeint und
+    hat den Fehler erzeugt, den sie erklaeren wollte.
+
+    `Binary.Buffer` sollte einmal ganz lesen und half gegen all das nicht.
+
+    Nichts davon steht in Spesen. Hier steht es jetzt auch nicht mehr.
     """
     daten = (
         'let\n'
-        f'    Basis = "{basis}",\n'
-        '    Antwort = Binary.Buffer(Web.Contents(Basis)),\n'
-        '    Quelle = Csv.Document(Antwort,'
-        '[Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n'
-        '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars=true]),\n'
-        # Kam gar keine CSV zurueck, sagt Excel «Die Spalte "WeNr" der Tabelle
-        # wurde nicht gefunden» — und schickt damit jeden zu den Spalten. Dort
-        # ist nichts. Diese Zeile nennt stattdessen die haeufigen Gruende.
-        '    Geprueft = if List.Contains(Table.ColumnNames(Kopf), "WeNr") then Kopf\n'
-        '        else error Error.Record("Keine CSV",\n'
-        '            "Die Adresse liefert keine CSV mit der Spalte WeNr. '
-        'Haeufigste Gruende: die Veroeffentlichung wurde aufgehoben, sie zeigt '
-        'auf ein anderes Blatt als «Export», oder das Format ist nicht CSV. '
-        'In der Tabelle: Datei -> Im Web veroeffentlichen -> Blatt «Export» -> '
-        'Kommagetrennte Werte (CSV).",\n'
-        '            Text.Start(Text.Combine(Table.ColumnNames(Kopf), " | "), 200)),\n'
-        f'    Typen = Table.TransformColumnTypes(Geprueft,{{{m_typen(namen)}}}, "en-US")\n'
+        '    Quelle = Csv.Document(\n'
+        '        Web.Contents(\n'
+        f'            "{basis}",\n'
+        f'            [Query = [token = "{token}", format = "csv"]]\n'
+        '        ),\n'
+        '        [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]\n'
+        '    ),\n'
+        '    Kopf = Table.PromoteHeaders(Quelle, [PromoteAllScalars = true]),\n'
+        f'    Typen = Table.TransformColumnTypes(Kopf, {{{m_typen(namen)}}}, "en-US")\n'
         'in\n'
         '    Typen'
     )
@@ -189,18 +189,22 @@ def m_schreiben(namen):
         '// die Ueberschrift hier. Dreimal, in dieser Reihenfolge — Nummern\n'
         '// und Liste bauen auf Daten auf.\n'
         '//\n'
-        '// EINE Zeile ist einzusetzen, und nur im Block «Daten»:\n'
-        '//     Basis = "<Veroeffentlichte-CSV-Adresse>",\n'
+        '// ZWEI Stellen sind einzusetzen, und nur im Block «Daten»:\n'
+        '//     "<Web-App-URL>"          die Bereitstellung, Endung /exec\n'
+        '//     token = "<TOKEN_READ>"\n'
         '//\n'
-        '// Sie kommt aus der Google-Tabelle selbst:\n'
-        '//   Datei -> Im Web veroeffentlichen -> Blatt «Export»\n'
-        '//         -> Kommagetrennte Werte (.csv) -> Veroeffentlichen\n'
+        '// Beides steht fertig im Protokoll von einrichtungPruefen().\n'
         '//\n'
-        '// NICHT die Apps-Script-Adresse: /exec antwortet mit einer\n'
-        '// Weiterleitung auf eine Adresse, die einmal und kurz gilt, und\n'
-        '// Excel for Mac kommt damit nicht zurecht (404 mitten im Abruf).\n'
-        '// Veroeffentlicht wird nur «Export» — die uebrigen Blaetter,\n'
-        '// darunter «Benutzer», bleiben privat.\n'
+        '// Die Adresse muss auf /exec enden. /dev verlangt eine Anmeldung,\n'
+        '// und Power Query bekommt dafuer die Anmeldeseite als HTML — Excel\n'
+        '// meldet dann «Die Spalte "WeNr" wurde nicht gefunden».\n'
+        '//\n'
+        '// Die Adresse steht als TEXT im Web.Contents, nicht in einer\n'
+        '// Variablen: sonst ist die Datenquelle fuer Power Query nicht\n'
+        '// statisch bestimmbar und die Aktualisierung bricht ausserhalb des\n'
+        '// Editors. Und kein Schritt darf einen anderen zweimal nennen —\n'
+        '// dann wird zweimal abgerufen, und die Weiterleitung von /exec gilt\n'
+        '// nur einmal: (404) Not Found. Genau diese Form laeuft in Spesen.\n'
         '// Nummern und Liste bekommen keine Adresse: sie lesen Daten.\n'
         '//\n'
         '// ============ Daten ============\n'
@@ -235,19 +239,31 @@ def m_schreiben(namen):
     stuecke.append(zeile)
 
     zeilen = [
-        'Private Function MDaten(ByVal quelle As String) As String',
+        'Private Function MDaten(ByVal url As String, '
+        'ByVal token As String) As String',
         "    ' ERZEUGT von tools/vorlage_bauen.py — nicht von Hand aendern.",
         "    ' Mehrere Anweisungen statt einer langen: VBA laesst je logischer",
         "    ' Zeile nur 1024 Zeichen zu, und die Typenliste waechst mit den",
         "    ' Spalten. Derselbe Text steht in vorlage/Abfragen.m.",
+        "    '",
+        "    ' Die Parameter stehen in einem Query-Satz, nicht als Fragezeichen",
+        "    ' in der Adresse: so bleibt /exec die Datenquelle. Und kein Schritt",
+        "    ' nennt einen anderen zweimal - sonst wird zweimal abgerufen, und",
+        "    ' die Weiterleitung von /exec gilt nur einmal (404).",
         '    Dim m As String',
         '    m = "let" & vbLf',
-        '    m = m & "    Quelle = Csv.Document(Web.Contents(""" & quelle & """),"',
-        '    m = m & "[Delimiter="","", Encoding=65001, '
-        'QuoteStyle=QuoteStyle.Csv])," & vbLf',
+        '    m = m & "    Quelle = Csv.Document(" & vbLf',
+        '    m = m & "        Web.Contents(" & vbLf',
+        '    m = m & "            """ & url & """," & vbLf',
+        '    m = m & "            [Query = [token = """ & token & '
+        '""", format = ""csv""]]" & vbLf',
+        '    m = m & "        )," & vbLf',
+        '    m = m & "        [Delimiter = "","", Encoding = 65001, '
+        'QuoteStyle = QuoteStyle.Csv]" & vbLf',
+        '    m = m & "    )," & vbLf',
         '    m = m & "    Kopf = Table.PromoteHeaders(Quelle, '
-        '[PromoteAllScalars=true])," & vbLf',
-        '    m = m & "    Typen = Table.TransformColumnTypes(Kopf,{"',
+        '[PromoteAllScalars = true])," & vbLf',
+        '    m = m & "    Typen = Table.TransformColumnTypes(Kopf, {"',
     ]
     zeilen += [f'    m = m & {zitat(st)}' for st in stuecke]
     zeilen += [

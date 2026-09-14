@@ -1912,48 +1912,52 @@ console.log('\n41) Die Einstellungen oeffnen sich in EINEM Aufruf');
      ctx.__driveAufrufe + ' statt ' + nachKaputt);
 }
 
-console.log('\n42) Der Bericht sagt, wo die Vorlage ihre Daten herholt');
+console.log('\n42) Der Bericht schreibt beide Stellen fertig hin');
 {
   const ss = neueTabelle(), ctx = laden(ss);
   ctx.__eigenschaften.TOKEN_READ = 'tok-abc';
+  ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/exec';
 
   const gut = ctx.einrichtungPruefen();
 
-  // Die Vorlage liest das veroeffentlichte Blatt. Stuende daneben noch eine
-  // Anleitung fuer den M-Code mit Basis und Token, waeren es zwei — und die
-  // zweite gaelte nicht mehr.
-  ok('der Bericht nennt das Blatt «Export»', gut.indexOf('Export: ') >= 0, gut);
-  ok('und den Weg zum Veroeffentlichen',
-     gut.indexOf('Im Web veroeffentlichen') >= 0);
-  ok('und sagt, dass die Adresse dort in «Basis» gehoert',
-     gut.indexOf('in der Vorlage in «Basis»') >= 0);
-  ok('keine zweite Anleitung fuer den M-Code mehr',
-     gut.indexOf('Basis = "') < 0 && gut.indexOf('Token = "') < 0, gut);
+  // Die Vorlage liest /exec, wie die Spesen-Vorlage. Einzusetzen sind ZWEI
+  // Stellen, und sie von Hand zusammenzusetzen war genau die Stelle, an der
+  // /dev statt /exec in den M-Code kam. Also stehen sie fertig da.
+  ok('die Adresse steht fertig, in Anfuehrungszeichen und mit Komma',
+     gut.indexOf('  "https://script.google.com/macros/s/AKfycb-test/exec",') >= 0, gut);
+  ok('und die Query-Zeile ebenso',
+     gut.indexOf('[Query = [token = "tok-abc", format = "csv"]]') >= 0, gut);
+  ok('und beide sind als das benannt, was sie sind',
+     gut.indexOf('in den Block \u00abDaten\u00bb') >= 0, gut);
 
-  // Die CSV-Adresse bleibt — aber als Werkzeug zum Nachsehen, nicht als
-  // Quelle der Vorlage. Im Browser trennt sie die zwei Faelle, die sonst
-  // gleich aussehen: «kein Zugriff» heisst lebend, die Drive-Seite tot.
-  ok('die Adresse zum Nachsehen steht da',
-     gut.indexOf('?token=tok-abc&format=csv&tage=365') >= 0, gut);
-  ok('und ist als solche benannt',
-     gut.indexOf('die Vorlage benutzt das NICHT') >= 0);
+  // Eine zweite Anleitung daneben waere schlimmer als gar keine. Die Zeit,
+  // in der die Vorlage ein veroeffentlichtes Blatt las, ist vorbei.
+  ok('keine zweite Anleitung zum Veroeffentlichen',
+     gut.indexOf('Im Web veroeffentlichen') < 0 &&
+     gut.indexOf('in der Vorlage in \u00abBasis\u00bb') < 0, gut);
+
+  // Das Blatt bleibt im Bericht, aber ohne Anleitung: an ihm sieht man,
+  // was der Endpunkt lieferte, ohne ihn aufzurufen.
+  ok('das Blatt \u00abExport\u00bb steht weiter da', gut.indexOf('Export: ') >= 0, gut);
 
   // Aus dem Editor heraus gibt getUrl() die /dev-Adresse. Die verlangt eine
-  // Anmeldung und taugt zum Nachsehen nicht.
+  // Anmeldung, und Power Query bekommt dafuer die Anmeldeseite als HTML.
   ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/dev';
   const dev = ctx.einrichtungPruefen();
   ok('eine /dev-Adresse wird nicht eingesetzt',
-     dev.indexOf('/dev?token=') < 0 && dev.indexOf('Bereitstellungen verwalten') >= 0,
-     dev);
+     dev.indexOf('"https://script.google.com/macros/s/AKfycb-test/dev"') < 0 &&
+     dev.indexOf('Bereitstellungen verwalten') >= 0, dev);
+  ok('die Query-Zeile steht trotzdem da',
+     dev.indexOf('[Query = [token = "tok-abc"') >= 0, dev);
 
   ctx.__webAppUrl = '';
-  ok('ohne Bereitstellung steht nur der Schwanz da',
+  ok('ohne Bereitstellung sagt der Bericht genau das',
      ctx.einrichtungPruefen().indexOf('noch keine Bereitstellung') >= 0);
 
   ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/exec';
   ctx.__eigenschaften.TOKEN_READ = '';
-  ok('ohne Token keine Adresse zum Nachsehen',
-     ctx.einrichtungPruefen().indexOf('format=csv') < 0);
+  ok('ohne Token keine Adresse, sondern der Weg zu einem',
+     ctx.einrichtungPruefen().indexOf('tokenSetzen()') >= 0);
 }
 
 console.log('\n43) Der Export steht als Blatt da');
