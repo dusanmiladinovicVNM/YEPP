@@ -407,23 +407,23 @@ select{
 <section id="scr-login" class="screen aktiv">
   <div class="login-wrap">
     <svg class="logo" aria-hidden="true"><use href="#logo"/></svg>
-    <h1>Wareneingang</h1>
-    <p class="sub">Material reception</p>
+    <h1 data-t="app_titel">Wareneingang</h1>
+    <p class="sub" data-t="app_sub">Material reception</p>
 
     <div class="feld">
-      <label for="lg-email">E-Mail</label>
+      <label for="lg-email" data-t="email">E-Mail</label>
       <input id="lg-email" type="email" inputmode="email"
              autocapitalize="off" autocomplete="username" autocorrect="off">
     </div>
     <div class="feld">
-      <label for="lg-pass">Passwort</label>
+      <label for="lg-pass" data-t="lg_passwort">Passwort</label>
       <input id="lg-pass" type="password" autocomplete="current-password">
     </div>
 
     <div id="lg-meldung" class="meldung err"></div>
 
     <div class="knopfzeile">
-      <button id="lg-senden" class="gross primaer">Anmelden</button>
+      <button id="lg-senden" class="gross primaer" data-t="lg_senden">Anmelden</button>
     </div>
   </div>
 </section>
@@ -436,23 +436,23 @@ select{
     <p class="sub" id="pw-sub"></p>
 
     <div class="feld" id="pw-alt-feld">
-      <label for="pw-alt">Bisheriges Passwort</label>
+      <label for="pw-alt" data-t="pw_alt">Bisheriges Passwort</label>
       <input id="pw-alt" type="password" autocomplete="current-password">
     </div>
     <div class="feld">
-      <label for="pw-neu">Neues Passwort</label>
+      <label for="pw-neu" data-t="pw_neu">Neues Passwort</label>
       <input id="pw-neu" type="password" autocomplete="new-password">
     </div>
     <div class="feld">
-      <label for="pw-neu2">Neues Passwort wiederholen</label>
+      <label for="pw-neu2" data-t="pw_neu2">Neues Passwort wiederholen</label>
       <input id="pw-neu2" type="password" autocomplete="new-password">
     </div>
 
     <div id="pw-meldung" class="meldung err"></div>
 
     <div class="knopfzeile">
-      <button id="pw-senden" class="gross primaer">Passwort speichern</button>
-      <button id="pw-zurueck" class="gross sekundaer">Abbrechen</button>
+      <button id="pw-senden" class="gross primaer" data-t="pw_speichern">Passwort speichern</button>
+      <button id="pw-zurueck" class="gross sekundaer" data-t="abbrechen">Abbrechen</button>
     </div>
   </div>
 </section>
@@ -466,7 +466,7 @@ select{
 
   <div class="scroll">
     <div class="knopfzeile" style="margin-top:0">
-      <button id="st-neu" class="gross primaer">Neuer Wareneingang</button>
+      <button id="st-neu" class="gross primaer" data-t="st_neu">Neuer Wareneingang</button>
     </div>
 
     <div class="pos-kopf">
@@ -474,23 +474,23 @@ select{
       <span class="kopf-rechts">
         <span class="zahl" id="st-zahl"></span>
         <span class="chips" id="st-chips" hidden>
-          <button id="st-offen" class="klein" aria-pressed="true">Nur offene</button>
-          <button id="st-alle" class="klein" aria-pressed="false">Alle</button>
+          <button id="st-offen" class="klein" aria-pressed="true" data-t="chip_offen">Nur offene</button>
+          <button id="st-alle" class="klein" aria-pressed="false" data-t="chip_alle">Alle</button>
         </span>
       </span>
     </div>
 
     <input id="st-suche" type="search" autocapitalize="off" autocorrect="off"
-           placeholder="Suchen: Nummer, Kunde, Lieferant, Erfasser">
+           data-t-ph="st_suche_ph" placeholder="Suchen: Nummer, Kunde, Lieferant, Erfasser">
 
     <div class="alt" id="st-alt" hidden></div>
     <div class="liste" id="st-liste"></div>
 
     <hr class="trennlinie">
     <div class="knopfzeile" style="margin-top:8px">
-      <button id="st-admin" class="gross sekundaer" hidden>Einstellungen</button>
-      <button id="st-passwort" class="gross sekundaer">Passwort ändern</button>
-      <button id="st-abmelden" class="gross sekundaer">Abmelden</button>
+      <button id="st-admin" class="gross sekundaer" hidden data-t="einstellungen">Einstellungen</button>
+      <button id="st-passwort" class="gross sekundaer" data-t="pw_aendern">Passwort ändern</button>
+      <button id="st-abmelden" class="gross sekundaer" data-t="abmelden">Abmelden</button>
     </div>
   </div>
 </section>
@@ -498,84 +498,84 @@ select{
 <!-- ============ ERFASSUNG ============ -->
 <section id="scr-form" class="screen">
   <header class="kopf-liste">
-    <button class="zurueck" id="fm-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1>Neuer Wareneingang</h1>
+    <button class="zurueck" id="fm-zurueck" data-t-al="zurueck_al" aria-label="Zurück">&#8592;</button>
+    <h1 data-t="st_neu">Neuer Wareneingang</h1>
   </header>
 
   <div class="scroll">
     <div class="feld">
-      <label for="fm-kunde">Kunde / Client</label>
+      <label for="fm-kunde" data-t="fm_kunde">Kunde / Client</label>
       <input id="fm-kunde" type="text" list="dl-kunden" autocapitalize="words">
       <datalist id="dl-kunden"></datalist>
     </div>
 
     <div class="feld">
-      <label for="fm-lieferant">Lieferant / Supplier</label>
+      <label for="fm-lieferant" data-t="fm_lieferant">Lieferant / Supplier</label>
       <input id="fm-lieferant" type="text" list="dl-lieferanten" autocapitalize="words">
       <datalist id="dl-lieferanten"></datalist>
     </div>
 
-    <p class="hinweis">
+    <p class="hinweis" data-t="fm_hinweis">
       Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.
     </p>
 
     <div class="pos-kopf">
-      <h2>Positionen</h2>
+      <h2 data-t="positionen">Positionen</h2>
       <span class="zahl" id="fm-poszahl"></span>
     </div>
     <div id="fm-positionen"></div>
 
     <div class="knopfzeile" style="margin-top:12px">
-      <button id="fm-plus" class="gross sekundaer" type="button">+ Position</button>
+      <button id="fm-plus" class="gross sekundaer" type="button" data-t="fm_plus">+ Position</button>
     </div>
 
     <div class="feld" style="margin-top:24px">
-      <label for="fm-m2">Lagerfläche / storage space — m2</label>
-      <input id="fm-m2" type="text" inputmode="decimal" placeholder="optional">
+      <label for="fm-m2" data-t="fm_m2">Lagerfläche / storage space — m2</label>
+      <input id="fm-m2" type="text" inputmode="decimal" data-t-ph="optional_ph" placeholder="optional">
     </div>
 
     <div class="feld">
-      <label>Lieferschein-Foto</label>
+      <label data-t="fm_foto_label">Lieferschein-Foto</label>
       <button type="button" class="foto-knopf" id="fm-foto-knopf">
-        <span>&#128247;</span><span>Foto aufnehmen</span>
+        <span>&#128247;</span><span data-t="fm_foto_knopf">Foto aufnehmen</span>
       </button>
       <input id="fm-foto" type="file" accept="image/*" capture="environment" hidden>
       <div class="foto-vorschau" id="fm-foto-vorschau">
         <img id="fm-foto-bild" alt="">
         <button type="button" class="foto-weg" id="fm-foto-weg"
-                aria-label="Foto entfernen">&times;</button>
+                data-t-al="bild_weg" aria-label="Foto entfernen">&times;</button>
       </div>
       <div class="foto-info" id="fm-foto-info"></div>
     </div>
 
     <div class="feld">
-      <label for="fm-bemerkung">Bemerkung</label>
-      <textarea id="fm-bemerkung" placeholder="optional"></textarea>
+      <label for="fm-bemerkung" data-t="bemerkung">Bemerkung</label>
+      <textarea id="fm-bemerkung" data-t-ph="optional_ph" placeholder="optional"></textarea>
     </div>
 
     <div class="pos-kopf" style="margin-top:24px">
-      <h2>Quittieren</h2>
-      <span class="zahl">auf deinen Namen</span>
+      <h2 data-t="fm_quittieren">Quittieren</h2>
+      <span class="zahl" data-t="fm_auf_namen">auf deinen Namen</span>
     </div>
     <label class="haken">
       <input type="checkbox" id="fm-s-angenommen" checked>
-      <span>Angenommen / Accepted</span>
+      <span data-t="schritt_angenommen">Angenommen / Accepted</span>
     </label>
     <label class="haken">
       <input type="checkbox" id="fm-s-gezaehlt">
-      <span>Gezählt &amp; kontrolliert / counted &amp; controlled</span>
+      <span data-t="schritt_gezaehlt">Gezählt &amp; kontrolliert / counted &amp; controlled</span>
     </label>
     <label class="haken">
       <input type="checkbox" id="fm-s-eingelagert">
-      <span>Eingelagert / stored</span>
+      <span data-t="schritt_eingelagert">Eingelagert / stored</span>
     </label>
-    <p class="hinweis">
+    <p class="hinweis" data-t="fm_haken_hinweis">
       Nur ankreuzen, was du selbst erledigt hast. Alles Weitere wird später von
       der Person, die es ausgeführt hat, quittiert.
     </p>
 
     <div class="knopfzeile">
-      <button id="fm-speichern" class="gross primaer">Speichern</button>
+      <button id="fm-speichern" class="gross primaer" data-t="speichern">Speichern</button>
     </div>
   </div>
 </section>
@@ -583,7 +583,7 @@ select{
 <!-- ============ DETAIL ============ -->
 <section id="scr-detail" class="screen">
   <header class="kopf-liste">
-    <button class="zurueck" id="dt-zurueck" aria-label="Zurück">&#8592;</button>
+    <button class="zurueck" id="dt-zurueck" data-t-al="zurueck_al" aria-label="Zurück">&#8592;</button>
     <h1 id="dt-titel">Wareneingang</h1>
   </header>
 
@@ -591,18 +591,18 @@ select{
     <div class="alt" id="dt-alt" hidden></div>
     <div class="daten" id="dt-daten"></div>
 
-    <div class="pos-kopf"><h2>Aufgabe / Task</h2></div>
+    <div class="pos-kopf"><h2 data-t="dt_aufgabe">Aufgabe / Task</h2></div>
     <div id="dt-schritte"></div>
 
     <div class="pos-kopf">
-      <h2>Positionen</h2>
+      <h2 data-t="positionen">Positionen</h2>
       <span class="zahl" id="dt-poszahl"></span>
     </div>
     <div id="dt-positionen"></div>
 
     <div class="knopfzeile" id="dt-aktionen" hidden>
-      <button id="dt-senden" class="gross primaer">Als Excel senden</button>
-      <button id="dt-storno" class="gross sekundaer">Zurückziehen</button>
+      <button id="dt-senden" class="gross primaer" data-t="dt_senden">Als Excel senden</button>
+      <button id="dt-storno" class="gross sekundaer" data-t="dt_storno">Zurückziehen</button>
     </div>
   </div>
 </section>
@@ -612,14 +612,14 @@ select{
 
 <div id="sperre" hidden>
   <div class="kreisel" aria-hidden="true"></div>
-  <div class="was" id="sperre-text">Bitte warten …</div>
+  <div class="was" id="sperre-text" data-t="bitte_warten">Bitte warten …</div>
 </div>
 
 <!-- ============ BILDSCHAU ============ -->
 <div id="bild-schau" hidden>
-  <img id="bild-schau-bild" alt="Foto">
-  <div class="bild-hinweis">Zum Schliessen tippen</div>
-  <button type="button" class="klein" id="bild-schau-weg" hidden>Foto entfernen</button>
+  <img id="bild-schau-bild" data-t-alt="bild_alt" alt="Foto">
+  <div class="bild-hinweis" data-t="bild_schliessen">Zum Schliessen tippen</div>
+  <button type="button" class="klein" id="bild-schau-weg" hidden data-t="bild_weg">Foto entfernen</button>
 </div>
 
 <!-- Einer fuer alle Positionen: welche gemeint ist, merkt S.fotoZiel. -->
@@ -628,17 +628,17 @@ select{
 <!-- ============ EINLAGERN ============ -->
 <section id="scr-regal" class="screen">
   <header class="kopf-liste">
-    <button class="zurueck" id="rg-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1>Eingelagert / stored</h1>
+    <button class="zurueck" id="rg-zurueck" data-t-al="zurueck_al" aria-label="Zurück">&#8592;</button>
+    <h1 data-t="schritt_eingelagert">Eingelagert / stored</h1>
   </header>
 
   <div class="scroll">
-    <p class="hinweis" style="margin-top:12px">
+    <p class="hinweis" style="margin-top:12px" data-t="rg_hinweis">
       Regalplatznr. eintragen, soweit bekannt. Leere Felder bleiben offen.
     </p>
     <div id="rg-liste"></div>
     <div class="knopfzeile">
-      <button id="rg-senden" class="gross primaer">Einlagerung quittieren</button>
+      <button id="rg-senden" class="gross primaer" data-t="rg_senden">Einlagerung quittieren</button>
     </div>
   </div>
 </section>
@@ -646,8 +646,8 @@ select{
 <!-- ============ EINSTELLUNGEN ============ -->
 <section id="scr-admin" class="screen">
   <header class="kopf-liste">
-    <button class="zurueck" id="adm-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1>Einstellungen</h1>
+    <button class="zurueck" id="adm-zurueck" data-t-al="zurueck_al" aria-label="Zurück">&#8592;</button>
+    <h1 data-t="einstellungen">Einstellungen</h1>
   </header>
 
   <div class="scroll">
@@ -657,35 +657,45 @@ select{
          fremden Abschnitten vorbei. Dieselben Chips wie oben in der Liste —
          eine Form, die man nicht zweimal lernen muss. -->
     <div class="chips reiter" id="adm-reiter">
-      <button class="klein" data-reiter="benutzer"  aria-pressed="true">Benutzer</button>
-      <button class="klein" data-reiter="kunden"    aria-pressed="false">Kunden</button>
-      <button class="klein" data-reiter="verwalter" aria-pressed="false">Verwalter</button>
-      <button class="klein" data-reiter="ablage"    aria-pressed="false">Speicherorte</button>
+      <button class="klein" data-reiter="benutzer"  aria-pressed="true" data-t="ad_benutzer">Benutzer</button>
+      <button class="klein" data-reiter="kunden"    aria-pressed="false" data-t="ad_kunden">Kunden</button>
+      <button class="klein" data-reiter="verwalter" aria-pressed="false" data-t="ad_verwalter">Verwalter</button>
+      <button class="klein" data-reiter="ablage"    aria-pressed="false" data-t="ad_ablage">Speicherorte</button>
     </div>
 
     <!-- ---------- Benutzer ---------- -->
     <div class="reiter-feld" data-feld="benutzer">
       <div class="pos-kopf" style="margin-top:0">
-        <h2>Neuer Benutzer</h2>
-        <span class="zahl">bekommt ein Zugangsmail</span>
+        <h2 data-t="ad_neuer_b">Neuer Benutzer</h2>
+        <span class="zahl" data-t="ad_neuer_b_sub">bekommt ein Zugangsmail</span>
       </div>
 
-      <label for="adm-name">Name</label>
+      <label for="adm-name" data-t="name">Name</label>
       <input id="adm-name" type="text" placeholder="Vorname Nachname">
 
-      <label for="adm-email">E-Mail</label>
+      <label for="adm-email" data-t="email">E-Mail</label>
       <input id="adm-email" type="email" inputmode="email"
-             autocapitalize="off" placeholder="name@firma.ch">
+             autocapitalize="off" data-t-ph="sd_mail_ph" placeholder="name@firma.ch">
+
+      <label for="adm-sprache" data-t="ad_sprache">Sprache</label>
+      <select id="adm-sprache">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+      <p class="hinweis" data-t="ad_sprache_hinweis">Gilt nur für die App. Der
+         Excel-Bogen und die CSV bleiben deutsch — sie sind ein Dokument für den
+         Kunden, kein Bildschirm für den Erfasser.</p>
 
       <label class="haken" for="adm-mail">
         <input type="checkbox" id="adm-mail">
-        <span>Zugangsmail verschicken</span>
+        <span data-t="ad_mail_schicken">Zugangsmail verschicken</span>
       </label>
 
       <div id="adm-meldung" class="meldung err"></div>
 
       <div class="knopfzeile">
-        <button id="adm-neu" class="gross primaer">Benutzer anlegen</button>
+        <button id="adm-neu" class="gross primaer" data-t="ad_b_anlegen">Benutzer anlegen</button>
       </div>
 
       <hr class="trennlinie">
@@ -695,20 +705,20 @@ select{
     <!-- ---------- Kunden, und die Kontakte, aus denen sie wählen ---------- -->
     <div class="reiter-feld" data-feld="kunden" hidden>
       <div class="pos-kopf" style="margin-top:0">
-        <h2>Kunden</h2>
-        <span class="zahl">je Kunde zwei Adressen</span>
+        <h2 data-t="ad_kunden">Kunden</h2>
+        <span class="zahl" data-t="ad_kd_sub">je Kunde zwei Adressen</span>
       </div>
 
-      <label for="adm-kd-name">Neuer Kunde</label>
+      <label for="adm-kd-name" data-t="ad_kd_neu">Neuer Kunde</label>
       <input id="adm-kd-name" type="text" placeholder="Firma AG">
 
       <div id="adm-kd-meldung" class="meldung err"></div>
 
       <div class="knopfzeile">
-        <button id="adm-kd-neu" class="gross primaer">Kunde anlegen</button>
+        <button id="adm-kd-neu" class="gross primaer" data-t="ad_kd_anlegen">Kunde anlegen</button>
       </div>
 
-      <p class="hinweis">Haupt und Stellvertretung sind die Vorgabe beim Senden.
+      <p class="hinweis" data-t="ad_kd_hinweis">Haupt und Stellvertretung sind die Vorgabe beim Senden.
          Beide bekommen die Mail — wer nur bei Abwesenheit davon erfährt,
          erfährt es zu spät. Im Sendedialog lässt sich beides ändern.</p>
 
@@ -717,21 +727,21 @@ select{
       <hr class="trennlinie">
 
       <div class="pos-kopf" style="margin-top:0">
-        <h2>Kontakte</h2>
-        <span class="zahl">daraus wählen die Kunden</span>
+        <h2 data-t="ad_kontakte">Kontakte</h2>
+        <span class="zahl" data-t="ad_kontakte_sub">daraus wählen die Kunden</span>
       </div>
 
-      <label for="adm-k-name">Name</label>
+      <label for="adm-k-name" data-t="name">Name</label>
       <input id="adm-k-name" type="text" placeholder="Vorname Nachname">
 
-      <label for="adm-k-mail">E-Mail</label>
+      <label for="adm-k-mail" data-t="email">E-Mail</label>
       <input id="adm-k-mail" type="email" inputmode="email"
-             autocapitalize="off" placeholder="name@firma.ch">
+             autocapitalize="off" data-t-ph="sd_mail_ph" placeholder="name@firma.ch">
 
       <div id="adm-k-meldung" class="meldung err"></div>
 
       <div class="knopfzeile">
-        <button id="adm-k-neu" class="gross primaer">Kontakt anlegen</button>
+        <button id="adm-k-neu" class="gross primaer" data-t="ad_k_anlegen">Kontakt anlegen</button>
       </div>
 
       <div id="adm-kontakte"></div>
@@ -740,48 +750,48 @@ select{
     <!-- ---------- Verwalter ---------- -->
     <div class="reiter-feld" data-feld="verwalter" hidden>
       <div class="pos-kopf" style="margin-top:0">
-        <h2>Verwalter</h2>
-        <span class="zahl">wenn beim Kunden nichts steht</span>
+        <h2 data-t="ad_verwalter">Verwalter</h2>
+        <span class="zahl" data-t="ad_verwalter_sub">wenn beim Kunden nichts steht</span>
       </div>
 
-      <label for="adm-mailan">Empfänger der Excel-Datei</label>
+      <label for="adm-mailan" data-t="ad_mailan">Empfänger der Excel-Datei</label>
       <input id="adm-mailan" type="email" inputmode="email"
              autocapitalize="off" placeholder="lager@firma.ch">
-      <p class="hinweis">Diese Adresse springt ein, wenn beim Kunden weder
+      <p class="hinweis" data-t="ad_mailan_hinweis">Diese Adresse springt ein, wenn beim Kunden weder
          Haupt noch Stellvertretung hinterlegt ist. Leer heisst: «Als Excel
          senden» meldet dann einen Fehler.</p>
 
       <div id="adm-par-meldung" class="meldung err"></div>
 
       <div class="knopfzeile">
-        <button id="adm-par" class="gross primaer">Einstellungen speichern</button>
+        <button id="adm-par" class="gross primaer" data-t="ad_speichern">Einstellungen speichern</button>
       </div>
     </div>
 
     <!-- ---------- Speicherorte ---------- -->
     <div class="reiter-feld" data-feld="ablage" hidden>
       <div class="pos-kopf" style="margin-top:0">
-        <h2>Speicherorte</h2>
-        <span class="zahl">drei Ordner im Drive</span>
+        <h2 data-t="ad_ablage">Speicherorte</h2>
+        <span class="zahl" data-t="ad_ablage_sub">drei Ordner im Drive</span>
       </div>
 
-      <label for="adm-archiv">Drive-Ordner für die Excel-Ablage</label>
-      <input id="adm-archiv" type="text" placeholder="Ordner-Adresse einfügen">
-      <p class="hinweis" id="adm-archiv-name">Leer heisst: nur Mail, kein Archiv.</p>
+      <label for="adm-archiv" data-t="ad_archiv">Drive-Ordner für die Excel-Ablage</label>
+      <input id="adm-archiv" type="text" data-t-ph="ad_ordner_ph" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-archiv-name" data-t="ad_archiv_leer">Leer heisst: nur Mail, kein Archiv.</p>
 
-      <label for="adm-foto">Drive-Ordner für die Lieferschein-Fotos</label>
-      <input id="adm-foto" type="text" placeholder="Ordner-Adresse einfügen">
-      <p class="hinweis" id="adm-foto-name">Leer heisst: Fotos werden übersprungen.</p>
+      <label for="adm-foto" data-t="ad_foto">Drive-Ordner für die Lieferschein-Fotos</label>
+      <input id="adm-foto" type="text" data-t-ph="ad_ordner_ph" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-foto-name" data-t="ad_foto_leer">Leer heisst: Fotos werden übersprungen.</p>
 
-      <label for="adm-sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
-      <input id="adm-sicherung" type="text" placeholder="Ordner-Adresse einfügen">
-      <p class="hinweis" id="adm-sicherung-name">Leer heisst: keine Sicherung.
+      <label for="adm-sicherung" data-t="ad_sicherung">Drive-Ordner für die wöchentliche Sicherung</label>
+      <input id="adm-sicherung" type="text" data-t-ph="ad_ordner_ph" placeholder="Ordner-Adresse einfügen">
+      <p class="hinweis" id="adm-sicherung-name" data-t="ad_sicherung_leer">Leer heisst: keine Sicherung.
          Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.</p>
 
       <div id="adm-ord-meldung" class="meldung err"></div>
 
       <div class="knopfzeile">
-        <button id="adm-ord" class="gross primaer">Einstellungen speichern</button>
+        <button id="adm-ord" class="gross primaer" data-t="ad_speichern">Einstellungen speichern</button>
       </div>
     </div>
   </div>
@@ -790,26 +800,26 @@ select{
 <!-- ============ SENDEN ============ -->
 <section id="scr-senden" class="screen">
   <header class="kopf-liste">
-    <button class="zurueck" id="sd-zurueck" aria-label="Zurück">&#8592;</button>
-    <h1 id="sd-titel">Als Excel senden</h1>
+    <button class="zurueck" id="sd-zurueck" data-t-al="zurueck_al" aria-label="Zurück">&#8592;</button>
+    <h1 id="sd-titel" data-t="dt_senden">Als Excel senden</h1>
   </header>
 
   <div class="scroll">
-    <label for="sd-an">An</label>
+    <label for="sd-an" data-t="sd_an">An</label>
     <input id="sd-an" type="email" inputmode="email" autocapitalize="off"
-           list="dl-kontakte" placeholder="name@firma.ch">
+           list="dl-kontakte" data-t-ph="sd_mail_ph" placeholder="name@firma.ch">
 
-    <label for="sd-kopie">Kopie</label>
+    <label for="sd-kopie" data-t="sd_kopie">Kopie</label>
     <input id="sd-kopie" type="email" inputmode="email" autocapitalize="off"
-           list="dl-kontakte" placeholder="freiwillig">
+           list="dl-kontakte" data-t-ph="sd_kopie_ph" placeholder="freiwillig">
 
     <p class="hinweis" id="sd-hinweis"></p>
 
     <div id="sd-meldung" class="meldung err"></div>
 
     <div class="knopfzeile">
-      <button id="sd-senden" class="gross primaer">Senden</button>
-      <button id="sd-ab" class="gross sekundaer">Abbrechen</button>
+      <button id="sd-senden" class="gross primaer" data-t="sd_senden">Senden</button>
+      <button id="sd-ab" class="gross sekundaer" data-t="abbrechen">Abbrechen</button>
     </div>
   </div>
 </section>
@@ -819,17 +829,17 @@ select{
 <!-- ============ DIALOGE ============ -->
 <div class="overlay" id="dlg-pw">
   <div class="box">
-    <p><b>Zugang angelegt</b><br><span id="pw-hinweis"></span></p>
+    <p><b data-t="dlg_zugang">Zugang angelegt</b><br><span id="pw-hinweis"></span></p>
     <div class="pwfeld">
       <div class="wem" id="pw-wem"></div>
       <div class="wert" id="pw-wert"></div>
     </div>
     <textarea class="nachricht" id="pw-text" readonly></textarea>
-    <p style="font-size:12px;color:var(--grau)">Wird nur jetzt angezeigt.
+    <p style="font-size:12px;color:var(--grau)" data-t="dlg_nur_jetzt">Wird nur jetzt angezeigt.
        Das Passwort gilt bis zur ersten Anmeldung.</p>
     <div class="knopfzeile">
-      <button id="pw-kopieren" class="gross primaer">Nachricht kopieren</button>
-      <button id="pw-fertig" class="gross sekundaer">Fertig</button>
+      <button id="pw-kopieren" class="gross primaer" data-t="dlg_kopieren">Nachricht kopieren</button>
+      <button id="pw-fertig" class="gross sekundaer" data-t="dlg_fertig">Fertig</button>
     </div>
   </div>
 </div>
@@ -838,8 +848,8 @@ select{
   <div class="box">
     <p id="frage-text"></p>
     <div class="knopfzeile">
-      <button id="frage-ja" class="gross primaer">Ja</button>
-      <button id="frage-nein" class="gross sekundaer">Abbrechen</button>
+      <button id="frage-ja" class="gross primaer" data-t="dlg_ja">Ja</button>
+      <button id="frage-nein" class="gross sekundaer" data-t="abbrechen">Abbrechen</button>
     </div>
   </div>
 </div>
@@ -856,10 +866,756 @@ const CONFIG = {
 
 /* Wareneingang — Clientlogik */
 
+/* ============================================================
+   1a) Die Sprachen
+   ============================================================ */
+
+/**
+ * Drei Sprachen, ein Schluessel je Satz. Der Excel-Bogen und die CSV bleiben
+ * deutsch: sie sind ein Dokument fuer den Kunden, kein Bildschirm fuer den
+ * Erfasser — die Spaltenueberschriften dort duerfen sich nicht bewegen, sonst
+ * bricht die Vorlage.
+ *
+ * Wo im Formular bisher zwei Sprachen mit Schraegstrich in einem Feld standen
+ * («Kunde / Client»), steht jetzt eine: genau dafuer gibt es die Wahl. Auf
+ * Deutsch bleibt der Schraegstrich, weil dort der Papierbogen danebenliegt und
+ * seine Beschriftung wiedererkannt werden soll.
+ */
+const SPRACHEN = ['de', 'en', 'fr'];
+
+const TEXTE = {
+  de: {
+    abbrechen: 'Abbrechen',
+    speichern: 'Speichern',
+    zurueck_al: 'Zurück',
+    optional_ph: 'optional',
+    positionen: 'Positionen',
+    bemerkung: 'Bemerkung',
+    einstellungen: 'Einstellungen',
+    abmelden: 'Abmelden',
+    name: 'Name',
+    email: 'E-Mail',
+    app_titel: 'Wareneingang',
+    app_sub: 'Material reception',
+    lg_passwort: 'Passwort',
+    lg_senden: 'Anmelden',
+    lg_laeuft: 'Anmelden …',
+    pw_aendern: 'Passwort ändern',
+    pw_setzen: 'Eigenes Passwort setzen',
+    pw_alt: 'Bisheriges Passwort',
+    pw_neu: 'Neues Passwort',
+    pw_neu2: 'Neues Passwort wiederholen',
+    pw_speichern: 'Passwort speichern',
+    pw_laeuft: 'Passwort wird gesetzt …',
+    st_neu: 'Neuer Wareneingang',
+    st_offen: 'Offene und letzte',
+    st_alle: 'Alle Wareneingänge',
+    st_suche: 'Suche',
+    chip_offen: 'Nur offene',
+    chip_alle: 'Alle',
+    st_suche_ph: 'Suchen: Nummer, Kunde, Lieferant, Erfasser',
+    fm_kunde: 'Kunde / Client',
+    fm_lieferant: 'Lieferant / Supplier',
+    fm_hinweis: 'Artikelanzahl bitte direkt auf dem Lieferschein abhaken bzw. anpassen.',
+    fm_plus: '+ Position',
+    fm_m2: 'Lagerfläche / storage space — m2',
+    fm_foto_label: 'Lieferschein-Foto',
+    fm_foto_knopf: 'Foto aufnehmen',
+    fm_quittieren: 'Quittieren',
+    fm_auf_namen: 'auf deinen Namen',
+    fm_haken_hinweis: 'Nur ankreuzen, was du selbst erledigt hast. Alles Weitere wird später von der Person, die es ausgeführt hat, quittiert.',
+    schritt_angenommen: 'Angenommen / Accepted',
+    schritt_gezaehlt: 'Gezählt &amp; kontrolliert / counted &amp; controlled',
+    schritt_eingelagert: 'Eingelagert / stored',
+    fm_speichern_laeuft: 'Speichern …',
+    fm_foto_laeuft: 'Foto wird geladen …',
+    pos_nr: 'POSITION',
+    pos_artikel: 'Artikelbezeichnung / Article description',
+    pos_anzahl: 'Anzahl / QTY',
+    pos_kg: 'kg',
+    pos_kg_frei: ' · nicht nötig',
+    pos_mhd: 'MHD',
+    pos_mhd_ph: 'TT.MM.JJJJ',
+    pos_regal: 'Regalplatznr. / shelf no.',
+    pos_regal_ph: 'Regalplatz',
+    pos_bemerkung: 'Bemerkungen / Kontrolle',
+    pos_bestehend: 'Bestehend / Existing',
+    pos_foto: 'Foto',
+    pos_foto_da: '✓ Foto',
+    pos_mhd_knopf: '+ MHD',
+    pos_mhd_titel: 'Gleiche Ware, anderes MHD',
+    pos_weg_al: 'Position entfernen',
+    pos_ausgefuellt: 'ausgefüllt',
+    dt_aufgabe: 'Aufgabe / Task',
+    dt_senden: 'Als Excel senden',
+    dt_storno: 'Zurückziehen',
+    dt_foto_ansehen: 'Foto ansehen',
+    dt_lieferschein: 'Lieferschein',
+    bitte_warten: 'Bitte warten …',
+    wird_geladen: 'Wird geladen …',
+    wird_gesucht: 'Wird gesucht …',
+    wird_gespeichert: 'Wird gespeichert …',
+    wird_quittiert: 'Wird quittiert …',
+    wird_gesendet: 'Wird gesendet …',
+    wird_zurueckgezogen: 'Wird zurückgezogen …',
+    wird_angelegt: 'Wird angelegt …',
+    wird_geholt: 'Wird geholt …',
+    wird_aktualisiert: 'Wird aktualisiert …',
+    abmelden_laeuft: 'Abmelden …',
+    bild_schliessen: 'Zum Schliessen tippen',
+    bild_weg: 'Foto entfernen',
+    bild_alt: 'Foto',
+    rg_hinweis: 'Regalplatznr. eintragen, soweit bekannt. Leere Felder bleiben offen.',
+    rg_senden: 'Einlagerung quittieren',
+    ad_benutzer: 'Benutzer',
+    ad_kunden: 'Kunden',
+    ad_verwalter: 'Verwalter',
+    ad_ablage: 'Speicherorte',
+    ad_neuer_b: 'Neuer Benutzer',
+    ad_neuer_b_sub: 'bekommt ein Zugangsmail',
+    ad_mail_schicken: 'Zugangsmail verschicken',
+    ad_b_anlegen: 'Benutzer anlegen',
+    ad_sprache: 'Sprache',
+    ad_sprache_hinweis: 'Gilt nur für die App. Der Excel-Bogen und die CSV bleiben deutsch — sie sind ein Dokument für den Kunden, kein Bildschirm für den Erfasser.',
+    ad_kd_sub: 'je Kunde zwei Adressen',
+    ad_kd_neu: 'Neuer Kunde',
+    ad_kd_anlegen: 'Kunde anlegen',
+    ad_kd_hinweis: 'Haupt und Stellvertretung sind die Vorgabe beim Senden. Beide bekommen die Mail — wer nur bei Abwesenheit davon erfährt, erfährt es zu spät. Im Sendedialog lässt sich beides ändern.',
+    ad_kontakte: 'Kontakte',
+    ad_kontakte_sub: 'daraus wählen die Kunden',
+    ad_k_anlegen: 'Kontakt anlegen',
+    ad_verwalter_sub: 'wenn beim Kunden nichts steht',
+    ad_mailan: 'Empfänger der Excel-Datei',
+    ad_mailan_hinweis: 'Diese Adresse springt ein, wenn beim Kunden weder Haupt noch Stellvertretung hinterlegt ist. Leer heisst: «Als Excel senden» meldet dann einen Fehler.',
+    ad_ablage_sub: 'drei Ordner im Drive',
+    ad_archiv: 'Drive-Ordner für die Excel-Ablage',
+    ad_archiv_leer: 'Leer heisst: nur Mail, kein Archiv.',
+    ad_foto: 'Drive-Ordner für die Lieferschein-Fotos',
+    ad_foto_leer: 'Leer heisst: Fotos werden übersprungen.',
+    ad_sicherung: 'Drive-Ordner für die wöchentliche Sicherung',
+    ad_sicherung_leer: 'Leer heisst: keine Sicherung. Diesen Ordner mit niemandem teilen — die Kopie enthält die Passwörter.',
+    ad_ordner_ph: 'Ordner-Adresse einfügen',
+    ad_speichern: 'Einstellungen speichern',
+    ad_ordner_name: 'Ordner: ',
+    ad_ordner_weg: 'Dieser Ordner ist nicht erreichbar — ID prüfen.',
+    ad_gespeichert: 'Einstellungen gespeichert.',
+    ad_marke_admin: 'Admin',
+    ad_zum_admin: 'Zum Admin machen',
+    ad_kein_admin: 'Adminrechte entziehen',
+    ad_keine_b: 'Keine Benutzer.',
+    ad_keine_k: 'Noch keine Kontakte.',
+    ad_keine_kd: 'Noch keine Kunden.',
+    sd_an: 'An',
+    sd_kopie: 'Kopie',
+    sd_senden: 'Senden',
+    sd_mail_ph: 'name@firma.ch',
+    sd_kopie_ph: 'freiwillig',
+    sd_vorgabe: 'Vorgabe für ',
+    sd_aenderung: '. Änderungen gelten nur für diesen Versand.',
+    sd_leer_hinweis: 'Leer lassen geht auch, dann nimmt der Server die allgemeine Adresse.',
+    sd_keine_adresse: 'Keine Empfängeradresse — hier eintragen, oder in den Einstellungen ',
+    sd_beim_kunden: 'beim Kunden hinterlegen.',
+    sd_gesendet: 'Gesendet an ',
+    dlg_zugang: 'Zugang angelegt',
+    dlg_nur_jetzt: 'Wird nur jetzt angezeigt. Das Passwort gilt bis zur ersten Anmeldung.',
+    dlg_kopieren: 'Nachricht kopieren',
+    dlg_fertig: 'Fertig',
+    dlg_ja: 'Ja',
+    dlg_kopiert: 'Nachricht kopiert.',
+    dlg_kein_mail: 'Es wurde kein Mail verschickt — bitte die Nachricht kopieren.',
+    dlg_mail_weg: 'Das Zugangsmail ist unterwegs.',
+    dlg_storno: 'Diesen Wareneingang zurückziehen? Er verschwindet aus der Liste und aus Excel.',
+    dlg_abmelden: 'Alle angemeldeten Geräte werden dabei abgemeldet.',
+    dlg_pw_pflicht: 'Das zugestellte Passwort stand im Mail. Bitte ersetze es jetzt.',
+    err_login_leer: 'Bitte E-Mail und Passwort eingeben.',
+    err_login: 'E-Mail oder Passwort ist falsch.',
+    err_gesperrt: 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.',
+    err_inaktiv: 'Dieser Zugang ist deaktiviert. Bitte melde dich bei uns.',
+    err_login_allg: 'Anmeldung nicht möglich.',
+    err_pw_kurz: 'Das neue Passwort braucht mindestens 8 Zeichen.',
+    err_pw_ungleich: 'Die beiden Eingaben stimmen nicht überein.',
+    err_pw_alt: 'Das bisherige Passwort ist falsch.',
+    ok_pw: 'Passwort gespeichert.',
+    err_sitzung: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+    err_pw_noetig: 'Bitte zuerst ein eigenes Passwort setzen.',
+    err_kunde_lief: 'Kunde oder Lieferant ist erforderlich.',
+    err_keine_pos: 'Mindestens eine Position ist erforderlich.',
+    err_keine_pos_art: 'Mindestens eine Position mit Artikelbezeichnung.',
+    err_kg_fehlt: 'kg fehlt',
+    err_kg_nur: '. Leer bleibt es nur bei «Bestehend».',
+    err_kg_bei: ' bei «',
+    ok_erfasst: 'Wareneingang ',
+    ok_erfasst2: ' erfasst.',
+    ok_schon: 'Dieser Wareneingang war schon gespeichert: ',
+    err_speichern: 'Speichern nicht möglich.',
+    err_speichern_grund: 'Speichern nicht möglich: ',
+    err_offline_speichern: 'Keine Verbindung. Bitte nochmals speichern — doppelt wird es nicht.',
+    err_schritt_da: 'Dieser Schritt ist bereits quittiert.',
+    err_nicht_gefunden: 'Dieser Wareneingang wurde nicht gefunden.',
+    err_rechte: 'Dafür fehlen die Rechte.',
+    ok_storno: 'Der Wareneingang wurde zurückgezogen.',
+    leer_nichts: 'Noch nichts erfasst.',
+    leer_suche: 'Nichts gefunden.',
+    leer_pos: 'Keine Positionen.',
+    err_nicht_geladen: 'Nicht geladen',
+    err_nicht_gesendet: 'Nicht gesendet',
+    err_nicht_gespeichert: 'Nicht gespeichert',
+    err_veraltet: 'Nicht gefunden — die Liste ist womöglich veraltet.',
+    err_nochmal: 'Nochmal versuchen',
+    stand_geraet: 'Stand vom Gerät, geladen ',
+    err_stamm: 'Kunden- und Lieferantenliste nicht geladen.',
+    err_foto: 'Foto konnte nicht verarbeitet werden.',
+    err_foto_titel: 'Foto nicht geladen',
+    err_foto_weg: 'Das Foto ist in Drive nicht mehr auffindbar.',
+    err_kein_foto: 'Zu diesem Wareneingang wurde kein Foto erfasst.',
+    err_b_unvoll: 'Name und E-Mail sind erforderlich.',
+    err_b_da: 'Diese E-Mail ist bereits erfasst.',
+    err_selbst: 'Der eigene Zugang lässt sich so nicht ändern.',
+    err_k_unvoll: 'Bitte Name und Adresse ausfüllen.',
+    err_keine_mail: 'Das ist keine E-Mail-Adresse.',
+    err_da: 'Das gibt es schon.',
+    err_mail_ungueltig: 'Die Empfängeradresse sieht nicht wie eine E-Mail aus.',
+    err_spalten_alt: 'Die Tabelle kennt die Empfängerspalten noch nicht. ',
+    err_setup: '«setupAnlegen» im Apps Script ausführen.',
+    err_nicht_moeglich: 'Nicht möglich: ',
+    err_offline: 'Keine Verbindung. Bitte Internetverbindung prüfen.',
+    err_server_grund: '. Der Server meldet: ',
+    dt_lagerflaeche: 'Lagerfläche m2',
+    dt_versandt: 'Versandt',
+    schritt_gezaehlt_kurz: 'Gezählt & kontrolliert',
+    ad_b_laeuft: 'Benutzer wird angelegt …',
+    ad_empf_speichern: 'Empfänger speichern',
+    zeit_server: ' ms — Server ',
+    zeit_weg: ', Weg ',
+    diag_nicht_verbunden: 'Diese App ist noch nicht mit dem Backend verbunden: ',
+    diag_url_eintragen: 'in CONFIG.url eintragen — «Neue Bereitstellung» vergibt jedes Mal eine neue Adresse, «Neue Version» behält die alte.',
+    diag_url_holen: 'unter «Bereitstellungen verwalten» die aktuelle URL holen und ',
+    diag_kein_json: 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ',
+    diag_zugriff: 'Zugriff «Jeder», Adresse endet auf /exec.',
+    diag_unbekannt: 'Diese Funktion kennt die Bereitstellung noch nicht. In Apps Script ',
+    diag_neue_version: 'den aktuellen Code.gs einfügen und unter «Bereitstellungen verwalten» eine neue Version veröffentlichen.',
+    diag_leer_noch: 'Der Aufruf kam beim Server ohne Inhalt an. Bitte noch einmal versuchen.',
+    diag_leer_grund: 'Der Aufruf kam beim Server ohne Inhalt an — das passiert, wenn Google die Anfrage umleitet. Bitte noch einmal versuchen.',
+    diag_404: 'Auch der zweite Versuch kam nicht an (404). In Apps Script ',
+    diag_url_leer: 'CONFIG.url in index.html ist leer.',
+    ad_aus: 'Deaktivieren',
+    ad_an: 'Aktivieren',
+    ad_inaktiv: 'inaktiv',
+    ad_gesperrt: 'gesperrt',
+    ad_nie_da: 'noch nicht angemeldet',
+    pos_wort: 'Position',
+    sd_fuer: 'Für ',
+    sd_nichts_da: ' ist nichts hinterlegt — leer lassen geht auch, dann nimmt der Server die allgemeine Adresse.'
+  },
+  en: {
+    abbrechen: 'Cancel',
+    speichern: 'Save',
+    zurueck_al: 'Back',
+    optional_ph: 'optional',
+    positionen: 'Items',
+    bemerkung: 'Note',
+    einstellungen: 'Settings',
+    abmelden: 'Sign out',
+    name: 'Name',
+    email: 'E-mail',
+    app_titel: 'Wareneingang',
+    app_sub: 'Goods receipt',
+    lg_passwort: 'Password',
+    lg_senden: 'Sign in',
+    lg_laeuft: 'Signing in …',
+    pw_aendern: 'Change password',
+    pw_setzen: 'Set your own password',
+    pw_alt: 'Current password',
+    pw_neu: 'New password',
+    pw_neu2: 'Repeat new password',
+    pw_speichern: 'Save password',
+    pw_laeuft: 'Setting password …',
+    st_neu: 'New goods receipt',
+    st_offen: 'Open and recent',
+    st_alle: 'All goods receipts',
+    st_suche: 'Search',
+    chip_offen: 'Open only',
+    chip_alle: 'All',
+    st_suche_ph: 'Search: number, client, supplier, recorded by',
+    fm_kunde: 'Client',
+    fm_lieferant: 'Supplier',
+    fm_hinweis: 'Please tick or adjust the item count directly on the delivery note.',
+    fm_plus: '+ Item',
+    fm_m2: 'Storage space — m2',
+    fm_foto_label: 'Delivery note photo',
+    fm_foto_knopf: 'Take photo',
+    fm_quittieren: 'Sign off',
+    fm_auf_namen: 'in your name',
+    fm_haken_hinweis: 'Tick only what you did yourself. Everything else is signed off later by the person who did it.',
+    schritt_angenommen: 'Accepted',
+    schritt_gezaehlt: 'Counted &amp; controlled',
+    schritt_eingelagert: 'Stored',
+    fm_speichern_laeuft: 'Saving …',
+    fm_foto_laeuft: 'Uploading photo …',
+    pos_nr: 'ITEM',
+    pos_artikel: 'Article description',
+    pos_anzahl: 'Qty',
+    pos_kg: 'kg',
+    pos_kg_frei: ' · not needed',
+    pos_mhd: 'Best before',
+    pos_mhd_ph: 'DD.MM.YYYY',
+    pos_regal: 'Shelf no.',
+    pos_regal_ph: 'Shelf',
+    pos_bemerkung: 'Notes / check',
+    pos_bestehend: 'Existing',
+    pos_foto: 'Photo',
+    pos_foto_da: '✓ Photo',
+    pos_mhd_knopf: '+ BBD',
+    pos_mhd_titel: 'Same goods, different best-before date',
+    pos_weg_al: 'Remove item',
+    pos_ausgefuellt: 'filled in',
+    dt_aufgabe: 'Task',
+    dt_senden: 'Send as Excel',
+    dt_storno: 'Withdraw',
+    dt_foto_ansehen: 'View photo',
+    dt_lieferschein: 'Delivery note',
+    bitte_warten: 'Please wait …',
+    wird_geladen: 'Loading …',
+    wird_gesucht: 'Searching …',
+    wird_gespeichert: 'Saving …',
+    wird_quittiert: 'Signing off …',
+    wird_gesendet: 'Sending …',
+    wird_zurueckgezogen: 'Withdrawing …',
+    wird_angelegt: 'Creating …',
+    wird_geholt: 'Fetching …',
+    wird_aktualisiert: 'Updating …',
+    abmelden_laeuft: 'Signing out …',
+    bild_schliessen: 'Tap to close',
+    bild_weg: 'Remove photo',
+    bild_alt: 'Photo',
+    rg_hinweis: 'Enter shelf numbers where known. Empty fields stay open.',
+    rg_senden: 'Sign off storage',
+    ad_benutzer: 'Users',
+    ad_kunden: 'Clients',
+    ad_verwalter: 'Administrator',
+    ad_ablage: 'Storage locations',
+    ad_neuer_b: 'New user',
+    ad_neuer_b_sub: 'gets an access mail',
+    ad_mail_schicken: 'Send access mail',
+    ad_b_anlegen: 'Create user',
+    ad_sprache: 'Language',
+    ad_sprache_hinweis: 'Applies to the app only. The Excel sheet and the CSV stay German — they are a document for the client, not a screen for whoever records.',
+    ad_kd_sub: 'two addresses per client',
+    ad_kd_neu: 'New client',
+    ad_kd_anlegen: 'Create client',
+    ad_kd_hinweis: 'Main and deputy are the default when sending. Both get the mail — whoever only hears of it during an absence hears too late. Both can be changed in the send dialog.',
+    ad_kontakte: 'Contacts',
+    ad_kontakte_sub: 'clients choose from these',
+    ad_k_anlegen: 'Create contact',
+    ad_verwalter_sub: 'when the client has none',
+    ad_mailan: 'Recipient of the Excel file',
+    ad_mailan_hinweis: 'This address steps in when the client has neither main nor deputy on file. Empty means: «Send as Excel» then reports an error.',
+    ad_ablage_sub: 'three folders in Drive',
+    ad_archiv: 'Drive folder for the Excel archive',
+    ad_archiv_leer: 'Empty means: mail only, no archive.',
+    ad_foto: 'Drive folder for the delivery note photos',
+    ad_foto_leer: 'Empty means: photos are skipped.',
+    ad_sicherung: 'Drive folder for the weekly backup',
+    ad_sicherung_leer: 'Empty means: no backup. Share this folder with nobody — the copy contains the passwords.',
+    ad_ordner_ph: 'Paste folder address',
+    ad_speichern: 'Save settings',
+    ad_ordner_name: 'Folder: ',
+    ad_ordner_weg: 'This folder cannot be reached — check the ID.',
+    ad_gespeichert: 'Settings saved.',
+    ad_marke_admin: 'Admin',
+    ad_zum_admin: 'Make admin',
+    ad_kein_admin: 'Revoke admin rights',
+    ad_keine_b: 'No users.',
+    ad_keine_k: 'No contacts yet.',
+    ad_keine_kd: 'No clients yet.',
+    sd_an: 'To',
+    sd_kopie: 'Copy',
+    sd_senden: 'Send',
+    sd_mail_ph: 'name@company.ch',
+    sd_kopie_ph: 'optional',
+    sd_vorgabe: 'Default for ',
+    sd_aenderung: '. Changes apply to this send only.',
+    sd_leer_hinweis: 'You may leave it empty; the server then uses the general address.',
+    sd_keine_adresse: 'No recipient address — enter one here, or in the settings ',
+    sd_beim_kunden: 'store it with the client.',
+    sd_gesendet: 'Sent to ',
+    dlg_zugang: 'Access created',
+    dlg_nur_jetzt: 'Shown only now. The password is valid until the first sign-in.',
+    dlg_kopieren: 'Copy message',
+    dlg_fertig: 'Done',
+    dlg_ja: 'Yes',
+    dlg_kopiert: 'Message copied.',
+    dlg_kein_mail: 'No mail was sent — please copy the message.',
+    dlg_mail_weg: 'The access mail is on its way.',
+    dlg_storno: 'Withdraw this goods receipt? It disappears from the list and from Excel.',
+    dlg_abmelden: 'All signed-in devices will be signed out.',
+    dlg_pw_pflicht: 'The delivered password was in the mail. Please replace it now.',
+    err_login_leer: 'Please enter e-mail and password.',
+    err_login: 'E-mail or password is wrong.',
+    err_gesperrt: 'Too many failed attempts. Please try again in 15 minutes.',
+    err_inaktiv: 'This access is deactivated. Please get in touch with us.',
+    err_login_allg: 'Sign-in not possible.',
+    err_pw_kurz: 'The new password needs at least 8 characters.',
+    err_pw_ungleich: 'The two entries do not match.',
+    err_pw_alt: 'The current password is wrong.',
+    ok_pw: 'Password saved.',
+    err_sitzung: 'Your session has expired. Please sign in again.',
+    err_pw_noetig: 'Please set your own password first.',
+    err_kunde_lief: 'Client or supplier is required.',
+    err_keine_pos: 'At least one item is required.',
+    err_keine_pos_art: 'At least one item with an article description.',
+    err_kg_fehlt: 'kg is missing',
+    err_kg_nur: '. It may stay empty only with «Existing».',
+    err_kg_bei: ' for «',
+    ok_erfasst: 'Goods receipt ',
+    ok_erfasst2: ' recorded.',
+    ok_schon: 'This goods receipt was already saved: ',
+    err_speichern: 'Saving not possible.',
+    err_speichern_grund: 'Saving not possible: ',
+    err_offline_speichern: 'No connection. Please save again — it will not be duplicated.',
+    err_schritt_da: 'This step has already been signed off.',
+    err_nicht_gefunden: 'This goods receipt was not found.',
+    err_rechte: 'You do not have the rights for that.',
+    ok_storno: 'The goods receipt was withdrawn.',
+    leer_nichts: 'Nothing recorded yet.',
+    leer_suche: 'Nothing found.',
+    leer_pos: 'No items.',
+    err_nicht_geladen: 'Not loaded',
+    err_nicht_gesendet: 'Not sent',
+    err_nicht_gespeichert: 'Not saved',
+    err_veraltet: 'Not found — the list may be out of date.',
+    err_nochmal: 'Try again',
+    stand_geraet: 'From the device, loaded ',
+    err_stamm: 'Client and supplier lists not loaded.',
+    err_foto: 'The photo could not be processed.',
+    err_foto_titel: 'Photo not loaded',
+    err_foto_weg: 'The photo can no longer be found in Drive.',
+    err_kein_foto: 'No photo was recorded for this goods receipt.',
+    err_b_unvoll: 'Name and e-mail are required.',
+    err_b_da: 'This e-mail is already on file.',
+    err_selbst: 'Your own access cannot be changed this way.',
+    err_k_unvoll: 'Please fill in name and address.',
+    err_keine_mail: 'That is not an e-mail address.',
+    err_da: 'That already exists.',
+    err_mail_ungueltig: 'The recipient address does not look like an e-mail.',
+    err_spalten_alt: 'The sheet does not know the recipient columns yet. ',
+    err_setup: 'Run «setupAnlegen» in Apps Script.',
+    err_nicht_moeglich: 'Not possible: ',
+    err_offline: 'No connection. Please check the internet connection.',
+    err_server_grund: '. The server reports: ',
+    dt_lagerflaeche: 'Storage space m2',
+    dt_versandt: 'Sent',
+    schritt_gezaehlt_kurz: 'Counted & controlled',
+    ad_b_laeuft: 'Creating user …',
+    ad_empf_speichern: 'Save recipients',
+    zeit_server: ' ms — server ',
+    zeit_weg: ', network ',
+    diag_nicht_verbunden: 'This app is not connected to the backend yet: ',
+    diag_url_eintragen: 'enter it in CONFIG.url — «New deployment» hands out a new address every time, «New version» keeps the old one.',
+    diag_url_holen: 'fetch the current URL under «Manage deployments» and ',
+    diag_kein_json: 'The server did not return JSON. Check the deployment: ',
+    diag_zugriff: 'Access «Anyone», address ends in /exec.',
+    diag_unbekannt: 'The deployment does not know this function yet. In Apps Script ',
+    diag_neue_version: 'paste the current Code.gs and publish a new version under «Manage deployments».',
+    diag_leer_noch: 'The call reached the server without content. Please try again.',
+    diag_leer_grund: 'The call reached the server without content — that happens when Google redirects the request. Please try again.',
+    diag_404: 'The second attempt did not arrive either (404). In Apps Script ',
+    diag_url_leer: 'CONFIG.url in index.html is empty.',
+    ad_aus: 'Deactivate',
+    ad_an: 'Activate',
+    ad_inaktiv: 'inactive',
+    ad_gesperrt: 'locked',
+    ad_nie_da: 'not signed in yet',
+    pos_wort: 'Item',
+    sd_fuer: 'For ',
+    sd_nichts_da: ' nothing is on file — you may leave it empty, the server then uses the general address.'
+  },
+  fr: {
+    abbrechen: 'Annuler',
+    speichern: 'Enregistrer',
+    zurueck_al: 'Retour',
+    optional_ph: 'facultatif',
+    positionen: 'Postes',
+    bemerkung: 'Remarque',
+    einstellungen: 'Paramètres',
+    abmelden: 'Se déconnecter',
+    name: 'Nom',
+    email: 'E-mail',
+    app_titel: 'Wareneingang',
+    app_sub: 'Réception de marchandises',
+    lg_passwort: 'Mot de passe',
+    lg_senden: 'Se connecter',
+    lg_laeuft: 'Connexion …',
+    pw_aendern: 'Changer le mot de passe',
+    pw_setzen: 'Définis ton mot de passe',
+    pw_alt: 'Mot de passe actuel',
+    pw_neu: 'Nouveau mot de passe',
+    pw_neu2: 'Répéter le nouveau mot de passe',
+    pw_speichern: 'Enregistrer le mot de passe',
+    pw_laeuft: 'Enregistrement du mot de passe …',
+    st_neu: 'Nouvelle réception',
+    st_offen: 'En cours et récentes',
+    st_alle: 'Toutes les réceptions',
+    st_suche: 'Recherche',
+    chip_offen: 'En cours seulement',
+    chip_alle: 'Toutes',
+    st_suche_ph: 'Rechercher : numéro, client, fournisseur, saisi par',
+    fm_kunde: 'Client',
+    fm_lieferant: 'Fournisseur',
+    fm_hinweis: 'Coche ou corrige le nombre d\'articles directement sur le bon de livraison.',
+    fm_plus: '+ Poste',
+    fm_m2: 'Surface de stockage — m2',
+    fm_foto_label: 'Photo du bon de livraison',
+    fm_foto_knopf: 'Prendre une photo',
+    fm_quittieren: 'Valider',
+    fm_auf_namen: 'à ton nom',
+    fm_haken_hinweis: 'Ne coche que ce que tu as fait toi-même. Le reste sera validé plus tard par la personne qui l\'a fait.',
+    schritt_angenommen: 'Réceptionné',
+    schritt_gezaehlt: 'Compté &amp; contrôlé',
+    schritt_eingelagert: 'Stocké',
+    fm_speichern_laeuft: 'Enregistrement …',
+    fm_foto_laeuft: 'Envoi de la photo …',
+    pos_nr: 'POSTE',
+    pos_artikel: 'Désignation de l\'article',
+    pos_anzahl: 'Quantité',
+    pos_kg: 'kg',
+    pos_kg_frei: ' · pas nécessaire',
+    pos_mhd: 'DLC',
+    pos_mhd_ph: 'JJ.MM.AAAA',
+    pos_regal: 'N° d\'emplacement',
+    pos_regal_ph: 'Emplacement',
+    pos_bemerkung: 'Remarques / contrôle',
+    pos_bestehend: 'Existant',
+    pos_foto: 'Photo',
+    pos_foto_da: '✓ Photo',
+    pos_mhd_knopf: '+ DLC',
+    pos_mhd_titel: 'Même marchandise, autre DLC',
+    pos_weg_al: 'Supprimer le poste',
+    pos_ausgefuellt: 'remplis',
+    dt_aufgabe: 'Tâche',
+    dt_senden: 'Envoyer en Excel',
+    dt_storno: 'Retirer',
+    dt_foto_ansehen: 'Voir la photo',
+    dt_lieferschein: 'Bon de livraison',
+    bitte_warten: 'Un instant …',
+    wird_geladen: 'Chargement …',
+    wird_gesucht: 'Recherche …',
+    wird_gespeichert: 'Enregistrement …',
+    wird_quittiert: 'Validation …',
+    wird_gesendet: 'Envoi …',
+    wird_zurueckgezogen: 'Retrait …',
+    wird_angelegt: 'Création …',
+    wird_geholt: 'Récupération …',
+    wird_aktualisiert: 'Mise à jour …',
+    abmelden_laeuft: 'Déconnexion …',
+    bild_schliessen: 'Touche pour fermer',
+    bild_weg: 'Supprimer la photo',
+    bild_alt: 'Photo',
+    rg_hinweis: 'Indique les emplacements connus. Les champs vides restent ouverts.',
+    rg_senden: 'Valider le stockage',
+    ad_benutzer: 'Utilisateurs',
+    ad_kunden: 'Clients',
+    ad_verwalter: 'Gestionnaire',
+    ad_ablage: 'Emplacements',
+    ad_neuer_b: 'Nouvel utilisateur',
+    ad_neuer_b_sub: 'reçoit un courriel d\'accès',
+    ad_mail_schicken: 'Envoyer le courriel d\'accès',
+    ad_b_anlegen: 'Créer l\'utilisateur',
+    ad_sprache: 'Langue',
+    ad_sprache_hinweis: 'Ne concerne que l\'application. Le fichier Excel et le CSV restent en allemand — ce sont des documents pour le client, pas un écran de saisie.',
+    ad_kd_sub: 'deux adresses par client',
+    ad_kd_neu: 'Nouveau client',
+    ad_kd_anlegen: 'Créer le client',
+    ad_kd_hinweis: 'Principal et suppléant sont proposés par défaut à l\'envoi. Les deux reçoivent le courriel — qui ne l\'apprend qu\'en cas d\'absence l\'apprend trop tard. Les deux se modifient à l\'envoi.',
+    ad_kontakte: 'Contacts',
+    ad_kontakte_sub: 'les clients y puisent',
+    ad_k_anlegen: 'Créer le contact',
+    ad_verwalter_sub: 'quand le client n\'en a aucune',
+    ad_mailan: 'Destinataire du fichier Excel',
+    ad_mailan_hinweis: 'Cette adresse prend le relais quand le client n\'a ni principal ni suppléant. Vide signifie : « Envoyer en Excel » signale alors une erreur.',
+    ad_ablage_sub: 'trois dossiers dans Drive',
+    ad_archiv: 'Dossier Drive pour l\'archive Excel',
+    ad_archiv_leer: 'Vide signifie : courriel seulement, pas d\'archive.',
+    ad_foto: 'Dossier Drive pour les photos des bons de livraison',
+    ad_foto_leer: 'Vide signifie : les photos sont ignorées.',
+    ad_sicherung: 'Dossier Drive pour la sauvegarde hebdomadaire',
+    ad_sicherung_leer: 'Vide signifie : pas de sauvegarde. Ne partage ce dossier avec personne — la copie contient les mots de passe.',
+    ad_ordner_ph: 'Coller l\'adresse du dossier',
+    ad_speichern: 'Enregistrer les paramètres',
+    ad_ordner_name: 'Dossier : ',
+    ad_ordner_weg: 'Ce dossier est injoignable — vérifie l\'ID.',
+    ad_gespeichert: 'Paramètres enregistrés.',
+    ad_marke_admin: 'Admin',
+    ad_zum_admin: 'Nommer admin',
+    ad_kein_admin: 'Retirer les droits admin',
+    ad_keine_b: 'Aucun utilisateur.',
+    ad_keine_k: 'Aucun contact.',
+    ad_keine_kd: 'Aucun client.',
+    sd_an: 'À',
+    sd_kopie: 'Copie',
+    sd_senden: 'Envoyer',
+    sd_mail_ph: 'nom@societe.ch',
+    sd_kopie_ph: 'facultatif',
+    sd_vorgabe: 'Par défaut pour ',
+    sd_aenderung: '. Les modifications ne valent que pour cet envoi.',
+    sd_leer_hinweis: 'Tu peux laisser vide ; le serveur prend alors l\'adresse générale.',
+    sd_keine_adresse: 'Aucune adresse de destinataire — saisis-la ici, ou dans les paramètres ',
+    sd_beim_kunden: 'enregistre-la chez le client.',
+    sd_gesendet: 'Envoyé à ',
+    dlg_zugang: 'Accès créé',
+    dlg_nur_jetzt: 'Affiché maintenant seulement. Le mot de passe vaut jusqu\'à la première connexion.',
+    dlg_kopieren: 'Copier le message',
+    dlg_fertig: 'Terminé',
+    dlg_ja: 'Oui',
+    dlg_kopiert: 'Message copié.',
+    dlg_kein_mail: 'Aucun courriel n\'a été envoyé — copie le message.',
+    dlg_mail_weg: 'Le courriel d\'accès est parti.',
+    dlg_storno: 'Retirer cette réception ? Elle disparaît de la liste et de l\'Excel.',
+    dlg_abmelden: 'Tous les appareils connectés seront déconnectés.',
+    dlg_pw_pflicht: 'Le mot de passe envoyé figurait dans le courriel. Remplace-le maintenant.',
+    err_login_leer: 'Saisis ton e-mail et ton mot de passe.',
+    err_login: 'L\'e-mail ou le mot de passe est incorrect.',
+    err_gesperrt: 'Trop de tentatives. Réessaie dans 15 minutes.',
+    err_inaktiv: 'Cet accès est désactivé. Contacte-nous.',
+    err_login_allg: 'Connexion impossible.',
+    err_pw_kurz: 'Le nouveau mot de passe doit compter au moins 8 caractères.',
+    err_pw_ungleich: 'Les deux saisies ne correspondent pas.',
+    err_pw_alt: 'Le mot de passe actuel est incorrect.',
+    ok_pw: 'Mot de passe enregistré.',
+    err_sitzung: 'Ta session a expiré. Reconnecte-toi.',
+    err_pw_noetig: 'Définis d\'abord ton propre mot de passe.',
+    err_kunde_lief: 'Le client ou le fournisseur est obligatoire.',
+    err_keine_pos: 'Au moins un poste est obligatoire.',
+    err_keine_pos_art: 'Au moins un poste avec une désignation d\'article.',
+    err_kg_fehlt: 'le kg manque',
+    err_kg_nur: '. Il ne reste vide qu\'avec « Existant ».',
+    err_kg_bei: ' pour « ',
+    ok_erfasst: 'Réception ',
+    ok_erfasst2: ' enregistrée.',
+    ok_schon: 'Cette réception était déjà enregistrée : ',
+    err_speichern: 'Enregistrement impossible.',
+    err_speichern_grund: 'Enregistrement impossible : ',
+    err_offline_speichern: 'Pas de connexion. Enregistre à nouveau — il n\'y aura pas de doublon.',
+    err_schritt_da: 'Cette étape est déjà validée.',
+    err_nicht_gefunden: 'Cette réception est introuvable.',
+    err_rechte: 'Tu n\'as pas les droits pour cela.',
+    ok_storno: 'La réception a été retirée.',
+    leer_nichts: 'Rien de saisi.',
+    leer_suche: 'Aucun résultat.',
+    leer_pos: 'Aucun poste.',
+    err_nicht_geladen: 'Non chargé',
+    err_nicht_gesendet: 'Non envoyé',
+    err_nicht_gespeichert: 'Non enregistré',
+    err_veraltet: 'Introuvable — la liste est peut-être périmée.',
+    err_nochmal: 'Réessayer',
+    stand_geraet: 'Version de l\'appareil, chargée ',
+    err_stamm: 'Listes des clients et fournisseurs non chargées.',
+    err_foto: 'La photo n\'a pas pu être traitée.',
+    err_foto_titel: 'Photo non chargée',
+    err_foto_weg: 'La photo est introuvable dans Drive.',
+    err_kein_foto: 'Aucune photo n\'a été prise pour cette réception.',
+    err_b_unvoll: 'Le nom et l\'e-mail sont obligatoires.',
+    err_b_da: 'Cet e-mail est déjà enregistré.',
+    err_selbst: 'Ton propre accès ne se modifie pas ainsi.',
+    err_k_unvoll: 'Remplis le nom et l\'adresse.',
+    err_keine_mail: 'Ce n\'est pas une adresse e-mail.',
+    err_da: 'Cela existe déjà.',
+    err_mail_ungueltig: 'L\'adresse du destinataire ne ressemble pas à un e-mail.',
+    err_spalten_alt: 'La feuille ne connaît pas encore les colonnes destinataires. ',
+    err_setup: 'Exécute « setupAnlegen » dans Apps Script.',
+    err_nicht_moeglich: 'Impossible : ',
+    err_offline: 'Pas de connexion. Vérifie la connexion internet.',
+    err_server_grund: '. Le serveur signale : ',
+    dt_lagerflaeche: 'Surface de stockage m2',
+    dt_versandt: 'Envoyé',
+    schritt_gezaehlt_kurz: 'Compté & contrôlé',
+    ad_b_laeuft: 'Création de l\'utilisateur …',
+    ad_empf_speichern: 'Enregistrer les destinataires',
+    zeit_server: ' ms — serveur ',
+    zeit_weg: ', réseau ',
+    diag_nicht_verbunden: 'Cette application n\'est pas encore reliée au backend : ',
+    diag_url_eintragen: 'à inscrire dans CONFIG.url — « Nouveau déploiement » attribue chaque fois une nouvelle adresse, « Nouvelle version » garde l\'ancienne.',
+    diag_url_holen: 'récupère l\'URL actuelle sous « Gérer les déploiements » et ',
+    diag_kein_json: 'Le serveur n\'a pas renvoyé de JSON. Vérifie le déploiement : ',
+    diag_zugriff: 'Accès « Tout le monde », adresse se terminant par /exec.',
+    diag_unbekannt: 'Le déploiement ne connaît pas encore cette fonction. Dans Apps Script ',
+    diag_neue_version: 'colle le Code.gs actuel et publie une nouvelle version sous « Gérer les déploiements ».',
+    diag_leer_noch: 'L\'appel est arrivé au serveur sans contenu. Réessaie.',
+    diag_leer_grund: 'L\'appel est arrivé au serveur sans contenu — cela arrive quand Google redirige la requête. Réessaie.',
+    diag_404: 'La deuxième tentative n\'est pas arrivée non plus (404). Dans Apps Script ',
+    diag_url_leer: 'CONFIG.url dans index.html est vide.',
+    ad_aus: 'Désactiver',
+    ad_an: 'Activer',
+    ad_inaktiv: 'inactif',
+    ad_gesperrt: 'bloqué',
+    ad_nie_da: 'jamais connecté',
+    pos_wort: 'Poste',
+    sd_fuer: 'Pour ',
+    sd_nichts_da: ' rien n\'est enregistré — tu peux laisser vide, le serveur prend alors l\'adresse générale.'
+  }
+};
+
+/**
+ * Kein stiller Rueckfall auf Deutsch. Faellt ein Schluessel durch, soll man
+ * ihn sehen — ein halb deutscher Bildschirm faellt niemandem auf, der die
+ * deutsche Fassung kennt, und genau der prueft die Uebersetzung ab.
+ * Ein Test haelt fest, dass alle drei Tabellen dieselben Schluessel tragen.
+ */
+/**
+ * Traegt die Sprache in die Seite. Noetig ist das zweimal: beim Start, weil
+ * der Anmeldeschirm dasteht, bevor jemand weiss, wer davor sitzt — und nach
+ * dem Anmelden, wenn feststeht, was beim Benutzer eingetragen ist.
+ *
+ * Angefasst wird nur, was im Markup steht. Was die App selbst zeichnet —
+ * Positionen, Liste, Detail — holt seinen Text beim naechsten Zeichnen aus
+ * t(); zwei Wege, die dasselbe tun, liefen frueher oder spaeter auseinander.
+ */
+function spracheAnwenden() {
+  document.documentElement.lang = S.sprache;
+  document.querySelectorAll('[data-t]').forEach(e => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll('[data-t-ph]').forEach(e => { e.placeholder = t(e.dataset.tPh); });
+  document.querySelectorAll('[data-t-al]').forEach(e =>
+    e.setAttribute('aria-label', t(e.dataset.tAl)));
+  document.querySelectorAll('[data-t-ti]').forEach(e =>
+    e.setAttribute('title', t(e.dataset.tTi)));
+  document.querySelectorAll('[data-t-alt]').forEach(e =>
+    e.setAttribute('alt', t(e.dataset.tAlt)));
+}
+
+/** Setzt sie, merkt sie und traegt sie ein — in dieser Reihenfolge. */
+function spracheSetzen(sprache) {
+  const neu = spracheOk(sprache);
+  if (neu === S.sprache) return false;
+  S.sprache = neu;
+  localStorage.setItem('sprache', neu);
+  spracheAnwenden();
+  return true;
+}
+
+/**
+ * In ihrer eigenen Sprache, nicht uebersetzt: wer Franzoesisch sucht, sucht
+ * «Français» — auch und gerade dann, wenn der Bildschirm gerade deutsch ist.
+ */
+const SPRACHNAME = { de: 'Deutsch', en: 'English', fr: 'Français' };
+
+function spracheOk(wert) {
+  const s = String(wert || '').trim().toLowerCase().slice(0, 2);
+  return SPRACHEN.indexOf(s) >= 0 ? s : 'de';
+}
+
+function t(schluessel) {
+  const tab = TEXTE[S.sprache] || TEXTE.de;
+  return schluessel in tab ? tab[schluessel] : '\u27e8' + schluessel + '\u27e9';
+}
+
+
 const S = {
   session:     localStorage.getItem('session') || '',
   name:        localStorage.getItem('name')    || '',
   rolle:       localStorage.getItem('rolle')   || '',
+  // Der Anmeldeschirm steht da, bevor jemand weiss, wer davor sitzt —
+  // also die zuletzt benutzte Sprache, nicht stur Deutsch.
+  sprache:     spracheOk(localStorage.getItem('sprache')),
   kunden:      [],
   lieferanten: [],
   kontakte:    [],      // {name, email} — Vorschlaege im Sendedialog
@@ -893,11 +1649,11 @@ function zeigeScreen(id) {
 }
 
 function toast(text, art) {
-  const t = $('toast');
-  t.textContent = text;
-  t.className = 'toast zeigen ' + (art || '');
+  const el = $('toast');
+  el.textContent = text;
+  el.className = 'toast zeigen ' + (art || '');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.className = 'toast', 3200);
+  toast._t = setTimeout(() => el.className = 'toast', 3200);
 }
 
 /** Alles, was aus der Antwort kommt, geht als Text in die Seite. */
@@ -925,8 +1681,8 @@ function vorgangsNr() {
 }
 
 function datumText(wert) {
-  const t = String(wert || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return t ? t[3] + '.' + t[2] + '.' + t[1] : String(wert || '');
+  const m = String(wert || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '.' + m[2] + '.' + m[1] : String(wert || '');
 }
 
 /* ---------- API ---------- */
@@ -960,19 +1716,25 @@ const warten = ms => new Promise(r => setTimeout(r, ms));
  *   SCHREIBEN Balken UND Sperre ueber dem ganzen Schirm. Hier richtet der
  *             zweite Tipp wirklich etwas an.
  */
+/**
+ * Schluessel, nicht Text: diese Tabelle steht auf Modulebene und liefe damit
+ * genau einmal — mit der Sprache, in der die Seite geladen wurde. Nach dem
+ * Anmelden gilt aber die des Benutzers, und der Zustand «wird gespeichert»
+ * stuende dann weiter auf Deutsch. Uebersetzt wird am Gebrauchsort.
+ */
 const ARBEIT_TEXT = {
-  login:            'Anmelden …',
-  passwort:         'Passwort wird gesetzt …',
-  abmelden:         'Abmelden …',
-  we_speichern:     'Wird gespeichert …',
-  we_schritt:       'Wird quittiert …',
-  we_senden:        'Wird gesendet …',
-  we_storno:        'Wird zurückgezogen …',
-  admin_neu:        'Benutzer wird angelegt …',
-  admin_aktion:     'Wird gespeichert …',
-  admin_parameter:  'Wird gespeichert …',
-  admin_kontakt:    'Wird gespeichert …',
-  admin_kunde:      'Wird gespeichert …'
+  login:            'lg_laeuft',
+  passwort:         'pw_laeuft',
+  abmelden:         'abmelden_laeuft',
+  we_speichern:     'wird_gespeichert',
+  we_schritt:       'wird_quittiert',
+  we_senden:        'wird_gesendet',
+  we_storno:        'wird_zurueckgezogen',
+  admin_neu:        'ad_b_laeuft',
+  admin_aktion:     'wird_gespeichert',
+  admin_parameter:  'wird_gespeichert',
+  admin_kontakt:    'wird_gespeichert',
+  admin_kunde:      'wird_gespeichert'
 };
 
 /**
@@ -991,7 +1753,7 @@ function arbeitAn(payload) {
   $('arbeit').hidden = false;
   if (!schreibt(payload)) return false;
   ARBEIT.schreibend++;
-  $('sperre-text').textContent = ARBEIT_TEXT[payload.action] || 'Bitte warten …';
+  $('sperre-text').textContent = t(ARBEIT_TEXT[payload.action] || 'bitte_warten');
   $('sperre').hidden = false;
   return true;
 }
@@ -1117,8 +1879,8 @@ async function postRoh(payload) {
     // aus, und man baut an der falschen Stelle um.
     if (antwort && antwort.ms != null) {
       const gesamt = Date.now() - begonnen;
-      console.info('«' + payload.action + '» ' + gesamt + ' ms — Server ' +
-                   antwort.ms + ', Weg ' + (gesamt - antwort.ms) +
+      console.info('«' + payload.action + '» ' + gesamt + t('zeit_server') +
+                   antwort.ms + t('zeit_weg') + (gesamt - antwort.ms) +
                    (antwort.teile ? ' (' + antwort.teile + ')' : ''));
     }
     return antwort;
@@ -1137,12 +1899,10 @@ async function postRoh(payload) {
 function verbindungText(e) {
   const art = e && e.message;
   if (art === 'nicht_verbunden') {
-    return 'Diese App ist noch nicht mit dem Backend verbunden: ' +
-           'CONFIG.url in index.html ist leer.';
+    return t('diag_nicht_verbunden') + t('diag_url_leer');
   }
   if (art === 'nur_post') {
-    return 'Der Aufruf kam beim Server ohne Inhalt an — das passiert, wenn ' +
-           'Google die Anfrage umleitet. Bitte noch einmal versuchen.';
+    return t('diag_leer_grund');
   }
   if (art === 'keine_antwort') {
     // 404 heisst nicht «kaputt», sondern «diese Bereitstellung gibt es
@@ -1150,18 +1910,15 @@ function verbindungText(e) {
     // statt «Neue Version»: die alte Adresse zeigt dann ins Leere, und die
     // allgemeine Bitte, den Zugriff zu pruefen, fuehrt in die Irre.
     if (e.status === 404) {
-      return 'Auch der zweite Versuch kam nicht an (404). In Apps Script ' +
-             'unter «Bereitstellungen verwalten» die aktuelle URL holen und ' +
-             'in CONFIG.url eintragen — «Neue Bereitstellung» vergibt jedes ' +
-             'Mal eine neue Adresse, «Neue Version» behält die alte.';
+      return t('diag_404') + t('diag_url_holen') + t('diag_url_eintragen');
     }
-    return 'Der Server hat kein JSON geliefert. Bereitstellung prüfen: ' +
-           'Zugriff «Jeder», Adresse endet auf /exec.' +
+    return t('diag_kein_json') +
+           t('diag_zugriff') +
            (e.status ? ' [HTTP ' + e.status + ': ' + e.anfang + ']' : '');
   }
   // Der technische Grund steht in der Konsole, nicht auf dem Schirm.
   if (e && e.grund) console.warn('Verbindung endgültig gescheitert:', e.grund);
-  return 'Keine Verbindung. Bitte Internetverbindung prüfen.';
+  return t('err_offline');
 }
 
 /**
@@ -1177,27 +1934,35 @@ function verbindungText(e) {
  */
 function abgelehntText(r, was) {
   return {
-    nur_post: 'Der Aufruf kam beim Server ohne Inhalt an. Bitte noch einmal ' +
-              'versuchen.',
-    nicht_gefunden: 'Dieser Wareneingang wurde nicht gefunden.',
-    'keine Berechtigung': 'Dafür fehlen die Rechte.',
-    passwort_noetig: 'Bitte zuerst ein eigenes Passwort setzen.',
+    nur_post: t('diag_leer_noch'),
+    nicht_gefunden: t('err_nicht_gefunden'),
+    'keine Berechtigung': t('err_rechte'),
+    passwort_noetig: t('err_pw_noetig'),
 
     // Die App ist neuer als das Skript. Ein Merge auf GitHub erneuert nur
     // die Seite; Code.gs kommt dort nicht von selbst an. Ohne diesen Satz
     // steht «Der Server meldet: unbekannte Aktion» auf dem Schirm, und das
     // schickt jeden an die falsche Stelle suchen.
     'unbekannte Aktion':
-      'Diese Funktion kennt die Bereitstellung noch nicht. In Apps Script ' +
-      'den aktuellen Code.gs einfügen und unter «Bereitstellungen verwalten» ' +
-      'eine neue Version veröffentlichen.'
-  }[r.error] || ((was || 'Nicht geladen') + '. Der Server meldet: ' + r.error);
+      t('diag_unbekannt') + t('diag_neue_version')
+  }[r.error] || ((was || t('err_nicht_geladen')) + t('err_server_grund') + r.error);
+}
+
+/**
+ * Raeumt den Speicher, behaelt aber die Sprache. Sie ist keine Sitzung,
+ * sondern eine Einstellung des Geraets: wer sich abmeldet, soll den
+ * Anmeldeschirm nicht auf einmal auf Deutsch vorfinden.
+ */
+function speicherLeeren() {
+  const sprache = S.sprache;
+  localStorage.clear();
+  localStorage.setItem('sprache', sprache);
 }
 
 function sessionWeg() {
-  localStorage.clear();
+  speicherLeeren();
   S.session = '';
-  toast('Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.', 'err');
+  toast(t('err_sitzung'), 'err');
   zeigeScreen('scr-login');
 }
 
@@ -1218,14 +1983,14 @@ async function anmelden() {
   m.classList.remove('zeigen');
 
   if (!email || !pass) {
-    m.textContent = 'Bitte E-Mail und Passwort eingeben.';
+    m.textContent = t('err_login_leer');
     m.classList.add('zeigen');
     return;
   }
 
   const btn = $('lg-senden');
   btn.disabled = true;
-  btn.textContent = 'Anmelden …';
+  btn.textContent = t('lg_laeuft');
 
   try {
     // «alle» mitschicken: das Anmelden bringt die Liste gleich mit, und ohne
@@ -1241,6 +2006,9 @@ async function anmelden() {
       localStorage.setItem('session', r.session);
       localStorage.setItem('name', r.name);
       localStorage.setItem('rolle', S.rolle);
+      localStorage.setItem('email', email.trim().toLowerCase());
+      // Erst jetzt steht fest, wer davor sitzt — und damit die Sprache.
+      spracheSetzen(r.sprache);
       $('lg-pass').value = '';
       if (r.pwGeaendert === false) { zeigePasswort(true); return; }
       // r.start kommt aus derselben Antwort — das Anmelden ist damit EIN
@@ -1248,10 +2016,10 @@ async function anmelden() {
       await start(r.start);
     } else {
       m.textContent = {
-        login:    'E-Mail oder Passwort ist falsch.',
-        gesperrt: 'Zu viele Fehlversuche. Bitte in 15 Minuten erneut versuchen.',
-        inaktiv:  'Dieser Zugang ist deaktiviert. Bitte melde dich bei uns.'
-      }[r.error] || 'Anmeldung nicht möglich.';
+        login:    t('err_login'),
+        gesperrt: t('err_gesperrt'),
+        inaktiv:  t('err_inaktiv')
+      }[r.error] || t('err_login_allg');
       m.classList.add('zeigen');
     }
   } catch (e) {
@@ -1259,7 +2027,7 @@ async function anmelden() {
     m.classList.add('zeigen');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Anmelden';
+    btn.textContent = t('lg_senden');
   }
 }
 
@@ -1268,7 +2036,7 @@ function abmelden() {
   // dreissig Tage gueltig, und «Abmelden» auf einem geteilten iPad waere
   // nur eine Geste. Schlaegt der Ruf fehl, wird trotzdem abgemeldet.
   if (S.session) post({ action: 'abmelden', session: S.session }).catch(() => {});
-  localStorage.clear();
+  speicherLeeren();
   S.session = ''; S.name = ''; S.rolle = '';
   $('lg-pass').value = '';
   zeigeScreen('scr-login');
@@ -1277,10 +2045,10 @@ function abmelden() {
 /** pflicht = erste Anmeldung mit dem zugestellten Passwort. */
 function zeigePasswort(pflicht) {
   S.pwPflicht = !!pflicht;
-  $('pw-titel').textContent = pflicht ? 'Eigenes Passwort setzen' : 'Passwort ändern';
+  $('pw-titel').textContent = pflicht ? t('pw_setzen') : t('pw_aendern');
   $('pw-sub').textContent = pflicht
-    ? 'Das zugestellte Passwort stand im Mail. Bitte ersetze es jetzt.'
-    : 'Alle angemeldeten Geräte werden dabei abgemeldet.';
+    ? t('dlg_pw_pflicht')
+    : t('dlg_abmelden');
   $('pw-alt-feld').hidden = pflicht && !!S.altPass;
   $('pw-zurueck').hidden  = pflicht;
   $('pw-alt').value = ''; $('pw-neu').value = ''; $('pw-neu2').value = '';
@@ -1295,38 +2063,38 @@ async function passwortSpeichern() {
   m.classList.remove('zeigen');
 
   if (neu.length < 8) {
-    m.textContent = 'Das neue Passwort braucht mindestens 8 Zeichen.';
+    m.textContent = t('err_pw_kurz');
     m.classList.add('zeigen'); return;
   }
   if (neu !== $('pw-neu2').value) {
-    m.textContent = 'Die beiden Eingaben stimmen nicht überein.';
+    m.textContent = t('err_pw_ungleich');
     m.classList.add('zeigen'); return;
   }
 
   const btn = $('pw-senden');
-  btn.disabled = true; btn.textContent = 'Speichern …';
+  btn.disabled = true; btn.textContent = t('fm_speichern_laeuft');
   try {
     const r = await post({ action: 'passwort', session: S.session, alt: alt, neu: neu });
     if (r.ok) {
       S.session = r.session;
       S.altPass = '';
       localStorage.setItem('session', r.session);
-      toast('Passwort gespeichert.', 'ok');
+      toast(t('ok_pw'), 'ok');
       await start();
     } else if (r.error === 'session') {
       sessionWeg();
     } else {
       m.textContent = {
-        alt_falsch: 'Das bisherige Passwort ist falsch.',
-        zu_kurz:    'Das neue Passwort braucht mindestens 8 Zeichen.'
-      }[r.error] || 'Speichern nicht möglich.';
+        alt_falsch: t('err_pw_alt'),
+        zu_kurz:    t('err_pw_kurz')
+      }[r.error] || t('err_speichern');
       m.classList.add('zeigen');
     }
   } catch (e) {
     m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
-    btn.disabled = false; btn.textContent = 'Passwort speichern';
+    btn.disabled = false; btn.textContent = t('pw_speichern');
   }
 }
 
@@ -1363,7 +2131,7 @@ async function start(vorab) {
   // Wartezeit, die man loswerden wollte.
   const zuletzt = listeAusSpeicher();
   if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen('st-alt', zuletzt.zeit); }
-  else         { $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>'; }
+  else         { $('st-liste').innerHTML = '<div class="leer">' + t('wird_geladen') + '</div>'; }
 
   try {
     // EIN Aufruf fuer Liste und Stammdaten. Zwei kosten den Weg zum Server
@@ -1386,7 +2154,7 @@ async function start(vorab) {
     startUebernehmen(r);
   } catch (e) {
     nichtErneuert(verbindungText(e), zuletzt);
-    if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
+    if (!cache) toast(t('err_stamm'), 'err');
   }
 }
 
@@ -1452,8 +2220,8 @@ function altText(zeit) {
 
 function altZeigen(id, zeit, grund) {
   $(id).hidden = false;
-  $(id).textContent = 'Stand vom Gerät, geladen ' + altText(zeit) + '. ' +
-                      (grund || 'Wird aktualisiert …');
+  $(id).textContent = t('stand_geraet') + altText(zeit) + '. ' +
+                      (grund || t('wird_aktualisiert'));
 }
 
 function altVerbergen(id) { $(id).hidden = true; }
@@ -1490,7 +2258,7 @@ function alleWaehlen(alle) {
 
 /** Ueberschrift und Speicher haengen beide daran, welche Ansicht gilt. */
 function listenTitel(suche) {
-  return suche ? 'Suche' : (S.alle ? 'Alle Wareneingänge' : 'Offene und letzte');
+  return suche ? t('st_suche') : (S.alle ? t('st_alle') : t('st_offen'));
 }
 
 function stammdatenAusSpeicher() {
@@ -1507,6 +2275,10 @@ function stammdatenAusSpeicher() {
 
 /** Antwort von «start»: Liste und Stammdaten in einem. */
 function startUebernehmen(r) {
+  // Stellt der Admin die Sprache um, gilt das beim naechsten Oeffnen — nicht
+  // erst beim naechsten Anmelden. Der Titel steht schon; er wird danach neu
+  // gesetzt, weil er aus t() kommt.
+  if (spracheSetzen(r.sprache)) $('st-titel').textContent = listenTitel('');
   if (r.kunden || r.lieferanten) {
     S.kunden = r.kunden || []; S.lieferanten = r.lieferanten || [];
     S.kontakte = r.kontakte || []; S.empfaenger = r.empfaenger || {};
@@ -1534,7 +2306,7 @@ async function startEinzeln(cache) {
     stammdatenMerken();
     fuelleStammdaten();
   } catch (e) {
-    if (!cache) toast('Kunden- und Lieferantenliste nicht geladen.', 'err');
+    if (!cache) toast(t('err_stamm'), 'err');
   }
 }
 
@@ -1579,11 +2351,11 @@ async function ladeListe() {
   const zuletzt = suche ? null : listeAusSpeicher();
   if (suche) {
     altVerbergen('st-alt');
-    $('st-liste').innerHTML = '<div class="leer">Wird gesucht …</div>';
+    $('st-liste').innerHTML = '<div class="leer">' + t('wird_gesucht') + '</div>';
   } else if (!$('st-liste').querySelector('.eintrag')) {
     if (zuletzt) { zeichneListe(zuletzt.liste); altZeigen('st-alt', zuletzt.zeit); }
     else { altVerbergen('st-alt');
-           $('st-liste').innerHTML = '<div class="leer">Wird geladen …</div>'; }
+           $('st-liste').innerHTML = '<div class="leer">' + t('wird_geladen') + '</div>'; }
   }
 
   try {
@@ -1602,7 +2374,7 @@ function zeichneListe(liste) {
   $('st-zahl').textContent = liste.length ? liste.length + ' Einträge' : '';
   if (!liste.length) {
     $('st-liste').innerHTML = '<div class="leer">' +
-      ($('st-suche').value.trim() ? 'Nichts gefunden.' : 'Noch nichts erfasst.') +
+      ($('st-suche').value.trim() ? t('leer_suche') : t('leer_nichts')) +
       '</div>';
     return;
   }
@@ -1669,45 +2441,48 @@ function zeichnePositionen() {
     '<div class="pos' + (p.bestehend ? ' ist-bestehend' : '') +
         '" data-i="' + i + '">' +
       '<div class="zeile1">' +
-        '<span class="nr">POSITION ' + (i + 1) + '</span>' +
+        '<span class="nr">' + t('pos_nr') + ' ' + (i + 1) + '</span>' +
         '<span class="kopftasten">' +
           '<button type="button" class="pos-mhd" data-i="' + i + '"' +
             (String(p.artikel).trim() ? '' : ' disabled') +
-            ' title="Gleiche Ware, anderes MHD"' +
-            ' aria-label="Gleiche Ware, anderes MHD">+ MHD</button>' +
+            ' title="' + esc(t('pos_mhd_titel')) + '"' +
+            ' aria-label="' + esc(t('pos_mhd_titel')) + '">' +
+            t('pos_mhd_knopf') + '</button>' +
           '<button type="button" class="pos-weg" data-i="' + i + '"' +
-            ' aria-label="Position entfernen">&times;</button>' +
+            ' aria-label="' + esc(t('pos_weg_al')) + '">&times;</button>' +
         '</span>' +
       '</div>' +
 
-      '<label>Artikelbezeichnung / Article description</label>' +
+      '<label>' + t('pos_artikel') + '</label>' +
       '<input type="text" data-f="artikel" value="' + esc(p.artikel) + '">' +
 
       '<div class="drei">' +
-        '<div><label>Anzahl / QTY</label>' +
+        '<div><label>' + t('pos_anzahl') + '</label>' +
           '<input type="text" inputmode="decimal" data-f="anzahl" value="' +
             esc(p.anzahl) + '"></div>' +
-        '<div><label>kg<span class="kg-frei"> · nicht nötig</span></label>' +
+        '<div><label>' + t('pos_kg') +
+          '<span class="kg-frei">' + t('pos_kg_frei') + '</span></label>' +
           '<input type="text" inputmode="decimal" data-f="kg" value="' +
             esc(p.kg) + '"></div>' +
-        '<div><label>MHD</label>' +
-          '<input type="text" data-f="mhd" placeholder="TT.MM.JJJJ" value="' +
+        '<div><label>' + t('pos_mhd') + '</label>' +
+          '<input type="text" data-f="mhd" placeholder="' + esc(t('pos_mhd_ph')) +
+            '" value="' +
             esc(p.mhd) + '"></div>' +
       '</div>' +
 
-      '<label>Regalplatznr. / shelf no.</label>' +
+      '<label>' + t('pos_regal') + '</label>' +
       '<div class="regal-zeile">' +
         '<input type="text" data-f="regalplatz" value="' + esc(p.regalplatz) + '">' +
         '<button type="button" class="klein pos-foto' + (p.bild ? ' hat-foto' : '') +
-          '" data-i="' + i + '">' + (p.bild ? '✓ Foto' : 'Foto') + '</button>' +
+          '" data-i="' + i + '">' + (p.bild ? t('pos_foto_da') : t('pos_foto')) + '</button>' +
       '</div>' +
 
-      '<label>Bemerkungen / Kontrolle</label>' +
+      '<label>' + t('pos_bemerkung') + '</label>' +
       '<input type="text" data-f="bemerkung" value="' + esc(p.bemerkung) + '">' +
 
       '<label class="haken bestehend">' +
         '<input type="checkbox" data-f="bestehend"' + (p.bestehend ? ' checked' : '') + '>' +
-        '<span class="marker">Bestehend / Existing</span>' +
+        '<span class="marker">' + t('pos_bestehend') + '</span>' +
       '</label>' +
     '</div>'
   ).join('');
@@ -1743,7 +2518,7 @@ function zeichnePositionen() {
 
 function zaehlePositionen() {
   const n = S.positionen.filter(p => String(p.artikel).trim()).length;
-  $('fm-poszahl').textContent = n ? n + ' ausgefüllt' : '';
+  $('fm-poszahl').textContent = n ? n + ' ' + t('pos_ausgefuellt') : '';
 }
 
 function positionWeg(i) {
@@ -1810,10 +2585,10 @@ async function speichern() {
   const gefuellt  = S.positionen.filter(p => String(p.artikel).trim());
 
   if (!kunde && !lieferant) {
-    toast('Kunde oder Lieferant ist erforderlich.', 'err'); return;
+    toast(t('err_kunde_lief'), 'err'); return;
   }
   if (!gefuellt.length) {
-    toast('Mindestens eine Position mit Artikelbezeichnung.', 'err'); return;
+    toast(t('err_keine_pos_art'), 'err'); return;
   }
 
   // kg ist Pflicht. Ausgenommen ist «Bestehend»: die Ware liegt schon im
@@ -1825,8 +2600,8 @@ async function speichern() {
   const ohneKg = S.positionen.findIndex(p =>
     String(p.artikel).trim() && p.bestehend !== true && zahl(p.kg) === '');
   if (ohneKg >= 0) {
-    toast('Position ' + (ohneKg + 1) + ': kg fehlt. ' +
-          'Leer bleibt es nur bei «Bestehend».', 'err');
+    toast(t('pos_wort') + ' ' + (ohneKg + 1) + ': ' +
+          t('err_kg_fehlt') + t('err_kg_nur'), 'err');
     const feld = $('fm-positionen')
       .querySelector('.pos[data-i="' + ohneKg + '"] [data-f=kg]');
     if (feld) {
@@ -1865,28 +2640,28 @@ async function speichern() {
   S.laeuft = true;
   const btn = $('fm-speichern');
   btn.disabled = true;
-  btn.textContent = S.bild ? 'Foto wird geladen …' : 'Speichern …';
+  btn.textContent = S.bild ? t('fm_foto_laeuft') : t('fm_speichern_laeuft');
 
   try {
     const r = await post(daten);
     if (r.ok) {
       toast(r.wiederholt
-        ? 'Dieser Wareneingang war schon gespeichert: ' + r.weNr
-        : 'Wareneingang ' + r.weNr + ' erfasst.', 'ok');
+        ? t('ok_schon') + r.weNr
+        : t('ok_erfasst') + r.weNr + t('ok_erfasst2'), 'ok');
       await ladeListe();
       detailOeffnen(r.weNr);
     } else if (!antwortOk(r)) {
       const text = {
-        kunde_lieferant:  'Kunde oder Lieferant ist erforderlich.',
-        keine_positionen: 'Mindestens eine Position ist erforderlich.',
+        kunde_lieferant:  t('err_kunde_lief'),
+        keine_positionen: t('err_keine_pos'),
         // Den Namen statt der Nummer: der Server sieht nur die gefuellten
         // Zeilen, seine Nummer waere nicht die auf der Karte.
-        kg_fehlt: 'kg fehlt' + (r.artikel ? ' bei «' + r.artikel + '»' : '') +
-                  '. Leer bleibt es nur bei «Bestehend».'
+        kg_fehlt: t('err_kg_fehlt') + (r.artikel ? t('err_kg_bei') + r.artikel + '»' : '') +
+                  t('err_kg_nur')
       }[r.error];
       if (text) toast(text, 'err');
       else if (r.error !== 'session' && r.error !== 'passwort_noetig') {
-        toast('Speichern nicht möglich: ' + r.error, 'err');
+        toast(t('err_speichern_grund') + r.error, 'err');
       }
     }
   } catch (e) {
@@ -1895,12 +2670,12 @@ async function speichern() {
       // Ob die Zeile geschrieben wurde, weiss hier niemand — deshalb nicht
       // behaupten, sie sei es nicht. Der Vorgangsschluessel sorgt dafuer,
       // dass ein zweiter Versuch nichts verdoppelt.
-      : 'Keine Verbindung. Bitte nochmals speichern — doppelt wird es nicht.',
+      : t('err_offline_speichern'),
       'err');
   } finally {
     S.laeuft = false;
     btn.disabled = false;
-    btn.textContent = 'Speichern';
+    btn.textContent = t('speichern');
   }
 }
 
@@ -1936,7 +2711,7 @@ async function fotoGewaehlt(ereignis) {
     $('fm-foto-vorschau').classList.add('da');
     $('fm-foto-info').textContent = Math.round(S.bild.length * 0.75 / 1024) + ' KB';
   } catch (e) {
-    toast('Foto konnte nicht verarbeitet werden.', 'err');
+    toast(t('err_foto'), 'err');
   } finally {
     ereignis.target.value = '';
   }
@@ -1962,7 +2737,7 @@ async function posFotoGewaehlt(ereignis) {
       S.regalBilder[ziel.nr] = bild; regalWerteLesen(); regalZeichnen();
     }
   } catch (e) {
-    toast('Foto konnte nicht verarbeitet werden.', 'err');
+    toast(t('err_foto'), 'err');
   }
 }
 
@@ -2035,7 +2810,7 @@ function zeichneStamm(r) {
                 (k.aktiv ? 'Deaktivieren' : 'Aktivieren') + '</button>' +
             '</div>' +
           '</div>').join('')
-      : '<div class="leer">Noch keine Kontakte.</div>';
+      : '<div class="leer">' + t('ad_keine_k') + '</div>';
   }
 
   if (r.kunden) {
@@ -2058,10 +2833,10 @@ function zeichneStamm(r) {
                   'list="dl-kontakte" data-f="vertretung" value="' +
                   esc(k.vertretung) + '"></div>' +
               '<button type="button" class="klein kd-speichern" data-name="' +
-                esc(k.name) + '">Empfänger speichern</button>' +
+                esc(k.name) + '">' + t('ad_empf_speichern') + '</button>' +
             '</div>' +
           '</div>').join('')
-      : '<div class="leer">Noch keine Kunden.</div>';
+      : '<div class="leer">' + t('ad_keine_kd') + '</div>';
   }
   stammdatenMerken();
 }
@@ -2073,13 +2848,13 @@ async function stammAktion(daten, meldungsId) {
     const r = await post(Object.assign({ session: S.session }, daten));
     if (!antwortOk(r)) {
       const text = {
-        existiert:      'Das gibt es schon.',
-        keine_mail:     'Das ist keine E-Mail-Adresse.',
-        unvollstaendig: 'Bitte Name und Adresse ausfüllen.',
-        nicht_gefunden: 'Nicht gefunden — die Liste ist womöglich veraltet.',
-        spalte_fehlt:   'Die Tabelle kennt die Empfängerspalten noch nicht. ' +
-                        '«setupAnlegen» im Apps Script ausführen.'
-      }[r.error] || abgelehntText(r, 'Nicht gespeichert');
+        existiert:      t('err_da'),
+        keine_mail:     t('err_keine_mail'),
+        unvollstaendig: t('err_k_unvoll'),
+        nicht_gefunden: t('err_veraltet'),
+        spalte_fehlt:   t('err_spalten_alt') +
+                        t('err_setup')
+      }[r.error] || abgelehntText(r, t('err_nicht_gespeichert'));
       if (feld) { feld.textContent = text; feld.classList.add('zeigen'); }
       else toast(text, 'err');
       return false;
@@ -2165,7 +2940,7 @@ async function detailOeffnen(weNr) {
     altZeigen('dt-alt', gemerkt.zeit);
   } else {
     // Kein Knopf auf einem Dokument, das noch gar nicht da ist.
-    $('dt-schritte').innerHTML = '<div class="leer">Wird geladen …</div>';
+    $('dt-schritte').innerHTML = '<div class="leer">' + t('wird_geladen') + '</div>';
   }
   zeigeScreen('scr-detail');
 
@@ -2202,7 +2977,7 @@ function detailFehler(text, weNr) {
   $('dt-schritte').innerHTML =
     '<div class="leer">' + esc(text) + '</div>' +
     '<div class="knopfzeile"><button class="gross sekundaer" id="dt-nochmal">' +
-      'Nochmal versuchen</button></div>';
+      t('err_nochmal') + '</button></div>';
   $('dt-nochmal').addEventListener('click', () => detailOeffnen(weNr));
 }
 
@@ -2212,20 +2987,21 @@ function zeichneDetail(kopf, pos) {
     : '';
 
   $('dt-daten').innerHTML =
-    zeile('Kunde / Client', kopf.Kunde) +
-    zeile('Lieferant / Supplier', kopf.Lieferant) +
-    zeile('Lagerfläche m2', kopf.LagerM2) +
-    zeile('Bemerkung', kopf.Bemerkung) +
+    zeile(t('fm_kunde'), kopf.Kunde) +
+    zeile(t('fm_lieferant'), kopf.Lieferant) +
+    zeile(t('dt_lagerflaeche'), kopf.LagerM2) +
+    zeile(t('bemerkung'), kopf.Bemerkung) +
     // KEIN Link nach Drive: den holt der Browser mit dem Google-Konto des
     // Geraets, und in dieser App angemeldet zu sein heisst dort gar nichts.
     // Das Bild kommt ueber «we_foto» vom Server, der es mit den Rechten des
     // Eigentuemers liest.
     (kopf.FotoUrl
-      ? '<div class="zeile"><span>Lieferschein</span><span>' +
-        '<button type="button" class="klein" id="dt-foto">Foto ansehen</button>' +
+      ? '<div class="zeile"><span>' + t('dt_lieferschein') + '</span><span>' +
+        '<button type="button" class="klein" id="dt-foto">' +
+        t('dt_foto_ansehen') + '</button>' +
         '</span></div>'
       : '') +
-    zeile('Versandt', kopf.Gesendet);
+    zeile(t('dt_versandt'), kopf.Gesendet);
 
   // Der Knopf entsteht eben erst mit dem innerHTML darueber.
   // Nicht fotoZeigen direkt: der Klick reicht sonst sein PointerEvent als
@@ -2233,11 +3009,11 @@ function zeichneDetail(kopf, pos) {
   if ($('dt-foto')) $('dt-foto').addEventListener('click', () => fotoZeigen());
 
   const schritte = [
-    { s: 'angenommen',  t: 'Angenommen / Accepted',
+    { s: 'angenommen',  t: t('schritt_angenommen'),
       nam: kopf.AngNam, dat: kopf.AngDat, zeit: kopf.AngZeit },
-    { s: 'gezaehlt',    t: 'Gezählt & kontrolliert',
+    { s: 'gezaehlt',    t: t('schritt_gezaehlt_kurz'),
       nam: kopf.GezNam, dat: kopf.GezDat, zeit: kopf.GezZeit },
-    { s: 'eingelagert', t: 'Eingelagert / stored',
+    { s: 'eingelagert', t: t('schritt_eingelagert'),
       nam: kopf.EinNam, dat: kopf.EinDat, zeit: kopf.EinZeit }
   ];
 
@@ -2279,9 +3055,9 @@ function zeichneDetail(kopf, pos) {
         '<span>' + menge + '</span></div>' +
       (zusatz ? '<div class="b">' + zusatz + '</div>' : '') +
       (p.foto ? '<div class="b"><button type="button" class="klein dt-pos-foto"' +
-                ' data-nr="' + p.nr + '">Foto ansehen</button></div>' : '') +
+                ' data-nr="' + p.nr + '">' + t('dt_foto_ansehen') + '</button></div>' : '') +
     '</div>';
-  }).join('') || '<div class="leer">Keine Positionen.</div>';
+  }).join('') || '<div class="leer">' + t('leer_pos') + '</div>';
 }
 
 /**
@@ -2317,16 +3093,16 @@ async function fotoZeigen(nr, knopf) {
 
   const btn = knopf || $('dt-foto');
   const alt = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Wird geholt …';
+  btn.disabled = true; btn.textContent = t('wird_geholt');
   try {
     const r = await post({ action: 'we_foto', session: S.session,
                           weNr: weNr, nr: nr || '' });
     if (!antwortOk(r)) {
       toast({
-        kein_foto:     'Zu diesem Wareneingang wurde kein Foto erfasst.',
-        foto_unlesbar: 'Das Foto ist in Drive nicht mehr auffindbar.',
-        storniert:     'Der Wareneingang wurde zurückgezogen.'
-      }[r.error] || abgelehntText(r, 'Foto nicht geladen'), 'err');
+        kein_foto:     t('err_kein_foto'),
+        foto_unlesbar: t('err_foto_weg'),
+        storniert:     t('ok_storno')
+      }[r.error] || abgelehntText(r, t('err_foto_titel')), 'err');
       return;
     }
     fotoMerken(schluessel, r.bild);
@@ -2375,9 +3151,9 @@ async function schrittSenden(schritt, regalplaetze, btn, bilder) {
       ladeListe();
     } else if (!antwortOk(r)) {
       toast({
-        bereits_quittiert: 'Dieser Schritt ist bereits quittiert.',
-        storniert:         'Der Wareneingang wurde zurückgezogen.'
-      }[r.error] || 'Nicht möglich: ' + r.error, 'err');
+        bereits_quittiert: t('err_schritt_da'),
+        storniert:         t('ok_storno')
+      }[r.error] || t('err_nicht_moeglich') + r.error, 'err');
     }
   } catch (e) {
     toast(verbindungText(e), 'err');
@@ -2421,15 +3197,16 @@ function regalZeichnen() {
         '<small>' + esc(p.anzahl !== '' ? p.anzahl + ' Stk ' : '') +
         esc(p.kg !== '' ? p.kg + ' kg' : '') + '</small></div>' +
       '<div class="regal-zeile">' +
-        '<input type="text" data-nr="' + p.nr + '" placeholder="Regalplatz"' +
+        '<input type="text" data-nr="' + p.nr + '" placeholder="' +
+          esc(t('pos_regal_ph')) + '"' +
           ' value="' + esc(S.regalWerte[p.nr] != null ? S.regalWerte[p.nr]
                                                       : (p.regalplatz || '')) + '">' +
         '<button type="button" class="klein rg-foto' +
           (S.regalBilder[p.nr] || p.foto ? ' hat-foto' : '') +
           '" data-nr="' + p.nr + '">' +
-          (S.regalBilder[p.nr] || p.foto ? '✓ Foto' : 'Foto') + '</button>' +
+          (S.regalBilder[p.nr] || p.foto ? t('pos_foto_da') : t('pos_foto')) + '</button>' +
       '</div>' +
-    '</div>').join('') || '<div class="leer">Keine Positionen.</div>';
+    '</div>').join('') || '<div class="leer">' + t('leer_pos') + '</div>';
 }
 
 function regalSenden() {
@@ -2461,11 +3238,10 @@ function sendenKlick() {
   $('sd-kopie').value = vor.kopie || '';
   $('sd-meldung').classList.remove('zeigen');
   $('sd-hinweis').textContent = vor.an
-    ? 'Vorgabe für ' + kunde + '. Änderungen gelten nur für diesen Versand.'
+    ? t('sd_vorgabe') + kunde + t('sd_aenderung')
     : (kunde
-        ? 'Für ' + kunde + ' ist nichts hinterlegt — leer lassen geht auch, ' +
-          'dann nimmt der Server die allgemeine Adresse.'
-        : 'Leer lassen geht auch, dann nimmt der Server die allgemeine Adresse.');
+        ? t('sd_fuer') + kunde + t('sd_nichts_da')
+        : t('sd_leer_hinweis'));
   zeigeScreen('scr-senden');
 }
 
@@ -2473,7 +3249,7 @@ async function sendenAusfuehren() {
   if (!S.detail || S.laeuft) return;
   S.laeuft = true;
   const btn = $('sd-senden');
-  btn.disabled = true; btn.textContent = 'Wird gesendet …';
+  btn.disabled = true; btn.textContent = t('wird_gesendet');
   $('sd-meldung').classList.remove('zeigen');
   try {
     const r = await post({
@@ -2481,13 +3257,13 @@ async function sendenAusfuehren() {
       mailAn: $('sd-an').value.trim(), kopie: $('sd-kopie').value.trim()
     });
     if (r.ok) {
-      toast('Gesendet an ' + r.an + (r.kopie ? ' (Kopie: ' + r.kopie + ')' : ''), 'ok');
+      toast(t('sd_gesendet') + r.an + (r.kopie ? ' (Kopie: ' + r.kopie + ')' : ''), 'ok');
       await detailOeffnen(S.detail.kopf.WeNr);
     } else if (!antwortOk(r)) {
       const text = r.error === 'kein_empfaenger'
-        ? 'Keine Empfängeradresse — hier eintragen, oder in den Einstellungen ' +
-          'beim Kunden hinterlegen.'
-        : abgelehntText(r, 'Nicht gesendet');
+        ? t('sd_keine_adresse') +
+          t('sd_beim_kunden')
+        : abgelehntText(r, t('err_nicht_gesendet'));
       $('sd-meldung').textContent = text;
       $('sd-meldung').classList.add('zeigen');
     }
@@ -2496,13 +3272,13 @@ async function sendenAusfuehren() {
     $('sd-meldung').classList.add('zeigen');
   } finally {
     S.laeuft = false;
-    btn.disabled = false; btn.textContent = 'Senden';
+    btn.disabled = false; btn.textContent = t('sd_senden');
   }
 }
 
 function stornoKlick() {
   if (!S.detail) return;
-  frage('Diesen Wareneingang zurückziehen? Er verschwindet aus der Liste und aus Excel.',
+  frage(t('dlg_storno'),
     async () => {
       try {
         const r = await post({
@@ -2513,7 +3289,7 @@ function stornoKlick() {
           await ladeListe();
           zeigeScreen('scr-start');
         } else if (!antwortOk(r)) {
-          toast('Nicht möglich: ' + r.error, 'err');
+          toast(t('err_nicht_moeglich') + r.error, 'err');
         }
       } catch (e) {
         toast(verbindungText(e), 'err');
@@ -2534,7 +3310,7 @@ function frage(text, dann) {
 async function adminOeffnen() {
   $('adm-meldung').classList.remove('zeigen');
   parMeldung('');
-  $('adm-liste').innerHTML = '<div class="leer">Wird geladen …</div>';
+  $('adm-liste').innerHTML = '<div class="leer">' + t('wird_geladen') + '</div>';
   $('adm-k-meldung').classList.remove('zeigen');
   $('adm-kd-meldung').classList.remove('zeigen');
   // Immer bei «Benutzer» beginnen. Einen gemerkten Reiter wiederzufinden
@@ -2594,11 +3370,11 @@ function parMeldung(text) {
 const PAR_FELDER = { MailAn: 'adm-mailan', ArchivOrdner: 'adm-archiv',
                      FotoOrdner: 'adm-foto', SicherungOrdner: 'adm-sicherung' };
 
+/* Schluessel, nicht Text — aus demselben Grund wie bei ARBEIT_TEXT. */
 const PAR_LEER = {
-  ArchivOrdner:    'Leer heisst: nur Mail, kein Archiv.',
-  FotoOrdner:      'Leer heisst: Fotos werden übersprungen.',
-  SicherungOrdner: 'Leer heisst: keine Sicherung. Diesen Ordner mit niemandem ' +
-                   'teilen — die Kopie enthält die Passwörter.'
+  ArchivOrdner:    'ad_archiv_leer',
+  FotoOrdner:      'ad_foto_leer',
+  SicherungOrdner: 'ad_sicherung_leer'
 };
 
 /** Ohne `werte` nur lesen, mit `werte` speichern — dieselbe Antwort. */
@@ -2606,7 +3382,7 @@ async function adminParameter(werte) {
   const knoepfe = PAR_KNOEPFE.map($);
   parMeldung('');
   if (werte) {
-    knoepfe.forEach(b => { b.disabled = true; b.textContent = 'Wird gespeichert …'; });
+    knoepfe.forEach(b => { b.disabled = true; b.textContent = t('wird_gespeichert'); });
   }
 
   try {
@@ -2614,8 +3390,8 @@ async function adminParameter(werte) {
                            werte: werte || null });
     if (!antwortOk(r)) {
       parMeldung(r.error === 'mail_ungueltig'
-        ? 'Die Empfängeradresse sieht nicht wie eine E-Mail aus.'
-        : 'Nicht möglich: ' + r.error);
+        ? t('err_mail_ungueltig')
+        : t('err_nicht_moeglich') + r.error);
       return;
     }
     Object.keys(PAR_FELDER).forEach(s => { $(PAR_FELDER[s]).value = r.werte[s] || ''; });
@@ -2624,17 +3400,17 @@ async function adminParameter(werte) {
     // Ordner trifft. Eine ID allein sagt gar nichts.
     Object.keys(PAR_LEER).forEach(s => {
       const feld = $(PAR_FELDER[s] + '-name');
-      if (!r.werte[s]) feld.textContent = PAR_LEER[s];
-      else if (r.ordner[s]) feld.textContent = 'Ordner: ' + r.ordner[s];
-      else feld.textContent = 'Dieser Ordner ist nicht erreichbar — ID prüfen.';
+      if (!r.werte[s]) feld.textContent = t(PAR_LEER[s]);
+      else if (r.ordner[s]) feld.textContent = t('ad_ordner_name') + r.ordner[s];
+      else feld.textContent = t('ad_ordner_weg');
     });
-    if (werte) toast('Einstellungen gespeichert.', 'ok');
+    if (werte) toast(t('ad_gespeichert'), 'ok');
   } catch (e) {
     parMeldung(verbindungText(e));
   } finally {
     knoepfe.forEach(b => {
       b.disabled = false;
-      b.textContent = 'Einstellungen speichern';
+      b.textContent = t('ad_speichern');
     });
   }
 }
@@ -2656,11 +3432,11 @@ async function adminLaden() {
 function adminZeichnen(liste) {
   $('adm-liste').innerHTML = liste.map(b => {
     const marken =
-      (b.aktiv ? '' : '<span class="marke aus">inaktiv</span>') +
-      (b.admin ? '<span class="marke adm">Admin</span>' : '') +
-      (b.gesperrt ? '<span class="marke aus">gesperrt</span>' : '') +
-      (b.neu ? '<span class="marke neu">noch nicht angemeldet</span>' : '');
-    const t = (was, txt) =>
+      (b.aktiv ? '' : '<span class="marke aus">' + t('ad_inaktiv') + '</span>') +
+      (b.admin ? '<span class="marke adm">' + t('ad_marke_admin') + '</span>' : '') +
+      (b.gesperrt ? '<span class="marke aus">' + t('ad_gesperrt') + '</span>' : '') +
+      (b.neu ? '<span class="marke neu">' + t('ad_nie_da') + '</span>' : '');
+    const taste = (was, txt) =>
       '<button class="klein" data-email="' + esc(b.email) + '" data-was="' + was + '">' +
       txt + '</button>';
     return '<div class="nutzer">' +
@@ -2668,14 +3444,24 @@ function adminZeichnen(liste) {
         '<span>' + marken + '</span></div>' +
       '<div class="ml">' + esc(b.email) + '</div>' +
       '<div class="tasten">' +
-        (b.aktiv ? t('aus', 'Deaktivieren') : t('an', 'Aktivieren')) +
-        (b.admin ? t('kein_admin', 'Adminrechte entziehen') : t('admin', 'Zum Admin machen')) +
-        t('passwort', 'Neues Passwort') +
+        // Ein Auswahlfeld statt dreier Knoepfe: drei Sprachen sind kein
+        // Umschalten, und die Liste traegt schon drei Knoepfe je Zeile.
+        '<select class="klein sprachwahl" data-email="' + esc(b.email) + '">' +
+          SPRACHEN.map(s => '<option value="' + s + '"' +
+            (b.sprache === s ? ' selected' : '') + '>' + SPRACHNAME[s] + '</option>').join('') +
+        '</select>' +
+        (b.aktiv ? taste('aus', t('ad_aus')) : taste('an', t('ad_an'))) +
+        (b.admin ? taste('kein_admin', t('ad_kein_admin'))
+                 : taste('admin', t('ad_zum_admin'))) +
+        taste('passwort', t('pw_neu')) +
       '</div></div>';
-  }).join('') || '<div class="leer">Keine Benutzer.</div>';
+  }).join('') || '<div class="leer">' + t('ad_keine_b') + '</div>';
 
   $('adm-liste').querySelectorAll('[data-was]').forEach(btn =>
     btn.addEventListener('click', () => adminAktion(btn)));
+
+  $('adm-liste').querySelectorAll('.sprachwahl').forEach(wahl =>
+    wahl.addEventListener('change', () => spracheAendern(wahl)));
 }
 
 async function adminAktion(btn) {
@@ -2690,13 +3476,41 @@ async function adminAktion(btn) {
       await adminLaden();
     } else if (!antwortOk(r)) {
       toast(r.error === 'nicht_selbst'
-        ? 'Der eigene Zugang lässt sich so nicht ändern.'
-        : 'Nicht möglich: ' + r.error, 'err');
+        ? t('err_selbst')
+        : t('err_nicht_moeglich') + r.error, 'err');
       btn.disabled = false;
     }
   } catch (e) {
     toast(verbindungText(e), 'err');
     btn.disabled = false;
+  }
+}
+
+/**
+ * Stellt der Admin die Sprache eines anderen um, merkt der es beim naechsten
+ * Oeffnen — «start» bringt sie mit. Stellt er die eigene um, soll der Schirm
+ * nicht bis dahin warten: dann gilt sie sofort, und der Adminbereich wird neu
+ * gezeichnet, weil sein Text aus t() kommt.
+ */
+async function spracheAendern(wahl) {
+  wahl.disabled = true;
+  const eigene = wahl.dataset.email === (localStorage.getItem('email') || '');
+  try {
+    const r = await post({ action: 'admin_aktion', session: S.session,
+                           email: wahl.dataset.email, was: 'sprache',
+                           sprache: wahl.value });
+    if (r.ok) {
+      if (eigene && spracheSetzen(wahl.value)) adminReiter('benutzer');
+      await adminLaden();
+    } else if (!antwortOk(r)) {
+      toast(r.error === 'spalte_fehlt'
+        ? t('err_spalten_alt') + t('err_setup')
+        : t('err_nicht_moeglich') + r.error, 'err');
+      wahl.disabled = false;
+    }
+  } catch (e) {
+    toast(verbindungText(e), 'err');
+    wahl.disabled = false;
   }
 }
 
@@ -2706,40 +3520,44 @@ async function adminNeu() {
   const name  = $('adm-name').value.trim();
   const email = $('adm-email').value.trim();
   if (!name || !email) {
-    m.textContent = 'Name und E-Mail sind erforderlich.';
+    m.textContent = t('err_b_unvoll');
     m.classList.add('zeigen'); return;
   }
 
   const btn = $('adm-neu');
-  btn.disabled = true; btn.textContent = 'Wird angelegt …';
+  btn.disabled = true; btn.textContent = t('wird_angelegt');
   try {
     const r = await post({
       action: 'admin_neu', session: S.session,
-      name: name, email: email, mail: $('adm-mail').checked
+      name: name, email: email, mail: $('adm-mail').checked,
+      // Schon fuer das Zugangsmail: es ist eine Anleitung, und wer sie nicht
+      // lesen kann, bekommt das Symbol nicht auf den Home-Bildschirm.
+      sprache: $('adm-sprache').value
     });
     if (r.ok) {
       $('adm-name').value = ''; $('adm-email').value = '';
+      $('adm-sprache').value = 'de';
       zeigePwDialog(r);
       await adminLaden();
     } else if (!antwortOk(r)) {
       m.textContent = {
-        existiert:      'Diese E-Mail ist bereits erfasst.',
-        unvollstaendig: 'Name und E-Mail sind erforderlich.'
-      }[r.error] || 'Nicht möglich: ' + r.error;
+        existiert:      t('err_b_da'),
+        unvollstaendig: t('err_b_unvoll')
+      }[r.error] || t('err_nicht_moeglich') + r.error;
       m.classList.add('zeigen');
     }
   } catch (e) {
     m.textContent = verbindungText(e);
     m.classList.add('zeigen');
   } finally {
-    btn.disabled = false; btn.textContent = 'Benutzer anlegen';
+    btn.disabled = false; btn.textContent = t('ad_b_anlegen');
   }
 }
 
 function zeigePwDialog(r) {
   $('pw-hinweis').textContent = $('adm-mail').checked
-    ? 'Das Zugangsmail ist unterwegs.'
-    : 'Es wurde kein Mail verschickt — bitte die Nachricht kopieren.';
+    ? t('dlg_mail_weg')
+    : t('dlg_kein_mail');
   $('pw-wem').textContent  = r.wem || '';
   $('pw-wert').textContent = r.passwort || '';
   $('pw-text').value       = r.text || '';
@@ -2834,11 +3652,11 @@ $('pw-kopieren').addEventListener('click', async () => {
   const feld = $('pw-text');
   try {
     await navigator.clipboard.writeText(feld.value);
-    toast('Nachricht kopiert.', 'ok');
+    toast(t('dlg_kopiert'), 'ok');
   } catch (e) {
     feld.select();                       // aelteres iOS ohne Clipboard-API
     document.execCommand('copy');
-    toast('Nachricht kopiert.', 'ok');
+    toast(t('dlg_kopiert'), 'ok');
   }
 });
 
@@ -2873,6 +3691,10 @@ $('frage-ja').addEventListener('click', () => {
   $('dlg-frage').classList.remove('zeigen');
   if (frage._dann) frage._dann();
 });
+
+// Zuerst die Sprache, dann erst ein Schirm: sonst steht der Anmeldeschirm
+// einen Wimpernschlag lang auf Deutsch und springt danach um.
+spracheAnwenden();
 
 if (!CONFIG.url) {
   // Ohne diese eine Zeile geht gar nichts, und ohne Hinweis sieht es aus

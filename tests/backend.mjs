@@ -1722,6 +1722,139 @@ console.log('\n37) «Verwaltung» heisst jetzt «Einstellungen»');
   }
 }
 
+console.log('\n38) Sprache je Benutzer');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const bl = ss.blaetter.Benutzer, k = ctx.spalten(bl.daten[0]);
+
+  ok('setupAnlegen legt die Spalte an', k.Sprache != null, Object.keys(k).join(','));
+
+  // Ein leeres Feld ist Deutsch, kein Fehler. Eine von Hand gepflegte Tabelle
+  // traegt frueher oder spaeter ein «Deutsch» oder ein «DE » mit Leerzeichen,
+  // und daran darf keine Anmeldung scheitern.
+  ok('leer heisst de', ctx.spracheOk('') === 'de');
+  ok('Unsinn heisst de', ctx.spracheOk('Klingonisch') === 'de');
+  ok('«FR » wird zu fr', ctx.spracheOk(' FR ') === 'fr');
+  ok('«Deutsch» wird zu de', ctx.spracheOk('Deutsch') === 'de');
+  ok('en bleibt en', ctx.spracheOk('en') === 'en');
+
+  // Die Sitzung traegt sie mit, sonst muesste jede Antwort das Blatt lesen.
+  ok('die Sitzung kennt die Sprache', ctx.sitzungPruefen('tokA').sprache === 'de');
+
+  // Umstellen durch den Admin
+  const r = ctx.verteilen({ action: 'admin_aktion', session: 'tokA',
+                            email: 'anna@firma.ch', was: 'sprache', sprache: 'fr' });
+  ok('der Admin darf umstellen', r.ok === true, JSON.stringify(r));
+  ok('und es steht im Blatt', bl.daten[1][k.Sprache] === 'fr',
+     String(bl.daten[1][k.Sprache]));
+  // Ohne das Leeren des Sitzungscaches saehe der Betroffene bis zu einer
+  // Minute lang noch die alte Sprache.
+  ok('die gemerkte Sitzung ist fort', ctx.sitzungPruefen('tokA').sprache === 'fr');
+
+  // «start» bringt sie mit: eine Umstellung wirkt beim naechsten Oeffnen,
+  // nicht erst beim naechsten Anmelden.
+  const st = ctx.verteilen({ action: 'start', session: 'tokA' });
+  ok('«start» traegt die Sprache', st.sprache === 'fr', JSON.stringify(st.sprache));
+
+  // Ein neuer Zugang bekommt die gewaehlte Sprache — und sein Mail auch.
+  const neu = ctx.verteilen({ action: 'admin_neu', session: 'tokA',
+                              name: 'Pierre', email: 'pierre@firma.ch', sprache: 'fr' });
+  ok('der neue Zugang steht auf fr',
+     bl.daten[bl.daten.length - 1][k.Sprache] === 'fr');
+  ok('das Zugangsmail ist franzoesisch', neu.text.indexOf('Bonjour Pierre') === 0,
+     neu.text.slice(0, 40));
+  ok('und nennt Safari trotzdem', neu.text.indexOf('Safari') > 0);
+
+  // Deutsch bleibt, wie es war — daran haengt der Duz-Test.
+  const de = ctx.zugangText('Eva', 'Pass1234');
+  ok('deutsch unveraendert', de.indexOf('Guten Tag Eva') === 0, de.slice(0, 30));
+  ok('englisch gibt es auch',
+     ctx.zugangText('Eve', 'x', 'en').indexOf('Hello Eve') === 0);
+}
+
+console.log('\n39) Drei Sprachen, dieselben Schluessel');
+{
+  const roh = fs.readFileSync('index.html', 'utf8');
+  const a = roh.indexOf('const TEXTE = {');
+  const b = roh.indexOf('\n};\n', a) + 2;   // bis zur schliessenden Klammer, ohne «;»
+  // Reines Literal — auswerten statt mit einem Muster zerlegen: ein Muster
+  // haette seine eigenen Fehler, und die suchte man dann hier statt dort.
+  const TEXTE = eval('(' + roh.slice(a + 'const TEXTE = '.length, b) + ')');
+
+  const de = Object.keys(TEXTE.de);
+  ok('es sind ueberhaupt welche da', de.length > 150, de.length + ' Schluessel');
+
+  // Kein stiller Rueckfall: fehlt ein Schluessel in en oder fr, stuende dort
+  // die Kennung in spitzen Klammern. Das faellt auf — aber erst im Betrieb.
+  for (const s of ['en', 'fr']) {
+    const fehlend = de.filter(k => !(k in TEXTE[s]));
+    const zuviel  = Object.keys(TEXTE[s]).filter(k => !(k in TEXTE.de));
+    ok(s + ' hat jeden Schluessel', fehlend.length === 0, fehlend.join(', '));
+    ok(s + ' hat keinen zuviel', zuviel.length === 0, zuviel.join(', '));
+  }
+
+  // Leere Uebersetzungen sind schlimmer als fehlende: sie fallen nicht auf.
+  for (const s of ['de', 'en', 'fr']) {
+    const leer = Object.keys(TEXTE[s]).filter(k => !String(TEXTE[s][k]).trim());
+    ok(s + ' hat keine leeren Werte', leer.length === 0, leer.join(', '));
+  }
+
+  // Jeder benutzte Schluessel muss es geben, und jeder vorhandene benutzt
+  // werden — sonst waechst die Tabelle um Text, den niemand mehr sieht.
+  const benutzt = new Set();
+  for (const m of roh.matchAll(/\bt\('([a-z0-9_]+)'\)/g)) benutzt.add(m[1]);
+  for (const m of roh.matchAll(/data-t(?:-(?:ph|al|ti|alt))?="([a-z0-9_]+)"/g)) benutzt.add(m[1]);
+  // Die beiden Tabellen auf Modulebene halten Schluessel statt Text.
+  for (const m of roh.matchAll(/^\s+\w+:\s+'([a-z0-9_]+)',?$/gm)) {
+    if (m[1] in TEXTE.de) benutzt.add(m[1]);
+  }
+  const unbekannt = [...benutzt].filter(k => !(k in TEXTE.de));
+  ok('jeder benutzte Schluessel steht in der Tabelle', unbekannt.length === 0,
+     unbekannt.join(', '));
+  const tot = de.filter(k => !benutzt.has(k));
+  ok('kein Schluessel liegt ungenutzt herum', tot.length === 0, tot.join(', '));
+}
+
+console.log('\n40) Nichts steht mehr fest auf Deutsch');
+{
+  // Wie 28): Kommentare weg, sonst schlaegt es dort an, wo erklaert wird.
+  // Zusaetzlich die Tabelle selbst und die Konsolenzeilen — die eine IST das
+  // Deutsch, die anderen liest ein Entwickler und kein Erfasser.
+  const roh = fs.readFileSync('index.html', 'utf8');
+  const nachTabelle = roh.slice(roh.indexOf('\n};\n', roh.indexOf('const TEXTE = {')) + 4);
+  // Ganze Konsolenaufrufe raus, nicht nur ihre erste Zeile: sie gehen ueber
+  // mehrere Zeilen, und die Fortsetzung sah sonst aus wie Bildschirmtext.
+  const js = nachTabelle
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map(z => z.replace(/(^|[^:])\/\/.*$/, '$1')).join('\n')
+    .replace(/console\.\w+\([\s\S]*?\);/g, '');
+
+  // Was der Server als Fehlermarke schickt, ist Protokoll und keine Prosa:
+  // diese Zeichenketten stehen so im Skript und werden verglichen, nicht
+  // angezeigt. Uebersetzt wuerden sie den Vergleich brechen.
+  const MARKEN = ['keine Berechtigung', 'unbekannte Aktion'];
+
+  // Ein deutsches Wort mit grossem Anfang und einem Leerzeichen daneben: so
+  // sieht ein Satz fuer den Bildschirm aus. Fehlermarken des Servers
+  // («keine Berechtigung») fangen klein an und bleiben aussen vor.
+  const saetze = [];
+  for (const m of js.matchAll(/'((?:[^'\\]|\\.)*)'/g)) {
+    const s = m[1];
+    if (MARKEN.indexOf(s) >= 0) continue;
+    if (/[A-ZÄÖÜ][a-zäöüß]{2,}/.test(s) && s.trim().indexOf(' ') > 0) saetze.push(s);
+  }
+  ok('kein deutscher Satz mehr fest im Code', saetze.length === 0,
+     saetze.slice(0, 3).map(s => JSON.stringify(s.slice(0, 60))).join(' | '));
+  ok('und die Pruefung wuerde einen finden',
+     /'[A-ZÄÖÜ][a-zäöüß]{2,}[^']* [^']*'/.test(js + "\n x = 'Bitte melde dich an.';"));
+
+  // Der Excel-Bogen bleibt deutsch: daran haengt die Vorlage.
+  const gas = fs.readFileSync('apps-script/Code.gs', 'utf8');
+  ok('die CSV-Spalten sind unveraendert deutsch',
+     gas.includes("'Artikel'") && gas.includes("'Lieferant'") && gas.includes("'Regalplatz'"));
+}
+
 console.log('\n' + '='.repeat(46));
 console.log(pass + ' bestanden, ' + fail + ' gescheitert');
 process.exit(fail ? 1 : 0);

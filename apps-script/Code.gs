@@ -59,6 +59,23 @@ const T = {
   parameter:   'Parameter'
 };
 
+/**
+ * Die Sprachen der App. Der Excel-Bogen und die CSV bleiben davon
+ * unberuehrt — sie sind ein Dokument fuer den Kunden, kein Bildschirm fuer
+ * den Erfasser, und stehen immer auf Deutsch.
+ *
+ * Ein unbekannter Wert im Blatt wird zu «de» statt zu einem Fehler: eine
+ * Tabelle, die von Hand gepflegt wird, traegt frueher oder spaeter ein
+ * «Deutsch» oder ein «DE » mit Leerzeichen, und daran darf keine Anmeldung
+ * scheitern.
+ */
+const SPRACHEN = ['de', 'en', 'fr'];
+
+function spracheOk(wert) {
+  const s = String(wert || '').trim().toLowerCase().slice(0, 2);
+  return SPRACHEN.indexOf(s) >= 0 ? s : 'de';
+}
+
 const ZEITZONE       = 'Europe/Zurich';
 const SITZUNG_TAGE   = 30;   // Gueltigkeit einer Anmeldung
 const MAX_FEHLER     = 5;    // danach Sperre
@@ -261,6 +278,7 @@ function login(d) {
       session: sitzungAnlegen(email),
       name: String(dat[i][k.Name] || ''),
       rolle: String(dat[i][k.Rolle] || ''),
+      sprache: spracheOk(dat[i][k.Sprache]),
       pwGeaendert: pwGeaendert
     };
 
@@ -271,7 +289,7 @@ function login(d) {
     // verteilen() laesst ihn bis dahin an keine andere Aktion.
     if (pwGeaendert) {
       const u = { email: email, name: antwort.name, rolle: antwort.rolle,
-                  pwGeaendert: true, zeile: zeile };
+                  sprache: antwort.sprache, pwGeaendert: true, zeile: zeile };
       // d traegt «alle» mit, falls der Admin die Ansicht eingeschaltet hat —
       // sonst kaeme hier die kurze Liste zurueck und wuerde als die ganze
       // angezeigt und gemerkt.
@@ -438,6 +456,10 @@ function sitzungPruefen(token) {
       email: email,
       name: String(bd[i][k.Name] || ''),
       rolle: String(bd[i][k.Rolle] || ''),
+      // Fehlt die Spalte noch, ist der Wert undefined und spracheOk macht
+      // «de» daraus — eine halb eingespielte Tabelle meldet sich nicht mit
+      // einem Fehler, sondern mit Deutsch.
+      sprache: spracheOk(bd[i][k.Sprache]),
       pwGeaendert: String(bd[i][k.PwGeaendert]).toLowerCase() === 'true',
       zeile: i + 1
     };
@@ -582,7 +604,12 @@ function startDaten(d, u) {
   const liste = weListe(d, u, daten[T.we]);
   if (!liste.ok) return liste;
   // Dieselbe Quelle wie «stammdaten» — nicht dieselben Zeilen noch einmal.
-  return Object.assign({ ok: true, liste: liste.liste }, stammdatenAus(daten));
+  //
+  // Die Sprache kommt mit: stellt der Admin sie um, gilt das beim naechsten
+  // Oeffnen und nicht erst beim naechsten Anmelden. Gelesen ist die Zeile
+  // ohnehin — sitzungPruefen hat sie gerade in der Hand gehabt.
+  return Object.assign({ ok: true, liste: liste.liste, sprache: u.sprache },
+                       stammdatenAus(daten));
 }
 
 function listeAktiv(name, vorab) {
@@ -1408,6 +1435,7 @@ function adminListe() {
       aktiv: String(dat[i][k.Aktiv]).toLowerCase() !== 'false',
       admin: String(dat[i][k.Rolle] || '') === 'admin',
       neu: String(dat[i][k.PwGeaendert]).toLowerCase() !== 'true',
+      sprache: spracheOk(dat[i][k.Sprache]),
       gesperrt: !!(dat[i][k.GesperrtBis] && new Date(dat[i][k.GesperrtBis]) > new Date())
     });
   }
@@ -1556,10 +1584,14 @@ function adminNeu(d, u) {
   z[k.Fehler]      = 0;
   z[k.PwGeaendert] = false;
   z[k.Rolle]       = '';
+  // Eine Tabelle ohne die Spalte bekommt hier nichts untergeschoben; beim
+  // Lesen macht spracheOk dann ohnehin «de» daraus.
+  if (k.Sprache != null) z[k.Sprache] = spracheOk(d.sprache);
   bl.appendRow(z);
 
-  const text = zugangText(name, pass);
-  if (d.mail) MailApp.sendEmail(email, 'Zugang Wareneingang', text);
+  const sprache = spracheOk(d.sprache);
+  const text = zugangText(name, pass, sprache);
+  if (d.mail) MailApp.sendEmail(email, ZUGANG_BETREFF[sprache].neu, text);
   return { ok: true, passwort: pass, text: text, wem: name + ' <' + email + '>' };
 }
 
@@ -1600,6 +1632,14 @@ function adminAktion(d, u) {
       bl.getRange(zeile, k.Rolle + 1).setValue('');
       sitzungCacheLeeren(email);
       return { ok: true };
+    // Die Sprache steht in der gemerkten Sitzung — ohne das Leeren saehe
+    // der Betroffene bis zu einer Minute lang noch die alte.
+    case 'sprache': {
+      if (k.Sprache == null) return { ok: false, error: 'spalte_fehlt' };
+      bl.getRange(zeile, k.Sprache + 1).setValue(spracheOk(d.sprache));
+      sitzungCacheLeeren(email);
+      return { ok: true };
+    }
     case 'passwort': {
       const pass = zufall(10);
       const salt = zufall(16);
@@ -1610,8 +1650,9 @@ function adminAktion(d, u) {
       bl.getRange(zeile, k.GesperrtBis + 1).setValue('');
       sitzungenLoeschen(email);
       const name = String(dat[i][k.Name] || '');
-      const text = zugangText(name, pass);
-      if (d.mail) MailApp.sendEmail(email, 'Neues Passwort Wareneingang', text);
+      const sprache = spracheOk(dat[i][k.Sprache]);
+      const text = zugangText(name, pass, sprache);
+      if (d.mail) MailApp.sendEmail(email, ZUGANG_BETREFF[sprache].pass, text);
       return { ok: true, passwort: pass, text: text, wem: name + ' <' + email + '>' };
     }
   }
@@ -1700,13 +1741,28 @@ function ordnerName(id) {
  * und dort gibt es «Zum Home-Bildschirm» gar nicht — der Empfaenger kommt
  * bis zur Anmeldung und danach nicht weiter, ohne zu wissen warum.
  */
-function zugangText(name, pass) {
-  return [
+/**
+ * Das Zugangsmail in der Sprache des Empfaengers. Es ist keine Zierde,
+ * sondern eine Anleitung: wer sie nicht lesen kann, bekommt das Symbol
+ * nicht auf den Home-Bildschirm. Der Excel-Bogen bleibt deutsch, dieses
+ * Mail nicht.
+ *
+ * Die Betreffzeile steht daneben, in derselben Tabelle — ein deutscher
+ * Betreff ueber einem franzoesischen Text waere eine halbe Uebersetzung.
+ */
+const ZUGANG_BETREFF = {
+  de: { neu: 'Zugang Wareneingang',   pass: 'Neues Passwort Wareneingang' },
+  en: { neu: 'Goods receipt access',  pass: 'New password for goods receipt' },
+  fr: { neu: 'Accès Réception',       pass: 'Nouveau mot de passe Réception' }
+};
+
+const ZUGANG_TEXT = {
+  de: (name, pass, adresse) => [
     'Guten Tag ' + name,
     '',
     'Der Wareneingang wird neu direkt am Gerät erfasst.',
     '',
-    'Adresse:  ' + eigenschaft('PWA_URL'),
+    'Adresse:  ' + adresse,
     'Passwort: ' + pass,
     '',
     'WICHTIG: Die Adresse bitte ausschliesslich mit Safari öffnen.',
@@ -1730,7 +1786,73 @@ function zugangText(name, pass) {
     'über dieses Symbol, nicht mehr über den Browser.',
     '',
     'Freundliche Grüsse'
-  ].join('\n');
+  ],
+  en: (name, pass, adresse) => [
+    'Hello ' + name,
+    '',
+    'Goods receipt is now recorded directly on the device.',
+    '',
+    'Address:  ' + adresse,
+    'Password: ' + pass,
+    '',
+    'IMPORTANT: please open the address in Safari only.',
+    '',
+    'Do not tap the link here in the mail. Many mail apps open it in a',
+    'window of their own, and there the icon cannot be added to the home',
+    'screen. Instead:',
+    '',
+    '  1. Select and copy the address above',
+    '  2. Open Safari',
+    '  3. Paste the address into the bar at the top and open it',
+    '',
+    'Every browser remembers the sign-in for itself. If you sign in with a',
+    'different browser, you have to do it again in Safari.',
+    '',
+    'The first time you choose a password of your own — the one above is',
+    'valid only until then.',
+    '',
+    'Icon on the home screen: in Safari tap «Share» at the bottom, then',
+    '«Add to Home Screen». From then on open goods receipt through that',
+    'icon, no longer through the browser.',
+    '',
+    'Kind regards'
+  ],
+  fr: (name, pass, adresse) => [
+    'Bonjour ' + name,
+    '',
+    'La réception de marchandises se saisit désormais directement sur',
+    "l'appareil.",
+    '',
+    'Adresse :      ' + adresse,
+    'Mot de passe : ' + pass,
+    '',
+    "IMPORTANT : ouvre l'adresse uniquement avec Safari.",
+    '',
+    "N'appuie pas sur le lien ici dans le courriel. Beaucoup de messageries",
+    "l'ouvrent dans leur propre fenêtre, et là il est impossible d'ajouter",
+    "l'icône à l'écran d'accueil. À la place :",
+    '',
+    "  1. Sélectionne et copie l'adresse ci-dessus",
+    '  2. Ouvre Safari',
+    "  3. Colle l'adresse dans la barre du haut et ouvre-la",
+    '',
+    'Chaque navigateur retient la connexion pour lui seul. Si tu te',
+    "connectes avec un autre navigateur, il faudra recommencer dans Safari.",
+    '',
+    'La première fois, tu choisis ton propre mot de passe — celui ci-dessus',
+    "ne vaut que jusque-là.",
+    '',
+    "Icône sur l'écran d'accueil : dans Safari, appuie en bas sur",
+    "« Partager », puis « Sur l'écran d'accueil ». Ensuite, ouvre la",
+    "réception toujours par cette icône, plus par le navigateur.",
+    '',
+    'Cordialement'
+  ]
+};
+
+function zugangText(name, pass, sprache) {
+  const s = spracheOk(sprache);
+  return ZUGANG_TEXT[s](name, pass, eigenschaft('PWA_URL')).join('\n');
 }
 
 /* ============================================================
@@ -1968,7 +2090,8 @@ function setupAnlegen() {
   plan[T.kontakte]    = ['Name', 'Email', 'Aktiv'];
   plan[T.lieferanten] = ['Name', 'Aktiv', 'Sortierung'];
   plan[T.benutzer]    = ['Email', 'Name', 'PassHash', 'Salt', 'Aktiv', 'Fehler',
-                         'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle'];
+                         'GesperrtBis', 'LetzterLogin', 'PwGeaendert', 'Rolle',
+                         'Sprache'];
   plan[T.sessions]    = ['Token', 'Email', 'GueltigBis'];
   plan[T.parameter]   = ['Schluessel', 'Wert', 'GueltigAb'];
 
@@ -2393,8 +2516,9 @@ function zugangVerschicken() {
     bl.getRange(i + 1, k.Fehler + 1).setValue(0);
     bl.getRange(i + 1, k.PwGeaendert + 1).setValue(false);
 
-    MailApp.sendEmail(email, 'Zugang Wareneingang',
-      zugangText(String(dat[i][k.Name] || ''), pass));
+    const sprache = spracheOk(dat[i][k.Sprache]);
+    MailApp.sendEmail(email, ZUGANG_BETREFF[sprache].neu,
+      zugangText(String(dat[i][k.Name] || ''), pass, sprache));
     n++;
   }
   return n + ' Zugang/Zugaenge verschickt';

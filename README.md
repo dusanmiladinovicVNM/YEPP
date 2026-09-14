@@ -97,7 +97,7 @@ Nastaju ovi, sa ovim kolonama:
 | `Kunden` | `Name` `Aktiv` `Sortierung` `EmailHaupt` `EmailVertretung` |
 | `Kontakte` | `Name` `Email` `Aktiv` |
 | `Lieferanten` | `Name` `Aktiv` `Sortierung` |
-| `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` |
+| `Benutzer` | `Email` `Name` `PassHash` `Salt` `Aktiv` `Fehler` `GesperrtBis` `LetzterLogin` `PwGeaendert` `Rolle` `Sprache` |
 | `Sessions` | `Token` `Email` `GueltigBis` |
 | `Parameter` | `Schluessel` `Wert` `GueltigAb` |
 
@@ -486,7 +486,7 @@ otvaraju najčešće.
 
 | Oblast | Šta je unutra |
 |---|---|
-| **Benutzer** | novi nalog i spisak postojećih |
+| **Benutzer** | novi nalog, spisak postojećih, i **jezik po korisniku** |
 | **Kunden** | kupci sa Haupt/Stellvertretung — i **Kontakte**, adresar iz kog kupci biraju |
 | **Verwalter** | `MailAn` — adresa koja uskače kad kod kupca nema nijedne |
 | **Speicherorte** | tri Drive foldera |
@@ -611,6 +611,65 @@ prolazi kroz istu proveru role iz sesije. To što dugme kod običnog
 korisnika nije vidljivo nije zaštita — klijent može poslati bilo šta.
 
 ---
+
+## Tri jezika
+
+**Jezik stoji uz korisnika, ne uz uređaj.** U listu `Benutzer` kolona
+`Sprache` nosi `de`, `en` ili `fr`; admin je bira iz padajuće liste u
+**Einstellungen → Benutzer**, i pri otvaranju novog naloga.
+
+Prazna ćelija znači `de`. Isto i besmislica: ručno održavana tabela pre ili
+kasnije nosi `Deutsch` ili `DE ` sa razmakom, i nijedna prijava ne sme na
+tome da padne.
+
+| gde | šta se menja |
+|---|---|
+| aplikacija | **sve** — natpisi, poruke, dijalozi |
+| pristupni mejl i „nova lozinka" | **da** — to je uputstvo; ko ga ne pročita, ne stavi ikonicu na home screen |
+| **Excel i CSV** | **ne, nikad** — dokument za kupca, ne ekran za onoga ko unosi |
+
+Poslednji red je važan: zaglavlja u `CSV_SPALTEN` i u `.xlsm` šablonu su
+**ugovor**. Da se pomere, Power Query upit puca. Test to i zakiva.
+
+### Kako je napravljeno
+
+Jedna tabela `TEXTE` sa tri bloka i **jednim ključem po rečenici**. Bez
+biblioteke.
+
+```js
+function t(schluessel) {
+  const tab = TEXTE[S.sprache] || TEXTE.de;
+  return schluessel in tab ? tab[schluessel] : '⟨' + schluessel + '⟩';
+}
+```
+
+**Nema tihog povratka na nemački.** Ako ključ fali, na ekranu stoji
+`⟨kljuc⟩` — vidi se. Tihi fallback bi bio gori: pola ekrana na nemačkom ne
+primeti niko ko nemačku verziju ionako zna, a baš on proverava prevod.
+
+Statički natpisi nose `data-t` (i `data-t-ph`, `-al`, `-ti`, `-alt`) i
+prepisuju se pri promeni jezika. Ono što aplikacija sama crta — pozicije,
+lista, detalj — uzima tekst iz `t()` pri sledećem crtanju. Dva puta koja
+rade istu stvar razišla bi se pre ili kasnije.
+
+**Dve tabele na nivou modula drže ključeve, ne tekst** (`ARBEIT_TEXT`,
+`PAR_LEER`). One se izvršavaju jednom, pri učitavanju — sa jezikom sa kojim
+je stranica startovala. Da drže gotov tekst, natpis „wird gespeichert" bi
+posle prijave ostao nemački.
+
+Gde je u formularu stajalo dva jezika sa kosom crtom (`Kunde / Client`), sada
+stoji jedan — baš zato izbor i postoji. **Na nemačkom kosa crta ostaje**, jer
+tamo pored ekrana leži papirni obrazac i njegovi natpisi treba da se
+prepoznaju.
+
+Konzolne poruke ostaju nemačke: njih čita onaj ko je postavljao skriptu, ne
+magacioner.
+
+### Šta ovo zahteva
+
+Postojeća instalacija mora jednom da pokrene **`setupAnlegen`** — dodaje
+kolonu `Sprache` na kraj lista `Benutzer`. Dok je nema, sve radi i svi vide
+nemački; `spracheOk()` od `undefined` pravi `de`.
 
 ## Brzina
 
@@ -918,6 +977,11 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 21 | Admin zalepi celu Drive adresu u polje za folder | sačuva se ID, ispod stoji ime foldera |
 | 22 | Admin upiše `lager.firma.ch` bez `@` | odbijeno, stari unos ostaje |
 | 23 | Novi korisnik iz Einstellungen, sa čekiranim mejlom | mejl stiže, lozinka se vidi jednom |
+| 23i | Postaviti kolegi `fr`, pa da se on prijavi | ceo ekran francuski, Excel i dalje nemački |
+| 23j | Postaviti sebi `en`, bez osvežavanja | ekran se menja odmah |
+| 23k | Nov nalog sa `fr` i čekiranim mejlom | mejl stiže na francuskom, i dalje pominje Safari |
+| 23l | Prijaviti se kao `fr`, pa se odjaviti | ekran za prijavu ostaje francuski |
+| 23m | Upisati `Klingonisch` u kolonu `Sprache` | prijava prolazi, ekran nemački |
 | 23f | Otvoriti Einstellungen | stoji `Benutzer`, ostale tri oblasti se ne vide |
 | 23g | Upisati `MailAn` u `Verwalter`, preći u `Speicherorte`, snimiti tamo | i adresa je sačuvana |
 | 23h | Chipovi na 390 px | sva četiri staju ili se prelamaju, strana se ne širi |
