@@ -350,9 +350,16 @@ def main():
     # Und der Kopf sagt dasselbe, damit man nicht erst suchen muss.
     kopfzeilen = m_text.split('// ============ ')[0]
     ok('der Kopf schickt zu einrichtungPruefen()',
-       'einrichtungPruefen()' in kopfzeilen and 'fertig hin' in kopfzeilen)
-    ok('und sagt, dass nichts von Hand zusammenzusetzen ist',
-       'von Hand zusammensetzen muss man nichts' in kopfzeilen)
+       'einrichtungPruefen()' in kopfzeilen and 'fertig aus' in kopfzeilen)
+    # Warum die Adresse nicht als ein Stueck dasteht, muss im Kopf stehen:
+    # sonst setzt der naechste sie beim Aufraeumen wieder zusammen und die
+    # 404 aus dem Betrieb ist zurueck.
+    ok('und erklaert, warum die Adresse geteilt ist',
+       '404' in kopfzeilen and 'weiter' in kopfzeilen)
+
+    # Die drei Griffe gegen die Weiterleitung muessen im Block «Daten» stehen.
+    for stueck in ('Query   = [ token = Token', 'IsRetry = true', 'Binary.Buffer('):
+       ok(f'«{stueck[:20]}…» steht in «Daten»', stueck in bloecke.get('Daten', ''))
     ok('der Kopf sagt, dass Nummern und Liste keine bekommen',
        'keine Adresse' in kopfzeilen)
 

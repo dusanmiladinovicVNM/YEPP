@@ -2268,32 +2268,34 @@ function einrichtungPruefen() {
 
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {
-    // Die ganze Adresse, nicht die Haelfte. Sie von Hand zusammenzusetzen
-    // war der letzte Handgriff am Vorlagenbau, den niemand pruefen konnte:
-    // ein vertippter Buchstabe faellt erst auf, wenn Power Query nichts
-    // findet — und dann sucht man ihn im M-Code statt in der Adresse.
+    // Zwei Zeilen, fertig zum Einfuegen — genau die beiden, die im Block
+    // «Daten» stehen. Von Hand zusammensetzen muss man nichts.
     //
-    // getUrl() gibt die Adresse der Bereitstellung. Aus dem Editor heraus
-    // kann das die /dev-Adresse sein; die gilt nur fuer den Angemeldeten und
-    // waere in der Vorlage wertlos. Darum wird sie nicht stillschweigend
-    // eingesetzt, sondern benannt.
+    // Die Adresse steht im M-Code NICHT als ein Stueck mit Fragezeichen:
+    // Apps Script beantwortet /exec mit einer Weiterleitung, und diese
+    // zweite Adresse gilt einmal und kurz. Power Query merkt sich die
+    // aufgeloeste und greift ein zweites Mal danach — dann 404. Darum
+    // /exec als Quelle und die Parameter getrennt.
+    //
+    // getUrl() gibt aus dem Editor heraus manchmal die /dev-Adresse. Die
+    // gilt nur fuer den Angemeldeten und waere in einer Vorlage auf
+    // SharePoint wertlos — sie wird darum benannt, nicht eingesetzt.
     let adresse = '';
     try { adresse = String(ScriptApp.getService().getUrl() || ''); } catch (e) { adresse = ''; }
-    const schwanz = '?token=' + token + '&format=csv&tage=365';
 
+    zeilen.push('CSV fuer die Vorlage — diese zwei Zeilen in den Block «Daten»:');
     if (adresse.slice(-5) === '/exec') {
-      zeilen.push('CSV fuer die Vorlage — fertig zum Einfuegen:');
-      zeilen.push(adresse + schwanz);
+      zeilen.push('    Basis = "' + adresse + '",');
     } else if (adresse) {
-      zeilen.push('ACHTUNG: die Adresse endet nicht auf /exec, sondern:');
+      zeilen.push('    Basis = "<Web-App-URL>",     <-- NICHT die Adresse unten!');
+      zeilen.push('ACHTUNG: getUrl() gab eine Adresse, die nicht auf /exec endet:');
       zeilen.push('  ' + adresse);
       zeilen.push('Diese gilt nur fuer dich. Die richtige steht unter');
-      zeilen.push('Bereitstellen → Bereitstellungen verwalten. Daran haengen:');
-      zeilen.push('  <Web-App-URL>' + schwanz);
+      zeilen.push('Bereitstellen -> Bereitstellungen verwalten.');
     } else {
-      zeilen.push('Noch keine Bereitstellung. Danach steht hier die fertige');
-      zeilen.push('Adresse. Bis dahin: <Web-App-URL>' + schwanz);
+      zeilen.push('    Basis = "<Web-App-URL>",     <-- noch keine Bereitstellung');
     }
+    zeilen.push('    Token = "' + token + '",');
   }
 
   const text = zeilen.join('\n');

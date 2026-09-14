@@ -44,7 +44,28 @@ Bez ponovnog osvežavanja, bez čekanja.
 
 `TOKEN_READ` stoji u **skripteigenschaften** Apps Script projekta, ne u kodu.
 Pokreni `einrichtungPruefen()` u editoru — pod **„CSV fuer die Vorlage"**
-stoji **cela adresa, gotova za lepljenje**, sa adresom i tokenom.
+stoje **dva gotova reda** za blok `Daten`.
+
+**Adresa namerno ne stoji kao jedan niz sa upitnikom.** Apps Script na
+`/exec` odgovara **preusmerenjem** na
+`script.googleusercontent.com/macros/echo?user_content_key=…`, a ta druga
+adresa važi **jednom i kratko**. Power Query izraz izračunava više puta —
+pregled, prepoznavanje tipova, učitavanje — i pamti **razrešenu** adresu;
+drugi put je više ne nalazi:
+
+```
+[DataSource.Error] Fehler beim Abrufen von Inhalten von
+"https://script.googleusercontent.com/macros/echo?user_content_key=…"
+(404) durch "Web.Contents": Not Found
+```
+
+Zato blok `Daten` nosi tri stvari koje to sprečavaju:
+
+| | zašto |
+|---|---|
+| `Query = [ token = …, format = "csv", tage = "365" ]` | izvor je `/exec`, parametri se dodaju pri svakom pozivu — ne pamti se razrešena adresa |
+| `IsRetry = true` | Power Query zaobilazi sopstvenu ostavu odgovora |
+| `Binary.Buffer(…)` | odgovor se čita **jednom, ceo**; razlaganje teksta posle toga ide iz memorije |
 
 Ako umesto toga piše `ACHTUNG: die Adresse endet nicht auf /exec`, izveštaj
 je dobio `/dev` adresu — ona važi samo za tebe i u šablonu je bezvredna.
@@ -172,9 +193,12 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. zameni **jedan jedini** niz — postoji **samo u bloku `Daten`**:
-   `<Web-App-URL>?token=<TOKEN_READ>&format=csv&tage=365` u celini,
-   gotovom adresom koju ispisuje **`einrichtungPruefen()`**.
+3. zameni **dva reda** — postoje **samo u bloku `Daten`** — onima koje
+   ispisuje **`einrichtungPruefen()`**:
+   ```m
+   Basis = "<Web-App-URL>",
+   Token = "<TOKEN_READ>",
+   ```
    `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje
