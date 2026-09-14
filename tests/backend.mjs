@@ -76,7 +76,7 @@ console.log('\n3) Erfassen');
   ok('zweite Zeile ist die dritte Eingabe', p.daten[2][pk.Artikel] === 'Kartonage');
   ok('Bestehend als Boolean', p.daten[1][pk.Bestehend] === true);
   ok('Bemerkung in der Position', p.daten[2][pk.Bemerkung] === 'Ecke gedrückt');
-  ok('leeres kg bleibt leer', p.daten[2][pk.KG] === '');
+  ok('kg in der Position', p.daten[2][pk.KG] === 12.5, String(p.daten[2][pk.KG]));
 
   // Der Erfasser quittiert nur, was er selbst getan hat.
   ctx.weSpeichern({ kunde: 'K', positionen: POS,
@@ -95,7 +95,7 @@ console.log('\n3) Erfassen');
 
   // Regalplatznr. traegt jetzt auch der Erfasser ein, nicht erst das zweite Team
   ctx.weSpeichern({ kunde: 'K', positionen: [
-    { artikel: 'Direkt ins Regal', anzahl: 1, kg: '', mhd: '',
+    { artikel: 'Direkt ins Regal', anzahl: 1, kg: 5, mhd: '',
       regalplatz: 'A-01', bemerkung: '', bestehend: false }] }, u);
   ok('Regalplatz schon beim Erfassen',
      p.daten[p.daten.length - 1][pk.Regalplatz] === 'A-01',
@@ -564,7 +564,7 @@ console.log('\n14) Doppelte Erfassung');
   ctx.weSpeichern({ kunde: 'K', lagerM2: '12,5', vorgang: 'v-komma', positionen: [
     { artikel: 'Mit Komma', anzahl: '3,4', kg: ' 1,25 ', mhd: '', bemerkung: '',
       bestehend: false },
-    { artikel: 'Unsinn', anzahl: 'viele', kg: '', mhd: '', bemerkung: '',
+    { artikel: 'Unsinn', anzahl: 'viele', kg: 2, mhd: '', bemerkung: '',
       bestehend: false }] }, u);
   const k = ctx.spalten(w.daten[0]);
   const p = ss.blaetter.Positionen, pk = ctx.spalten(p.daten[0]);
@@ -1316,8 +1316,8 @@ console.log('\n26) Ein Foto je Position');
   const bild = n => 'data:image/jpeg;base64,' + Buffer.from('bild' + n).toString('base64');
 
   const weNr = ctx.weSpeichern({ kunde: 'K', positionen: [
-    { artikel: 'Schrauben M6', anzahl: 1, bild: bild(1) },
-    { artikel: 'Kartonage',    anzahl: 2 }
+    { artikel: 'Schrauben M6', anzahl: 1, kg: 1, bild: bild(1) },
+    { artikel: 'Kartonage',    anzahl: 2, kg: 2 }
   ] }, u).weNr;
 
   // Der Dateiname ist die Artikelbezeichnung, so verlangt
@@ -1372,7 +1372,7 @@ console.log('\n27) Eine Tabelle ohne die neue Spalte bricht nicht');
   ss.blaetter.Parameter.appendRow(['FotoOrdner', 'ordner-id', '']);
 
   const weNr = ctx.weSpeichern({ kunde: 'K', positionen: [
-    { artikel: 'Schrauben M6', anzahl: 1,
+    { artikel: 'Schrauben M6', anzahl: 1, kg: 1,
       bild: 'data:image/jpeg;base64,' + Buffer.from('x').toString('base64') }
   ] }, u).weNr;
   ok('gespeichert wird trotzdem', !!weNr);
@@ -1620,6 +1620,76 @@ console.log('\n34) «&tage=» schneidet wirklich ab');
   const csv = ctx.csvExport({ tage: 365 });
   ok('ein alter Eintrag im US-Format faellt heraus',
      csv.indexOf(alt_) < 0, csv.split('\n')[1]);
+}
+
+console.log('\n35) kg ist Pflicht — ausser bei «Bestehend»');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+  const p = ss.blaetter.Positionen;
+
+  const ohne = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Neue Ware', anzahl: 3, kg: '', mhd: '', bemerkung: '',
+      bestehend: false }] }, u);
+  ok('ohne kg abgewiesen', ohne.error === 'kg_fehlt', JSON.stringify(ohne));
+  ok('und die Meldung nennt den Artikel', ohne.artikel === 'Neue Ware');
+  ok('nichts geschrieben', p.daten.length === 1, p.daten.length + ' Zeilen');
+
+  // «Bestehend» heisst: die Ware liegt schon im Lager und wird nicht noch
+  // einmal gewogen. Und leer bleibt leer — nicht Null, die waere eine Aussage.
+  const mit = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Schon da', anzahl: 3, kg: '', mhd: '', bemerkung: '',
+      bestehend: true }] }, u);
+  ok('mit «Bestehend» geht es durch', mit.ok === true, JSON.stringify(mit));
+  const pk = ctx.spalten(p.daten[0]);
+  ok('leeres kg bleibt leer, nicht Null', p.daten[1][pk.KG] === '',
+     JSON.stringify(p.daten[1][pk.KG]));
+
+  // Eine leere Formularzeile bleibt eine leere Formularzeile: sie faellt
+  // weg, statt an der kg-Pflicht haengenzubleiben.
+  const gemischt = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Mit kg', anzahl: 1, kg: 4, mhd: '', bemerkung: '', bestehend: false },
+    { artikel: '', anzahl: '', kg: '', mhd: '', bemerkung: '', bestehend: false }] }, u);
+  ok('die leere Zeile stoert nicht', gemischt.ok === true, JSON.stringify(gemischt));
+
+  // Null ist eine Zahl und damit eine Angabe — sie darf nicht als «fehlt» gelten.
+  const null_kg = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Nullgewicht', anzahl: 1, kg: 0, mhd: '', bemerkung: '',
+      bestehend: false }] }, u);
+  ok('kg = 0 ist eine Angabe', null_kg.ok === true, JSON.stringify(null_kg));
+}
+
+console.log('\n36) Dieselbe Ware in zwei Chargen');
+{
+  const ss = neueTabelle(), ctx = laden(ss);
+  const u = mitBenutzer(ctx, ss);
+
+  // Zwei Chargen derselben Ware sind zwei Zeilen. Nichts darf sie nach der
+  // Bezeichnung zusammenlegen — im Excel stehen sie genauso untereinander.
+  const weNr = ctx.weSpeichern({ kunde: 'K', positionen: [
+    { artikel: 'Joghurt 500g', anzahl: 60, kg: 30, mhd: '01.10.2026',
+      regalplatz: 'B-04', bemerkung: 'Palette 1', bestehend: false },
+    { artikel: 'Joghurt 500g', anzahl: 40, kg: 20, mhd: '01.02.2027',
+      regalplatz: 'B-04', bemerkung: 'Palette 1', bestehend: false }] }, u).weNr;
+
+  const pos = ctx.positionenLesen(weNr);
+  ok('zwei Zeilen, nicht eine', pos.length === 2, pos.length + ' Zeilen');
+  ok('fortlaufend nummeriert', pos[0].nr === 1 && pos[1].nr === 2,
+     pos[0].nr + '/' + pos[1].nr);
+  ok('dieselbe Bezeichnung', pos[0].artikel === pos[1].artikel);
+  ok('verschiedenes MHD', pos[0].mhd === '01.10.2026' && pos[1].mhd === '01.02.2027',
+     pos[0].mhd + ' / ' + pos[1].mhd);
+  ok('jede Charge mit eigener Menge', pos[0].anzahl === 60 && pos[1].anzahl === 40);
+
+  // Und im Excel stehen beide, untereinander, mit ihrem eigenen MHD.
+  const det = ctx.weDetail({ weNr: weNr }, u);
+  const sh = new Sheet('leer');
+  ctx.blattAufbauen(sh, det.kopf, det.positionen);
+  const zelle = (r, c) => (sh.daten[r - 1] || [])[c - 1];
+  ok('erste Charge in Zeile 16', zelle(16, 2) === 'Joghurt 500g' &&
+     zelle(16, 5) === '01.10.2026', zelle(16, 2) + ' / ' + zelle(16, 5));
+  ok('zweite Charge in Zeile 17', zelle(17, 2) === 'Joghurt 500g' &&
+     zelle(17, 5) === '01.02.2027', zelle(17, 2) + ' / ' + zelle(17, 5));
 }
 
 console.log('\n' + '='.repeat(46));

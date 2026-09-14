@@ -297,10 +297,37 @@ ok('Nummerierung neu vergeben',
 await page.click('#fm-plus');
 ok('Position dazu', (await page.$$('.pos')).length === 5);
 
-// --- 4) Speichern -----------------------------------------------------------
-console.log('\n4) Speichern');
+// --- 3b) kg ist Pflicht, ausser bei «Bestehend» -----------------------------
+// Karte 0 traegt den Haken, Karte 1 nicht. Der Hinweis am kg-Feld haengt am
+// Zustand der Karte, nicht an neu gebautem Text — sonst verloere die Zeile
+// beim Umlegen des Hakens den Tippcursor.
+console.log('\n3b) kg ist Pflicht, ausser bei «Bestehend»');
+const kgHinweis = i =>
+  page.$eval(`.pos[data-i="${i}"] .kg-frei`, e => getComputedStyle(e).display);
+
+ok('der Hinweis steht an der Karte mit Haken', (await kgHinweis(0)) === 'inline');
+ok('und fehlt an der ohne', (await kgHinweis(1)) === 'none');
+
 await page.fill('#fm-kunde', 'Kunde AG');
 await page.fill('#fm-lieferant', 'Lieferant GmbH');
+const vorSpeichern = await page.evaluate(() => window.__gesendet.length);
+await page.click('#fm-speichern');
+ok('ohne kg geht der Aufruf gar nicht erst raus',
+   (await page.evaluate(() => window.__gesendet.length)) === vorSpeichern);
+// Die Nummer auf der Karte, nicht der Index im Datenfeld: dazwischen liegt
+// eine geloeschte Zeile, und der Erfasser sucht nach dem, was er sieht.
+ok('und die Meldung nennt die Nummer auf der Karte',
+   (await page.textContent('#toast')).includes('Position 2'),
+   await page.textContent('#toast'));
+
+await page.check('.pos[data-i="1"] [data-f="bestehend"]');
+ok('Haken umlegen zeigt den Hinweis sofort', (await kgHinweis(1)) === 'inline');
+await page.uncheck('.pos[data-i="1"] [data-f="bestehend"]');
+ok('und nimmt ihn wieder weg', (await kgHinweis(1)) === 'none');
+await feld(1, 'kg', '18,2');
+
+// --- 4) Speichern -----------------------------------------------------------
+console.log('\n4) Speichern');
 await page.fill('#fm-m2', '12,5');
 await page.click('#fm-speichern');
 await page.waitForSelector('#scr-detail.aktiv');
@@ -315,7 +342,8 @@ ok('Anzahl als Zahl', gesendet.positionen[0].anzahl === 120);
 ok('bestehend als Boolean', gesendet.positionen[0].bestehend === true);
 ok('zweite Position ohne Haken', gesendet.positionen[1].bestehend === false);
 ok('m2 mit Komma', gesendet.lagerM2 === 12.5, 'lagerM2=' + JSON.stringify(gesendet.lagerM2));
-ok('leeres kg bleibt leer', gesendet.positionen[1].kg === '');
+ok('zweites kg, auch mit Komma', gesendet.positionen[1].kg === 18.2,
+   'kg=' + JSON.stringify(gesendet.positionen[1].kg));
 ok('Regalplatz schon beim Erfassen', gesendet.positionen[0].regalplatz === 'A-12',
    JSON.stringify(gesendet.positionen[0].regalplatz));
 ok('nur Angenommen quittiert',
@@ -384,6 +412,7 @@ ok('Auswahl steht wieder auf Angenommen', await page.isChecked('#fm-s-angenommen
 
 await page.uncheck('#fm-s-angenommen');
 await feld(0, 'artikel', 'Nur abgetippt');
+await feld(0, 'kg', '1');
 await page.fill('#fm-kunde', 'Kunde AG');
 await page.click('#fm-speichern');
 await page.waitForSelector('#scr-detail.aktiv');
@@ -471,6 +500,7 @@ console.log('\n10) Zweiter Versuch nach Verbindungsabbruch');
 await page.click('#st-neu');
 await page.waitForSelector('#scr-form.aktiv');
 await feld(0, 'artikel', 'Nach Funkloch');
+await feld(0, 'kg', '1');
 await page.fill('#fm-kunde', 'Kunde AG');
 
 // Das Netz bricht ab, nachdem der Aufruf raus ist — genau der Fall, in dem
@@ -854,6 +884,7 @@ await flott.waitForSelector('#scr-form.aktiv');
 await flott.fill('#fm-kunde', 'Kunde AG');
 await flott.fill('#fm-lieferant', 'Lieferant GmbH');
 await flott.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await flott.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await flott.click('#fm-speichern');
 await flott.waitForSelector('#scr-detail.aktiv');
 await flott.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
@@ -922,6 +953,7 @@ await det.waitForSelector('#scr-form.aktiv');
 await det.fill('#fm-kunde', 'Kunde AG');
 await det.fill('#fm-lieferant', 'Lieferant GmbH');
 await det.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await det.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await det.click('#fm-speichern');
 // Nach dem Speichern steht das Detail schon offen.
 await det.waitForSelector('#scr-detail.aktiv');
@@ -983,15 +1015,32 @@ await adm.fill('#lg-pass', 'geheim123');
 await adm.click('#lg-senden');
 await adm.waitForSelector('#scr-start.aktiv');
 
-ok('der Umschalter steht beim Admin', !(await adm.$eval('#st-alle', e => e.hidden)));
-ok('und heisst zuerst «Alle»', (await adm.textContent('#st-alle')) === 'Alle');
+// Zwei Chips, kein Umschalter: der aktive traegt aria-pressed, und beide
+// Aufschriften stehen fest. Der alte Knopf nannte das Ziel statt den Stand.
+const gedrueckt = s => adm.$eval(s, e => e.getAttribute('aria-pressed'));
+
+ok('die Chips stehen beim Admin', !(await adm.$eval('#st-chips', e => e.hidden)));
+ok('beide Aufschriften stehen fest',
+   (await adm.textContent('#st-offen')) === 'Nur offene' &&
+   (await adm.textContent('#st-alle'))  === 'Alle');
+ok('zuerst ist «Nur offene» aktiv',
+   (await gedrueckt('#st-offen')) === 'true' && (await gedrueckt('#st-alle')) === 'false');
 ok('der fremde abgeschlossene Eintrag fehlt zunaechst',
    !(await adm.textContent('#st-liste')).includes('WE-2026-0009'));
+
+// Den schon aktiven Chip anzutippen darf nichts kosten: der Weg zum Server
+// ist hier das Teure, und die Liste waere danach dieselbe.
+const vorher = await adm.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_liste').length);
+await adm.click('#st-offen');
+ok('der aktive Chip loest keinen Aufruf aus',
+   (await adm.evaluate(() =>
+     window.__gesendet.filter(x => x.action === 'we_liste').length)) === vorher);
 
 await adm.click('#st-alle');
 await adm.waitForFunction(() =>
   document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
-ok('nach dem Umschalten ist er da',
+ok('nach dem Wechsel ist er da',
    (await adm.textContent('#st-liste')).includes('WE-2026-0009'));
 ok('die Ansicht wird mitgeschickt',
    (await adm.evaluate(() => window.__gesendet.filter(x => x.action === 'we_liste').pop()))
@@ -999,8 +1048,8 @@ ok('die Ansicht wird mitgeschickt',
 ok('die Ueberschrift sagt, welche Ansicht gilt',
    (await adm.textContent('#st-titel')) === 'Alle Wareneingänge',
    await adm.textContent('#st-titel'));
-ok('und der Knopf bietet den Rueckweg an',
-   (await adm.textContent('#st-alle')) === 'Nur offene');
+ok('und die Markierung ist umgesprungen',
+   (await gedrueckt('#st-alle')) === 'true' && (await gedrueckt('#st-offen')) === 'false');
 
 // Die Wahl ueberlebt das Neuladen — sonst waehlt der Admin sie jeden Morgen neu
 await adm.reload();
@@ -1008,14 +1057,15 @@ await adm.waitForSelector('#scr-start.aktiv');
 await adm.waitForFunction(() =>
   document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
 ok('die Wahl ueberlebt das Neuladen',
-   (await adm.textContent('#st-alle')) === 'Nur offene' &&
+   (await gedrueckt('#st-alle')) === 'true' &&
    (await adm.textContent('#st-titel')) === 'Alle Wareneingänge');
 
-await adm.click('#st-alle');
+await adm.click('#st-offen');
 await adm.waitForFunction(() =>
   !document.getElementById('st-liste').textContent.includes('WE-2026-0009'));
 ok('und zurueck geht es auch',
-   (await adm.textContent('#st-titel')) === 'Offene und letzte');
+   (await adm.textContent('#st-titel')) === 'Offene und letzte' &&
+   (await gedrueckt('#st-offen')) === 'true');
 await adm.close();
 
 // Beim gewoehnlichen Benutzer gibt es den Knopf nicht. Das ist Bequemlichkeit,
@@ -1029,8 +1079,8 @@ await bob.fill('#lg-email', 'bob@firma.ch');
 await bob.fill('#lg-pass', 'geheim123');
 await bob.click('#lg-senden');
 await bob.waitForSelector('#scr-start.aktiv');
-ok('gewoehnlicher Benutzer sieht den Umschalter nicht',
-   await bob.$eval('#st-alle', e => e.hidden));
+ok('gewoehnlicher Benutzer sieht die Chips nicht',
+   await bob.$eval('#st-chips', e => e.hidden));
 ok('und auch den Verwaltungsknopf nicht',
    await bob.$eval('#st-admin', e => e.hidden));
 await bob.close();
@@ -1055,6 +1105,7 @@ await lok.waitForSelector('#scr-form.aktiv');
 await lok.fill('#fm-kunde', 'Kunde AG');
 await lok.fill('#fm-lieferant', 'Lieferant GmbH');
 await lok.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await lok.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await lok.click('#fm-speichern');
 await lok.waitForFunction(() =>
   document.getElementById('st-liste').textContent.includes('WE-2026-0001'));
@@ -1144,6 +1195,7 @@ await fot.click('#st-neu');
 await fot.waitForSelector('#scr-form.aktiv');
 await fot.fill('#fm-kunde', 'Kunde AG');
 await fot.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await fot.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await fot.click('#fm-speichern');
 await fot.waitForSelector('#scr-detail.aktiv');
 await fot.waitForSelector('#dt-foto');
@@ -1221,6 +1273,7 @@ ok('und er steht in der Regalplatzzeile',
 
 await pf.fill('#fm-kunde', 'Kunde AG');
 await pf.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await pf.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await pf.click('.pos[data-i="0"] .pos-foto');
 await pf.waitForFunction(() =>
   document.querySelector('.pos[data-i="0"] .pos-foto').classList.contains('hat-foto'));
@@ -1366,6 +1419,7 @@ await kt.click('#st-neu');
 await kt.waitForSelector('#scr-form.aktiv');
 await kt.fill('#fm-kunde', 'Kunde AG');
 await kt.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await kt.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await kt.click('#fm-speichern');
 await kt.waitForSelector('#scr-detail.aktiv');
 await kt.waitForFunction(() => !document.getElementById('dt-aktionen').hidden);
@@ -1418,10 +1472,11 @@ const anmeldung = await av.evaluate(() =>
   window.__gesendet.filter(x => x.action === 'login').pop());
 ok('die Ansicht wird beim Anmelden mitgeschickt', anmeldung.alle === true,
    JSON.stringify(anmeldung.alle));
-ok('und die Ueberschrift sagt dasselbe wie der Knopf',
+ok('und die Ueberschrift sagt dasselbe wie die Chips',
    (await av.textContent('#st-titel')) === 'Alle Wareneingänge' &&
-   (await av.textContent('#st-alle')) === 'Nur offene',
-   (await av.textContent('#st-titel')) + ' / ' + (await av.textContent('#st-alle')));
+   (await av.$eval('#st-alle', e => e.getAttribute('aria-pressed'))) === 'true',
+   (await av.textContent('#st-titel')) + ' / ' +
+   (await av.$eval('#st-alle', e => e.getAttribute('aria-pressed'))));
 await av.close();
 
 // --- 23) Man sieht, dass etwas laeuft ---------------------------------------
@@ -1465,6 +1520,7 @@ await ar.click('#st-neu');
 await ar.waitForSelector('#scr-form.aktiv');
 await ar.fill('#fm-kunde', 'Kunde AG');
 await ar.fill('.pos[data-i="0"] [data-f="artikel"]', 'Schrauben M6');
+await ar.fill('.pos[data-i="0"] [data-f="kg"]', '1');
 await ar.click('#fm-speichern');
 await ar.waitForFunction(() => !document.getElementById('sperre').hidden);
 ok('beim Speichern steht «Wird gespeichert …»',
@@ -1522,6 +1578,83 @@ ok('Speichern von Einstellungen schon',
 ok('eine Leseaktion sperrt nie',
    (await ar.evaluate(() => schreibt({ action: 'we_liste' }))) === false);
 await ar.close();
+
+// --- 25) Dieselbe Ware, ein anderes MHD -------------------------------------
+// Eine Lieferung bringt dieselbe Ware in zwei Chargen. Das ist keine
+// Bemerkung an einer Zeile, sondern eine zweite Zeile — in der Tabelle und
+// im Excel.
+console.log('\n25) Dieselbe Ware, ein anderes MHD');
+const ch = await browser.newPage();
+ch.on('pageerror', e => { fail++; console.log('  FAIL  pageerror: ' + e.message); });
+await ch.addInitScript(attrappe);
+await ch.goto(APP);
+await ch.fill('#lg-email', 'anna@firma.ch');
+await ch.fill('#lg-pass', 'geheim123');
+await ch.click('#lg-senden');
+await ch.waitForSelector('#scr-start.aktiv');
+await ch.click('#st-neu');
+await ch.waitForSelector('#scr-form.aktiv');
+
+const cfeld = (i, f) => `.pos[data-i="${i}"] [data-f="${f}"]`;
+
+ok('ohne Artikel gibt es nichts zu kopieren',
+   await ch.$eval('.pos[data-i="0"] .pos-mhd', e => e.disabled));
+
+await ch.fill(cfeld(0, 'artikel'), 'Joghurt 500g');
+await ch.fill(cfeld(0, 'anzahl'), '60');
+await ch.fill(cfeld(0, 'kg'), '30');
+await ch.fill(cfeld(0, 'mhd'), '01.10.2026');
+await ch.fill(cfeld(0, 'regalplatz'), 'B-04');
+await ch.fill(cfeld(0, 'bemerkung'), 'Palette 1');
+ok('mit Artikel wird der Knopf nutzbar',
+   !(await ch.$eval('.pos[data-i="0"] .pos-mhd', e => e.disabled)));
+
+await ch.click('.pos[data-i="0"] .pos-mhd');
+ok('die neue Zeile steht direkt darunter',
+   (await ch.inputValue(cfeld(1, 'artikel'))) === 'Joghurt 500g');
+ok('Bemerkung und Regalplatz kommen mit',
+   (await ch.inputValue(cfeld(1, 'bemerkung'))) === 'Palette 1' &&
+   (await ch.inputValue(cfeld(1, 'regalplatz'))) === 'B-04');
+// Genau diese drei unterscheiden die Charge. Eine mitkopierte Menge, die
+// niemand korrigiert, waere ein stiller Fehler in den Daten.
+ok('Anzahl, kg und MHD bleiben leer',
+   (await ch.inputValue(cfeld(1, 'anzahl'))) === '' &&
+   (await ch.inputValue(cfeld(1, 'kg'))) === '' &&
+   (await ch.inputValue(cfeld(1, 'mhd'))) === '');
+ok('der Cursor steht im MHD',
+   (await ch.evaluate(() => document.activeElement.dataset.f)) === 'mhd');
+ok('die erste Zeile bleibt, wie sie war',
+   (await ch.inputValue(cfeld(0, 'mhd'))) === '01.10.2026' &&
+   (await ch.inputValue(cfeld(0, 'anzahl'))) === '60');
+ok('und neu durchnummeriert ist auch',
+   (await ch.textContent('.pos[data-i="1"] .nr')) === 'POSITION 2');
+
+// Der Haken wandert mit: es ist dieselbe Ware, nur eine andere Charge.
+await ch.check(cfeld(0, 'bestehend'));
+await ch.click('.pos[data-i="0"] .pos-mhd');
+ok('«Bestehend» wird mitkopiert', await ch.isChecked(cfeld(1, 'bestehend')));
+await ch.click('.pos-weg[data-i="1"]');
+await ch.uncheck(cfeld(0, 'bestehend'));
+
+await ch.fill(cfeld(1, 'mhd'), '01.02.2027');
+await ch.fill(cfeld(1, 'anzahl'), '40');
+await ch.fill(cfeld(1, 'kg'), '20');
+await ch.fill('#fm-kunde', 'Kunde AG');
+await ch.click('#fm-speichern');
+await ch.waitForSelector('#scr-detail.aktiv');
+
+const chargen = await ch.evaluate(() =>
+  window.__gesendet.filter(x => x.action === 'we_speichern').pop());
+ok('zwei Zeilen gehen raus, nicht eine', chargen.positionen.length === 2,
+   JSON.stringify(chargen.positionen));
+ok('gleicher Artikel, verschiedenes MHD',
+   chargen.positionen[0].artikel === chargen.positionen[1].artikel &&
+   chargen.positionen[0].mhd === '01.10.2026' &&
+   chargen.positionen[1].mhd === '01.02.2027',
+   JSON.stringify(chargen.positionen.map(p => p.artikel + '/' + p.mhd)));
+ok('und jede Charge traegt ihre eigene Menge',
+   chargen.positionen[0].anzahl === 60 && chargen.positionen[1].anzahl === 40);
+await ch.close();
 
 await browser.close();
 console.log('\n' + '='.repeat(46));

@@ -291,6 +291,29 @@ Regalplatznr. Isto polje stoji i u samom obrascu, po poziciji: ko odmah zna
 gde roba ide, upisuje ga pri unosu. Na papiru je to kolona „Second Team".
 Prazna polja ostaju prazna, kvitiranje ide svejedno.
 
+**`kg` je obavezno polje — osim kod `Bestehend`.** Roba koja već leži u
+magacinu se ne meri ponovo, pa tamo `kg` sme da ostane prazno; svuda drugde
+unos bez kilaže biva odbijen, uz poruku koja **imenuje poziciju** (`Position
+3: kg fehlt`) i skače na to polje. Kad se čekira `Bestehend`, pored natpisa
+`kg` stane `· nicht nötig`. Prazno ostaje prazno i u tabeli — ne postaje
+nula, jer nula je tvrdnja.
+
+Isto pravilo stoji i na serveru. Ne zato što se očekuje da klijent pogreši,
+nego zato što klijent nije zaštita — isto načelo kao kod admin prava.
+
+U prelaznom trenutku — `Code.gs` nov, stranica još stara u kešu telefona —
+server odbije unos porukom `Speichern nicht möglich: kg_fehlt`. Nije lepa,
+ali nije ni netačna; osvežavanje stranice je rešava.
+
+**Ista roba sa drugim MHD je druga charge, dakle drugi red.** Uz svaku
+poziciju stoji dugme `+ MHD`: pravi red odmah ispod, prekopira ono što robu
+**opisuje** — naziv, bemerkung, haken i regalplatz — a ostavlja prazno ono
+što chargu **razlikuje**: `Anzahl`, `kg` i `MHD`. Kursor odmah stane u MHD.
+
+Količina se ne kopira namerno. Prekopirana količina koju niko ne ispravi je
+tiha greška u podacima; prazno polje traži odluku. Slika se takođe ne
+prenosi — ona je dokaz za **tu** robu onakvu kakva je stigla.
+
 **Status** je uvek najdalji kvitirani korak, ne poslednji kliknuti —
 naknadno kvitiranje `Angenommen` ne vraća eingelagert dokument na početak.
 Dokument bez ijednog potpisa ima status `erfasst`.
@@ -305,10 +328,17 @@ iz nje čim je `eingelagert`; posao je gotov i nikome više ne stoji na putu.
 | tuđi | dok su otvoreni (status ≠ `eingelagert`) |
 | stornirani | nikad |
 
-**Admin ima uz naslov prekidač „Alle".** Njime pregled prelazi u ceo
-bestand, uključujući tuđe završene dokumente — za onoga ko hoće da vidi šta
-je tim uopšte uneo, a ne samo šta još traži ruku. Izbor preživi osvežavanje,
-i naslov kaže koja ansicht važi (`Alle Wareneingänge` / `Offene und letzte`).
+**Admin ima uz naslov dva chipa — `Nur offene` i `Alle`.** Drugim pregled
+prelazi u ceo bestand, uključujući tuđe završene dokumente — za onoga ko hoće
+da vidi šta je tim uopšte uneo, a ne samo šta još traži ruku. Izbor preživi
+osvežavanje, i naslov kaže koja ansicht važi (`Alle Wareneingänge` /
+`Offene und letzte`).
+
+Dva chipa, a ne jedno dugme koje menja natpis. Takvo dugme pokazuje **cilj**,
+ne **stanje**: pisalo je `Alle` kad je važilo „nur offene", pa se iz njega
+nije moglo pročitati koja lista stoji ispod. Sada stoje oba natpisa, a aktivni
+nosi boju. Dodir na već aktivan chip **ne šalje poziv** — put do servera je
+ovde skup, a lista bi posle bila ista.
 
 Da li neko sme da vidi sve **odlučuje server iz role u sesiji**, ne
 aplikacija. To što običan korisnik ne vidi taj prekidač nije zaštita —
@@ -844,6 +874,13 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 5 | Unos sa pet praznih pozicija | odbijen |
 | 6 | `3,4` i `3.4` u polju kg | oba daju 3.4 |
 | 7 | Brisanje srednje pozicije | ostale zadržavaju vrednosti, brojevi se preračunaju |
+| 7b | Pozicija sa artiklom, bez `kg`, bez `Bestehend` | odbijena, poruka imenuje poziciju, kursor skače na `kg` |
+| 7c | Ista pozicija sa čekiranim `Bestehend` | prolazi, u tabeli `kg` prazno — ne `0` |
+| 7d | Čekirati `Bestehend` usred kucanja u drugom polju | `· nicht nötig` se pojavi, otkucano ostaje |
+| 7e | `kg` = `0` | prolazi — nula je podatak, ne praznina |
+| 7f | `+ MHD` na poziciji sa artiklom | red ispod, naziv i regalplatz prekopirani, `Anzahl`/`kg`/`MHD` prazni, kursor u MHD |
+| 7g | Isti artikal, dva MHD, pa Speichern | dva reda u tabeli i dva u Excelu, svaki sa svojim MHD |
+| 7h | `+ MHD` na praznoj poziciji | dugme nije aktivno |
 | 8 | Kolega kvitira *Gezählt* | njegovo ime, ne ime onog ko je uneo |
 | 9 | Isti korak dva puta | drugi put odbijen |
 | 10 | *Eingelagert* sa praznim regalima | prolazi, polja ostaju prazna |
@@ -877,7 +914,9 @@ Ovo se ne može automatizovati — radi se rukom, na pravom uređaju.
 | 32 | Pretraga po imenu dobavljača od pre dva meseca | nađe i tuđ završen dokument |
 | 32b | Kolega kvitira *Eingelagert*, pa pogledaš pregled | njegov unos je nestao iz liste |
 | 32c | Isti slučaj, pa pritisneš **Alle** | vratio se, naslov `Alle Wareneingänge` |
-| 32d | Običan korisnik: ima li dugme **Alle** | nema ga |
+| 32f | Pogledati koji chip je obojen | onaj koji **važi**, ne onaj koji nudi promenu |
+| 32g | Pritisnuti već aktivan chip | ništa se ne učitava, lista miruje |
+| 32d | Običan korisnik: ima li chipove | nema ih |
 | 32e | Razmak na kraju u koloni `Email` tvog završenog unosa | i dalje ga vidiš u svojoj listi |
 | 37 | Otvoriti jedan unos, nazad, pa drugi kod kog učitavanje padne | nema dugmadi, `Nochmal versuchen` stoji |
 | 37b | Pritisnuti `Nochmal versuchen` | učitava **taj** dokument, dugmad se vrate |

@@ -89,7 +89,7 @@ Fünf leere Blöcke stehen bereit, wie die fünf Zeilen auf dem Papier.
 |---|---|
 | **Artikelbezeichnung** | was geliefert wurde |
 | **Anzahl / QTY** | Stückzahl |
-| **kg** | Gewicht, falls relevant |
+| **kg** | Gewicht — **Pflicht**, ausser bei «Bestehend» |
 | **MHD** | Mindesthaltbarkeit — `10.2027` oder `31.10.2027`, beides geht |
 | **Regalplatznr.** | wenn du schon weisst, wohin die Ware kommt |
 | **Foto** | Knopf neben der Regalplatznr. — ein Bild zu diesem Artikel |
@@ -104,6 +104,20 @@ entfernst du mit dem **×** oben rechts im Block; die übrigen behalten ihre
 Werte und werden neu durchnummeriert.
 
 **Beim Gewicht** spielt es keine Rolle, ob du `3.4` oder `3,4` eintippst.
+
+**kg musst du eintragen.** Ausgenommen ist Ware mit dem Haken **Bestehend**:
+die liegt schon im Lager und wird nicht noch einmal gewogen — dort steht dann
+neben `kg` ein blasses `· nicht nötig`. Fehlt das Gewicht sonst irgendwo,
+sagt dir die Meldung, in welchem Block: «Position 3: kg fehlt».
+
+**Dieselbe Ware mit zwei Daten?** Kommt ein Artikel in zwei Chargen mit
+verschiedenem MHD, tippst du oben im Block auf **+ MHD**. Darunter entsteht
+ein neuer Block mit derselben Bezeichnung, derselben Bemerkung und demselben
+Regalplatz — **Anzahl, kg und MHD bleiben leer**, denn genau die
+unterscheiden die zweite Charge. Der Cursor steht schon im MHD.
+
+Jede Charge ist eine eigene Zeile: in der Tabelle und im Excel stehen sie
+untereinander, jede mit ihrem eigenen Datum und ihrer eigenen Menge.
 
 **Ein Foto je Artikel** nimmst du mit dem Knopf **Foto** rechts neben der
 Regalplatznr. auf. Steht dort **✓ Foto**, ist schon eines da: antippen zeigt
@@ -247,6 +261,11 @@ Beide Felder sind leer. Eines genügt.
 
 **«Mindestens eine Position mit Artikelbezeichnung.»**
 Es steht in keinem Block eine Artikelbezeichnung.
+
+**«Position 3: kg fehlt. Leer bleibt es nur bei «Bestehend».»**
+Im genannten Block steht eine Artikelbezeichnung, aber kein Gewicht. Trag es
+ein — oder setze den Haken **Bestehend**, falls die Ware schon im Lager
+geführt wird. Die App springt selbst auf das Feld.
 
 **«Dieser Schritt ist bereits quittiert.»**
 Jemand war schneller. Öffne den Eintrag neu, dann siehst du, wer.

@@ -19,7 +19,7 @@ const a = ctx.weSpeichern({
   positionen: [
     { artikel: 'Kartonage 600x400x300', anzahl: 120, kg: 48.5,
       mhd: '10.2027', bemerkung: '', bestehend: true },
-    { artikel: 'Rohr "40mm"', anzahl: 36, kg: '',
+    { artikel: 'Rohr "40mm"', anzahl: 36, kg: 7.2,
       mhd: '', bemerkung: 'Rolle 2 eingedrückt', bestehend: false },
     { artikel: 'Etiketten A5', anzahl: 500, kg: 2,
       mhd: '', bemerkung: '', bestehend: false }
@@ -40,7 +40,7 @@ const b = ctx.weSpeichern({
 
 // 3) Zurueckgezogen — darf in der CSV gar nicht auftauchen
 const c = ctx.weSpeichern({ kunde: 'Storniert AG',
-  positionen: [{ artikel: 'Darf nicht erscheinen', anzahl: 1, kg: '',
+  positionen: [{ artikel: 'Darf nicht erscheinen', anzahl: 1, kg: 1,
                  mhd: '', bemerkung: '', bestehend: false }] }, u).weNr;
 ctx.weStorno({ weNr: c }, u);
 
@@ -48,7 +48,7 @@ ctx.weStorno({ weNr: c }, u);
 const d = ctx.weSpeichern({
   kunde: 'Grosslieferung AG', lieferant: 'Nordwind Logistik',
   positionen: Array.from({ length: 12 }, (_, i) => ({
-    artikel: 'Palette ' + (i + 1), anzahl: i + 1, kg: '',
+    artikel: 'Palette ' + (i + 1), anzahl: i + 1, kg: i + 1,
     mhd: '', bemerkung: '', bestehend: false
   }))
 }, u).weNr;
