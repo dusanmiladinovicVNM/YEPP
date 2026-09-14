@@ -257,31 +257,39 @@ Isto za `Nummern` → `=Nummern!$A$1` i `Liste` → `=Liste!$A$1`.
 > pravljenje novog lista istog imena je **ne vraća**. Formule u `Formular` i
 > padajuća lista bi ostale mrtve, i šablon bi morao iz repoa ispočetka.
 
-**Daten → Abfragen und Verbindungen na Macu ne pomaže.** Otvara stari prozor
-*Arbeitsmappenabfragen und -verbindungen*, gde postoje samo *Entfernen*,
-*Aktualisieren* i zasivljeno *Eigenschaften…* — **nema „Laden in…"**. To je
-Windows-ov panel za upite, koji Mac nema.
+**Excel for Mac ne ume da učita upit u postojeći list.** Ni jedan ni drugi
+put ne postoji:
 
-**Prvo probaj:** *Daten → Daten abrufen (Power Query) → Abfrage-Editor
-starten* → izaberi `Daten` → **Schließen & Laden** (strelica) →
-**Schließen & Laden in…** → *Bestehendes Arbeitsblatt* → `=Daten!$A$1`.
+| gde bi se očekivalo | šta je stvarno tamo |
+|---|---|
+| **Daten → Abfragen und Verbindungen** | stari prozor *Arbeitsmappenabfragen und -verbindungen* — samo *Entfernen*, *Aktualisieren*, zasivljeno *Eigenschaften…* |
+| **Power Query-Editor → Schließen und laden** | dugme **bez strelice**; nema varijante „…in…". Uporedi `Daten abrufen ⌄`, `Aktualisieren ⌄`, `Transformieren ⌄` — svi imaju `⌄`, ovaj nema |
 
-**Ako je i to zasivljeno,** ide se obrnuto: ne seli se tabela nego se
-**formule preusmere**, pa tek onda briše — tim redom, jer se referenca na
-obrisan list više ne popravlja.
+Znači: **svaki upit na Macu ide u novi list**, i nastaju `Daten (2)`,
+`Nummern (2)`, `Liste (2)`. To se ne izbegava — to se sređuje posle, i
+**redosled je ono što čuva fajl**.
 
-1. list **`Formular`** → `Ctrl+H` →
-   traži `Daten!` → zameni `'Daten (2)'!` → **Alle ersetzen**
-2. **Daten → Datenüberprüfung** u ćeliji `J2` → izvor na
-   `='Nummern (2)'!$A$2:$A$1000` *(tek kad i `Nummern` bude učitan)*
-3. sad prazan `Daten` **više nijedna formula ne pominje** → obriši ga
-4. preimenuj `Daten (2)` → **`Daten`**
+Šta šta gađa:
 
-Korak 4 je bezbedan i sve vraća na čisto: **Excel pri preimenovanju lista
-sam ispravlja formule i izvore provere podataka.** Opasno je samo brisanje,
-ne preimenovanje.
+| list | gađa ga | oprez |
+|---|---|---|
+| `Daten` | formule u `Formular` | da |
+| `Nummern` | provera podataka u `J2` | da |
+| `Liste` | **ništa** | ne — briši i preimenuj slobodno |
 
-Isto za `Nummern` i `Liste`.
+Postupak, kad sva tri upita budu učitana:
+
+1. list **`Formular`** → `Ctrl+H`, tražiti u **formulama**:
+   `Daten!` → `'Daten (2)'!` → **Alle ersetzen**
+   *(natpis u `A26` sadrži reči „Blatt Daten" bez uzvičnika i ostaje netaknut)*
+2. **Daten → Datenüberprüfung** u `J2` → izvor na `='Nummern (2)'!$A$2:$A$1000`
+3. sada prazne `Daten`, `Nummern` i `Liste` **ništa ne pominje** → obriši sva tri
+4. preimenuj `Daten (2)` → `Daten`, `Nummern (2)` → `Nummern`,
+   `Liste (2)` → `Liste`
+
+Korak 4 vraća sve na čisto i bezbedan je: **Excel pri preimenovanju lista sam
+ispravlja formule i izvore provere.** Opasno je isključivo brisanje lista na
+koji nešto još pokazuje — zato ovim redom i nijednim drugim.
 
 **Zašto nalepiti, a ne kliktati:** upravo koraci sa tipovima su ono što tiho
 puca. M-kod tipuje **svaku od 23 kolone izričito**:
