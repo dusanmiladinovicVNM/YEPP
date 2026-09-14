@@ -368,6 +368,19 @@ def main():
     ok('die Antwort wird einmal ganz gelesen',
        'Binary.Buffer(' in bloecke.get('Daten', ''))
 
+    # Die Anleitung und der erzeugte M-Code muessen VON DENSELBEN
+    # Platzhaltern sprechen. Als die Quelle vom Skript auf das
+    # veroeffentlichte Blatt umgestellt wurde, blieb in EXCEL.md ein Schritt
+    # stehen, der weiter Basis UND Token einzusetzen verlangte — zwei
+    # Anleitungen nebeneinander, und die zweite galt nicht mehr.
+    excel_md = (WURZEL / 'EXCEL.md').read_text(encoding='utf-8')
+    ok('EXCEL.md nennt den Platzhalter, den es wirklich gibt',
+       halter in excel_md, halter)
+    for tot in ('<Web-App-URL>', '<TOKEN_READ>'):
+        ok(f'und nicht mehr den alten {tot}', tot not in excel_md,
+           (excel_md[max(0, excel_md.find(tot) - 60):excel_md.find(tot) + 40]
+            if tot in excel_md else ''))
+
     # Kam gar keine CSV, meldet Excel von sich aus «Die Spalte WeNr wurde
     # nicht gefunden» — und schickt damit zu den Spalten, wo nichts ist.
     # Der Waechter muss VOR dem Typen stehen, sonst kommt er nie dran.

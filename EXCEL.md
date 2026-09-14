@@ -211,12 +211,13 @@ Postupak, **tri puta**, tim redosledom (`Nummern` i `Liste` se oslanjaju na
 1. **Daten → Daten abrufen → Leere Abfrage**
 2. **Erweiterter Editor** → obriši sve → nalepi odgovarajući blok iz
    `Abfragen.m`
-3. zameni **dva reda** — postoje **samo u bloku `Daten`** — onima koje
-   ispisuje **`einrichtungPruefen()`**:
+3. zameni **jedan red** — postoji **samo u bloku `Daten`** — adresom
+   objavljenog lista `Export`:
    ```m
-   Basis = "<Web-App-URL>",
-   Token = "<TOKEN_READ>",
+   Basis = "<Veroeffentlichte-CSV-Adresse>",
    ```
+   Adresu daje **Datei → Im Web veröffentlichen → list `Export` →
+   Kommagetrennte Werte (.csv)**. **Nema tokena** — šablon ne čita skriptu.
    `Nummern` i `Liste` ne dobijaju adresu — oni čitaju `Daten`
 4. upit nazvati **tačno** kako piše u zaglavlju bloka — `Daten`,
    `Nummern`, `Liste`; imena su ono na čemu ostala dva stoje

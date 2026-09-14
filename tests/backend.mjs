@@ -680,8 +680,8 @@ console.log('\n16) Konfiguration in den Skripteigenschaften');
   const bericht = ctx.einrichtungPruefen();
   ok('Bericht meldet die fehlende Adresse', bericht.includes('PWA_URL: FEHLT'), bericht);
   ok('Bericht nennt die Tabelle', bericht.includes('Wareneingang (Test)'));
-  ok('Bericht nennt die zwei Zeilen fuer «Daten»',
-     bericht.includes('Basis = ') && bericht.includes('Token = '), bericht);
+  ok('Bericht nennt die Adresse zum Nachsehen',
+     bericht.includes('format=csv') && bericht.includes('Nachsehen'), bericht);
   ok('Bericht meldet vollstaendige Blaetter', bericht.includes('alle ' + Object.keys(ss.blaetter).length + ' da'), bericht);
 
   delete ss.blaetter.Sessions;
@@ -1912,44 +1912,48 @@ console.log('\n41) Die Einstellungen oeffnen sich in EINEM Aufruf');
      ctx.__driveAufrufe + ' statt ' + nachKaputt);
 }
 
-console.log('\n42) Der Bericht schreibt die Adresse fertig hin');
+console.log('\n42) Der Bericht sagt, wo die Vorlage ihre Daten herholt');
 {
   const ss = neueTabelle(), ctx = laden(ss);
   ctx.__eigenschaften.TOKEN_READ = 'tok-abc';
 
-  // Der Regelfall: bereitgestellt, Adresse endet auf /exec. Gedruckt werden
-  // die beiden Zeilen, wie sie im Block «Daten» stehen — die Adresse steht
-  // dort NICHT als ein Stueck mit Fragezeichen, siehe vorlage_bauen.py.
   const gut = ctx.einrichtungPruefen();
-  ok('die Basiszeile steht fertig da',
-     gut.indexOf('Basis = "https://script.google.com/macros/s/AKfycb-test/exec",') >= 0,
-     gut);
-  ok('und die Tokenzeile auch', gut.indexOf('Token = "tok-abc",') >= 0, gut);
-  ok('kein Platzhalter mehr', gut.indexOf('Basis = "<Web-App-URL>"') < 0, gut);
 
-  // Aus dem Editor heraus kann getUrl() die /dev-Adresse geben. Die gilt nur
-  // fuer den Angemeldeten — in der Vorlage waere sie wertlos, und still
-  // eingesetzt waere sie eine Falle.
+  // Die Vorlage liest das veroeffentlichte Blatt. Stuende daneben noch eine
+  // Anleitung fuer den M-Code mit Basis und Token, waeren es zwei — und die
+  // zweite gaelte nicht mehr.
+  ok('der Bericht nennt das Blatt «Export»', gut.indexOf('Export: ') >= 0, gut);
+  ok('und den Weg zum Veroeffentlichen',
+     gut.indexOf('Im Web veroeffentlichen') >= 0);
+  ok('und sagt, dass die Adresse dort in «Basis» gehoert',
+     gut.indexOf('in der Vorlage in «Basis»') >= 0);
+  ok('keine zweite Anleitung fuer den M-Code mehr',
+     gut.indexOf('Basis = "') < 0 && gut.indexOf('Token = "') < 0, gut);
+
+  // Die CSV-Adresse bleibt — aber als Werkzeug zum Nachsehen, nicht als
+  // Quelle der Vorlage. Im Browser trennt sie die zwei Faelle, die sonst
+  // gleich aussehen: «kein Zugriff» heisst lebend, die Drive-Seite tot.
+  ok('die Adresse zum Nachsehen steht da',
+     gut.indexOf('?token=tok-abc&format=csv&tage=365') >= 0, gut);
+  ok('und ist als solche benannt',
+     gut.indexOf('die Vorlage benutzt das NICHT') >= 0);
+
+  // Aus dem Editor heraus gibt getUrl() die /dev-Adresse. Die verlangt eine
+  // Anmeldung und taugt zum Nachsehen nicht.
   ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/dev';
   const dev = ctx.einrichtungPruefen();
-  ok('eine /dev-Adresse wird benannt, nicht eingesetzt',
-     dev.indexOf('ACHTUNG') >= 0 && dev.indexOf('Basis = "<Web-App-URL>"') >= 0, dev);
-  ok('und sie steht trotzdem da, damit man sie erkennt', dev.indexOf('/dev') >= 0);
-  ok('der Token bleibt trotzdem fertig', dev.indexOf('Token = "tok-abc",') >= 0);
+  ok('eine /dev-Adresse wird nicht eingesetzt',
+     dev.indexOf('/dev?token=') < 0 && dev.indexOf('Bereitstellungen verwalten') >= 0,
+     dev);
 
-  // Noch gar nicht bereitgestellt: der Platzhalter bleibt, mit Ansage.
   ctx.__webAppUrl = '';
-  const ohne = ctx.einrichtungPruefen();
-  ok('ohne Bereitstellung bleibt der Platzhalter',
-     ohne.indexOf('noch keine Bereitstellung') >= 0 &&
-     ohne.indexOf('Basis = "<Web-App-URL>"') >= 0, ohne);
+  ok('ohne Bereitstellung steht nur der Schwanz da',
+     ctx.einrichtungPruefen().indexOf('noch keine Bereitstellung') >= 0);
 
-  // Ohne Token steht die Zeile gar nicht da — eine Adresse ohne Token
-  // liefert «kein Zugriff», und die einzufuegen waere ein Umweg.
   ctx.__webAppUrl = 'https://script.google.com/macros/s/AKfycb-test/exec';
   ctx.__eigenschaften.TOKEN_READ = '';
-  ok('ohne Token keine Zeilen fuer die Vorlage',
-     ctx.einrichtungPruefen().indexOf('Basis = ') < 0);
+  ok('ohne Token keine Adresse zum Nachsehen',
+     ctx.einrichtungPruefen().indexOf('format=csv') < 0);
 }
 
 console.log('\n43) Der Export steht als Blatt da');

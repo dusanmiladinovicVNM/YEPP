@@ -2367,34 +2367,31 @@ function einrichtungPruefen() {
 
   const token = eigenschaft('TOKEN_READ', true);
   if (token) {
-    // Zwei Zeilen, fertig zum Einfuegen — genau die beiden, die im Block
-    // «Daten» stehen. Von Hand zusammensetzen muss man nichts.
+    // Die Vorlage liest das veroeffentlichte Blatt, NICHT diese Adresse.
+    // Sie steht hier trotzdem: im Browser aufgerufen zeigt sie in einem
+    // Zug, ob Bereitstellung, Token und Export zusammenpassen — und eine
+    // lebende Bereitstellung mit falschem Token antwortet «kein Zugriff»,
+    // eine tote mit der Drive-Seite. Diese beiden zu unterscheiden ist das,
+    // wonach man sonst lange sucht.
     //
-    // Die Adresse steht im M-Code NICHT als ein Stueck mit Fragezeichen:
-    // Apps Script beantwortet /exec mit einer Weiterleitung, und diese
-    // zweite Adresse gilt einmal und kurz. Power Query merkt sich die
-    // aufgeloeste und greift ein zweites Mal danach — dann 404. Darum
-    // /exec als Quelle und die Parameter getrennt.
-    //
-    // getUrl() gibt aus dem Editor heraus manchmal die /dev-Adresse. Die
-    // gilt nur fuer den Angemeldeten und waere in einer Vorlage auf
-    // SharePoint wertlos — sie wird darum benannt, nicht eingesetzt.
+    // Frueher stand hier, was in den M-Code gehoert. Das gilt nicht mehr,
+    // und zwei Anleitungen nebeneinander sind schlimmer als eine.
     let adresse = '';
     try { adresse = String(ScriptApp.getService().getUrl() || ''); } catch (e) { adresse = ''; }
+    const schwanz = '?token=' + token + '&format=csv&tage=365';
 
-    zeilen.push('CSV fuer die Vorlage — diese zwei Zeilen in den Block «Daten»:');
+    zeilen.push('Zum Nachsehen im Browser — die Vorlage benutzt das NICHT:');
     if (adresse.slice(-5) === '/exec') {
-      zeilen.push('    Basis = "' + adresse + '",');
+      zeilen.push('  ' + adresse + schwanz);
     } else if (adresse) {
-      zeilen.push('    Basis = "<Web-App-URL>",     <-- NICHT die Adresse unten!');
-      zeilen.push('ACHTUNG: getUrl() gab eine Adresse, die nicht auf /exec endet:');
-      zeilen.push('  ' + adresse);
-      zeilen.push('Diese gilt nur fuer dich. Die richtige steht unter');
-      zeilen.push('Bereitstellen -> Bereitstellungen verwalten.');
+      // getUrl() gibt aus dem Editor heraus die /dev-Adresse. Die verlangt
+      // eine Anmeldung und taugt zum Nachsehen nicht.
+      zeilen.push('  getUrl() gab eine /dev-Adresse; die richtige steht unter');
+      zeilen.push('  Bereitstellen -> Bereitstellungen verwalten. Daran haengen:');
+      zeilen.push('  ' + schwanz);
     } else {
-      zeilen.push('    Basis = "<Web-App-URL>",     <-- noch keine Bereitstellung');
+      zeilen.push('  noch keine Bereitstellung. Daran haengen: ' + schwanz);
     }
-    zeilen.push('    Token = "' + token + '",');
   }
 
   const text = zeilen.join('\n');
